@@ -78,5 +78,6 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("paths", nargs="+")
     a = p.parse_args()
-    results = [r for path in a.paths for f in sorted(glob.glob(path)) for r in json.load(open(f))]
+    results = [r for path in a.paths for f in sorted(glob.glob(path))
+               if not f.endswith(".config.json") for r in json.load(open(f))]
     print(to_markdown(summarize(results)))

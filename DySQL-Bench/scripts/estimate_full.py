@@ -9,7 +9,7 @@ import glob, json, sys, statistics
 d = sys.argv[1]
 N_TOTAL = 1062
 CONC = int(sys.argv[2]) if len(sys.argv) > 2 else 5
-rs = [r for f in glob.glob(f"{d}/*.json") for r in json.load(open(f))]
+rs = [r for f in glob.glob(f"{d}/*.json") if not f.endswith(".config.json") for r in json.load(open(f))]
 wall = int(open(f"{d}/wall.txt").read().split()[1])
 n = len(rs)
 per_task = wall / n
