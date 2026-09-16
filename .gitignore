@@ -16,7 +16,8 @@ logs/
 
 tmp/
 
-results/
+DySQL-Bench/results/
+!docs/results/
 
 # DB files
 **/*.sqlite
