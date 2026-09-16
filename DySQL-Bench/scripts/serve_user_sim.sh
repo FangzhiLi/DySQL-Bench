@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# scripts/serve_user_sim.sh  -- Qwen2.5-72B-Instruct-AWQ on :8001. MAX_SEQS (default 16)
+# scripts/serve_user_sim.sh  -- Qwen2.5-72B-Instruct-AWQ on :8001. MAX_SEQS (default 16), GPU_UTIL (default 0.38)
 set -euo pipefail
 MAX_SEQS="${MAX_SEQS:-16}"
+GPU_UTIL="${GPU_UTIL:-0.38}"
 docker rm -f dysql-user 2>/dev/null || true
 docker run -d --name dysql-user --restart unless-stopped \
   --gpus all --ipc host --shm-size 64gb \
@@ -14,6 +15,6 @@ docker run -d --name dysql-user --restart unless-stopped \
   --quantization awq_marlin \
   --max-model-len 16384 \
   --max-num-seqs "$MAX_SEQS" \
-  --gpu-memory-utilization 0.42 \
+  --gpu-memory-utilization "$GPU_UTIL" \
   --enable-prefix-caching
-echo "user sim starting max-num-seqs=$MAX_SEQS; logs: docker logs -f dysql-user"
+echo "user sim starting max-num-seqs=$MAX_SEQS gpu-util=$GPU_UTIL; logs: docker logs -f dysql-user"

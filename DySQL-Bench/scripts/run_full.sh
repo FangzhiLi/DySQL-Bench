@@ -2,7 +2,7 @@
 # scripts/run_full.sh <tag> [num_trials] [concurrency]  -- all 13 envs, resumable; run under nohup
 # Re-running the same command resumes: each env's existing results json is passed via --resume.
 set -uo pipefail
-TAG="${1:?usage: run_full.sh <tag> [num_trials] [concurrency]}"; TRIALS="${2:-1}"; CONC="${3:-12}"
+TAG="${1:?usage: run_full.sh <tag> [num_trials] [concurrency]}"; TRIALS="${2:-1}"; CONC="${3:-16}"
 cd "$(dirname "$0")/.."
 OUT="results/full_${TAG}"; mkdir -p "$OUT"
 # largest DBs first so the long tail lands on small envs; eu_soccer (299 MB) gets lower concurrency
