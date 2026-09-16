@@ -55,3 +55,15 @@ def test_inline_think_tag_still_parsed(monkeypatch):
     res = sca.SQLCallingAgent(api="http://x", wiki="w", model="m").solve(FakeEnv(), 0, max_num_steps=1)
     a = [m for m in res.messages if m["role"] == "assistant"][0]
     assert a["reasoning_content"] == "hmm" and a["content"] == "Sure."
+
+def test_reasoning_field_name_from_newer_vllm(monkeypatch):
+    """vLLM v0.19+ returns thinking under 'reasoning' instead of 'reasoning_content'."""
+    def _post(url, headers=None, json=None):
+        body = {"choices": [{"message": {"content": "\n\nfour", "reasoning": "thinking hard"},
+                             "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
+        return types.SimpleNamespace(json=lambda: body)
+    monkeypatch.setattr(sca.requests, "post", _post)
+    res = sca.SQLCallingAgent(api="http://x", wiki="w", model="m").solve(FakeEnv(), 0, max_num_steps=1)
+    a = [m for m in res.messages if m["role"] == "assistant"][0]
+    assert a["reasoning_content"] == "thinking hard" and a["content"] == "four"

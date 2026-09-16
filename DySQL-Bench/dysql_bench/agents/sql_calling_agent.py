@@ -69,9 +69,11 @@ class SQLCallingAgent(Agent):
 
             choice = response["choices"][0]
             next_message = self.parse_response(choice["message"]["content"])
-            # vLLM --reasoning-parser puts thinking in a separate field; keep it if inline parse found none
-            if choice["message"].get("reasoning_content") and not next_message["reasoning_content"]:
-                next_message["reasoning_content"] = choice["message"]["reasoning_content"]
+            # vLLM --reasoning-parser puts thinking in a separate field ("reasoning_content" in older
+            # builds, "reasoning" in v0.19+); keep it if inline <think> parse found none
+            server_reasoning = choice["message"].get("reasoning_content") or choice["message"].get("reasoning")
+            if server_reasoning and not next_message["reasoning_content"]:
+                next_message["reasoning_content"] = server_reasoning
             next_message["finish_reason"] = choice.get("finish_reason")
             u = response.get("usage") or {}
             next_message["usage"] = {
