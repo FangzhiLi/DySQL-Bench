@@ -67,6 +67,8 @@ class EnvRunResult(BaseModel):
     info: Dict[str, Any]
     traj: List[Dict[str, Any]]
     trial: int
+    meta: Dict[str, Any] = {}
+    user_traj: List[Dict[str, Any]] = []
 
 
 class RunConfig(BaseModel):
@@ -91,3 +93,4 @@ class RunConfig(BaseModel):
     seed: int = 10
     shuffle: int = 0
     user_strategy: str = "llm"
+    resume: Optional[str] = None

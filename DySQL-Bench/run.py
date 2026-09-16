@@ -93,6 +93,7 @@ def parse_args() -> RunConfig:
     parser.add_argument("--seed", type=int, default=10)
     parser.add_argument("--shuffle", type=int, default=0)
     parser.add_argument("--user-strategy", type=str, default="llm", choices=[item.value for item in UserStrategy])
+    parser.add_argument("--resume", type=str, default=None, help="existing results json to continue; skips done (task, trial) pairs and appends to that file")
 
     args = parser.parse_args()
     print(args)
@@ -118,6 +119,7 @@ def parse_args() -> RunConfig:
         seed=args.seed,
         shuffle=args.shuffle,
         user_strategy=args.user_strategy,
+        resume=args.resume,
     )
 
 

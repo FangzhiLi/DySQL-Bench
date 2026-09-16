@@ -16,8 +16,44 @@ from dysql_bench.envs import get_env
 from dysql_bench.agents.base import Agent
 from dysql_bench.types import EnvRunResult, RunConfig
 from dysql_bench.envs.user import UserStrategy
+from dysql_bench.analysis import (classify_task, count_fabricated_results,
+                                  count_sql_errors, confirmed_before_write)
 
 MAX_NUM_STEPS = 30
+
+
+def load_done(path):
+    """(task_id, trial) pairs already present in an existing results file."""
+    if not path or not os.path.exists(path):
+        return set()
+    with open(path) as f:
+        return {(r["task_id"], r["trial"]) for r in json.load(f)}
+
+
+def _sum_completion(traj):
+    return sum((m.get("usage") or {}).get("completion_tokens") or 0
+               for m in traj if m.get("role") == "assistant")
+
+
+def _last_prompt(traj):
+    pts = [(m.get("usage") or {}).get("prompt_tokens") for m in traj if m.get("role") == "assistant"]
+    pts = [p for p in pts if p is not None]
+    return pts[-1] if pts else None
+
+
+def build_meta(env_name, task, info, traj, user_traj, wall_s):
+    """Analysis-only metadata attached to each EnvRunResult. Does not affect reward."""
+    ri = (info.get("reward_info") or {}).get("info") or {}
+    return {"env": env_name, **classify_task(task),
+            "termination": info.get("termination"), "n_steps": info.get("n_steps"),
+            "n_fabricated_results": count_fabricated_results(traj),
+            "n_sql_errors": count_sql_errors(traj),
+            "confirmed_before_write": confirmed_before_write(traj),
+            "mismatched_tables": ri.get("mismatched_tables", []),
+            "wall_s": round(wall_s, 2),
+            "agent_completion_tokens": _sum_completion(traj),
+            "user_completion_tokens": _sum_completion(user_traj),
+            "last_prompt_tokens": _last_prompt(traj)}
 
 def run(config: RunConfig) -> List[EnvRunResult]:
     assert config.env in ["retail", "eu_soccer", "music", "bowling", "entertainment", "pagila", "chinook", "car", "cookbook", "human_resources", "ice_hockey", "law_episode", "retail_world"], f"Only retail, eu_soccer, music, bowling, entertainment, pagila, chinook, car, cookbook, human_resources, ice_hockey, law_episode, retail_world envs are supported"
@@ -30,6 +66,15 @@ def run(config: RunConfig) -> List[EnvRunResult]:
     ckpt_path = f"{config.log_dir}/{config.env}-{config.agent_strategy}-agent-{config.model.split('/')[-1]}-{config.temperature}_range_{config.start_index}-{config.end_index}_user-{config.user_model.split('/')[-1]}-{config.user_strategy}_{time_str}.json"
     if not os.path.exists(config.log_dir):
         os.makedirs(config.log_dir)
+    done = set()
+    prior_results: List[EnvRunResult] = []
+    if config.resume:
+        ckpt_path = config.resume
+        done = load_done(ckpt_path)
+        if os.path.exists(ckpt_path):
+            with open(ckpt_path) as f:
+                prior_results = [EnvRunResult(**r) for r in json.load(f)]
+        print(f"Resuming from {ckpt_path}: {len(done)} (task, trial) pairs already done")
 
     print(f"Loading user with strategy: {config.user_strategy}")
     env = get_env(              
@@ -48,7 +93,7 @@ def run(config: RunConfig) -> List[EnvRunResult]:
     end_index = (
         len(env.tasks) if config.end_index == -1 else min(config.end_index, len(env.tasks))
     )
-    results: List[EnvRunResult] = []
+    results: List[EnvRunResult] = list(prior_results)
     lock = threading.Lock()  
     if config.task_ids and len(config.task_ids) > 0:
         print(f"Running tasks {config.task_ids} (checkpoint path: {ckpt_path})")
@@ -63,6 +108,10 @@ def run(config: RunConfig) -> List[EnvRunResult]:
             idxs = list(range(config.start_index, end_index))
         if config.shuffle:
             random.shuffle(idxs)
+        idxs = [idx for idx in idxs if (idx, i) not in done]
+        if not idxs:
+            print(f"Trial {i+1}/{config.num_trials}: nothing left to run")
+            continue
 
         def _run(idx: int) -> EnvRunResult:
             run_start_time = time.time()
@@ -86,12 +135,16 @@ def run(config: RunConfig) -> List[EnvRunResult]:
                     task_index=idx,
                     max_num_steps=MAX_NUM_STEPS
                 )
+                user_traj = getattr(isolated_env.user, "messages", [])
                 result = EnvRunResult(
                     task_id=idx,
                     reward=res.reward,
                     info=res.info,
                     traj=res.messages,
                     trial=i,
+                    user_traj=user_traj,
+                    meta=build_meta(config.env, isolated_env.task, res.info, res.messages,
+                                    user_traj, time.time() - run_start_time),
                 )
             except Exception as e:
                 result = EnvRunResult(
@@ -100,6 +153,9 @@ def run(config: RunConfig) -> List[EnvRunResult]:
                     info={"error": str(e), "traceback": traceback.format_exc()},
                     traj=[],
                     trial=i,
+                    user_traj=getattr(isolated_env.user, "messages", []),
+                    meta={"env": config.env, "termination": "error",
+                          "wall_s": round(time.time() - run_start_time, 2)},
                 )
             print(
                 "✅" if result.reward == 1 else "❌",
@@ -125,7 +181,8 @@ def run(config: RunConfig) -> List[EnvRunResult]:
             res = list(tqdm(executor.map(_run, idxs), total=len(idxs), desc=f"Trial {i+1}/{config.num_trials}"))
             results.extend(res)
 
-    display_metrics(results)
+    if results:
+        display_metrics(results)
 
     with open(ckpt_path, "w") as f:
         json.dump([result.model_dump() for result in results], f, indent=2)
