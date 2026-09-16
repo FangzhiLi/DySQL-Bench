@@ -25,5 +25,5 @@ results/
 
 .cache
 
-.egg-info/
+*.egg-info/
 
