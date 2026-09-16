@@ -3,6 +3,7 @@
 import abc
 import enum
 import re
+import time
 import requests
 from typing import Optional, List, Dict, Any, Union
 
@@ -49,13 +50,13 @@ class LLMUserSimulationEnv(BaseUserSimulationEnv):
         self.reset()
 
     def generate_next_message(self, messages: List[Dict[str, Any]]) -> str:
-
+        t0 = time.time()
         response = requests.post(
-            f"{self.api}/v1/chat/completions", 
-            headers={"Content-Type": "application/json"}, 
+            f"{self.api}/v1/chat/completions",
+            headers={"Content-Type": "application/json"},
             json={
                 "model": self.model,
-                "messages": messages,
+                "messages": [{k: m[k] for k in ("role", "content") if k in m} for m in messages],
                 "max_tokens": 8192,
                 "temperature": 0.6,
                 "top_p": 0.95,
@@ -64,6 +65,9 @@ class LLMUserSimulationEnv(BaseUserSimulationEnv):
             }
         ).json()
         message = parse_response(response["choices"][0]["message"]["content"])
+        u = response.get("usage") or {}
+        message["usage"] = {"prompt_tokens": u.get("prompt_tokens"), "completion_tokens": u.get("completion_tokens")}
+        message["latency_s"] = round(time.time() - t0, 3)
 
         self.messages.append({'role': 'assistant', **message})
         return message["content"]

@@ -3,8 +3,8 @@
 import re
 import copy
 import json
+import time
 import requests
-from transformers import AutoTokenizer
 from typing import List, Optional, Dict, Any
 
 from dysql_bench.agents.base import Agent
@@ -33,10 +33,14 @@ class SQLCallingAgent(Agent):
         self.top_k = top_k
         self.min_p = min_p
 
+    def _api_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Strip logging-only fields before sending history back to the model."""
+        keep = ("role", "content", "name")
+        return [{k: m[k] for k in keep if k in m} for m in messages]
+
     def solve(
         self, env: Env, task_index: Optional[int] = None, max_num_steps: int = 30
     ) -> SolveResult:
-        #total_cost = 0.0
         env_reset_res = env.reset(task_index=task_index)
         obs = env_reset_res.observation
         info = env_reset_res.info.model_dump()
@@ -45,25 +49,40 @@ class SQLCallingAgent(Agent):
             {"role": "system", "content": self.wiki},
             {"role": "user", "content": obs},
         ]
+        termination, n_steps = "max_steps", 0
         for _ in range(max_num_steps):
-
+            t0 = time.time()
             response = requests.post(
-                self.api + "/v1/chat/completions", 
-                headers={"Content-Type": "application/json"}, 
+                self.api + "/v1/chat/completions",
+                headers={"Content-Type": "application/json"},
                 json={
-                    "messages": messages,
+                    "model": self.model,
+                    "messages": self._api_messages(messages),
                     "max_tokens": self.max_tokens,
                     "temperature": self.temperature,
                     "top_p": self.top_p,
                     "top_k": self.top_k,
                     "min_p": self.min_p,
-                }
+                },
             ).json()
-            
-            next_message = self.parse_response(response['choices'][0]['message']['content'])
+            latency = time.time() - t0
 
-            action = message_to_action(next_message)    
-            env_response = env.step(action)             
+            choice = response["choices"][0]
+            next_message = self.parse_response(choice["message"]["content"])
+            # vLLM --reasoning-parser puts thinking in a separate field; keep it if inline parse found none
+            if choice["message"].get("reasoning_content") and not next_message["reasoning_content"]:
+                next_message["reasoning_content"] = choice["message"]["reasoning_content"]
+            next_message["finish_reason"] = choice.get("finish_reason")
+            u = response.get("usage") or {}
+            next_message["usage"] = {
+                "prompt_tokens": u.get("prompt_tokens"),
+                "completion_tokens": u.get("completion_tokens"),
+            }
+            next_message["latency_s"] = round(latency, 3)
+            n_steps += 1
+
+            action = message_to_action(next_message)
+            env_response = env.step(action)
             reward = env_response.reward
             info = {**info, **env_response.info.model_dump()}
             if action.name != RESPOND_ACTION_NAME:
@@ -85,7 +104,10 @@ class SQLCallingAgent(Agent):
                     ]
                 )
             if env_response.done:
+                termination = "user_stop"
                 break
+        info["termination"] = termination
+        info["n_steps"] = n_steps
         return SolveResult(
             reward=reward,
             info=info,
