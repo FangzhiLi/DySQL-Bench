@@ -38,3 +38,12 @@ def test_confirmed_before_write():
     assert confirmed_before_write([sel, {"role": "user", "content": "Yes, go ahead"}, upd]) is True
     assert confirmed_before_write([sel, {"role": "user", "content": "what next?"}, upd]) is False
     assert confirmed_before_write([sel]) is None
+
+def test_count_extra_sql_blocks():
+    from dysql_bench.analysis import count_extra_sql_blocks
+    traj = [{"role": "assistant", "content": "```sql\nSELECT 1\n```\n<result>x</result>\n```sql\nUPDATE a SET b=1\n```\n```sql\nDELETE FROM a\n```"},
+            {"role": "assistant", "content": "```sql\nSELECT 2\n```"},
+            {"role": "assistant", "content": "<sql>SELECT 3</sql> and <sql>SELECT 4</sql>"},
+            {"role": "user", "name": "sql", "content": "```sql\nnot counted\n```"}]
+    # first message: 3 blocks -> 2 extra; second: 0 extra; third: 1 extra
+    assert count_extra_sql_blocks(traj) == 3

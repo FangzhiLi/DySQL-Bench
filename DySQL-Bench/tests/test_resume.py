@@ -22,7 +22,14 @@ def test_build_meta():
             {"role": "assistant", "content": "```sql\nUPDATE a SET b=1\n```",
              "usage": {"prompt_tokens": 4100, "completion_tokens": 3}}]
     user_traj = [{"role": "assistant", "content": "hi", "usage": {"completion_tokens": 7}}]
-    m = build_meta("pagila", task, info, traj, user_traj, wall_s=12.5)
+    sql_log = [{"phase": "agent", "type": "SELECT", "rowcount": 3},
+               {"phase": "agent", "type": "UPDATE", "rowcount": 0},
+               {"phase": "agent", "type": "UPDATE", "rowcount": 1},
+               {"phase": "agent", "type": "DELETE", "rowcount": None, "error": "x"},
+               {"phase": "gold", "type": "UPDATE", "rowcount": 0}]
+    m = build_meta("pagila", task, info, traj, user_traj, wall_s=12.5, sql_log=sql_log)
+    assert m["n_extra_sql_blocks"] == 0
+    assert m["n_zero_row_writes"] == 1 and m["gold_zero_row_writes"] == 1
     assert m["length"] == "short" and m["crud_types"] == ["UPDATE"]
     assert m["termination"] == "user_stop" and m["n_steps"] == 4
     assert m["n_fabricated_results"] == 1 and m["mismatched_tables"] == ["a"]
@@ -36,3 +43,16 @@ def test_build_meta_tolerates_missing_fields():
     m = build_meta("pagila", task, {}, [], [], wall_s=0)
     assert m["termination"] is None and m["mismatched_tables"] == []
     assert m["last_prompt_tokens"] is None and m["confirmed_before_write"] is None
+
+def test_run_config_sidecar_path_and_content(monkeypatch):
+    from dysql_bench.run import write_run_config
+    from dysql_bench.types import RunConfig
+    cfg = RunConfig(model="m", model_api="http://a", user_model_api="http://u", user_model="um", env="pagila")
+    with tempfile.TemporaryDirectory() as d:
+        ckpt = os.path.join(d, "pagila-run.json")
+        side = write_run_config(ckpt, cfg, server_probe=lambda api: {"version": "x"})
+        assert side == os.path.join(d, "pagila-run.config.json")
+        c = json.load(open(side))
+        assert c["run_config"]["model"] == "m" and c["max_num_steps"] == 30
+        assert c["agent_server"] == {"version": "x"} and c["user_server"] == {"version": "x"}
+        assert "git_commit" in c and "started_at" in c

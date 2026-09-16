@@ -27,6 +27,7 @@ class RewardActionInfo(BaseModel):
     r_actions: float
     gt_data_hash: str
     mismatched_tables: List[str] = []
+    row_diff: Dict[str, Any] = {}
 
 
 class RewardResult(BaseModel):
@@ -69,6 +70,7 @@ class EnvRunResult(BaseModel):
     trial: int
     meta: Dict[str, Any] = {}
     user_traj: List[Dict[str, Any]] = []
+    sql_log: List[Dict[str, Any]] = []
 
 
 class RunConfig(BaseModel):

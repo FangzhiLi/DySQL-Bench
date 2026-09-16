@@ -1216,6 +1216,21 @@ git push -u origin isa/eval-harness
 
 ---
 
+## Addendum (2026-09-16, after pilot): extra log fields
+
+Added after reviewing the five pilot trajectories. Selection rule: only fields that directly separate failure classes or flag bad data; nothing else.
+
+| where | field | why |
+|---|---|---|
+| `info.reward_info.info.row_diff` | per mismatched table: `only_agent` / `only_gold` rows (≤20 each) + counts; `rowcount_only` when the table has no stable columns | tells *how* a table differs (UPDATE vs DELETE, `'N'` vs `'0'`) instead of just its name |
+| `sql_log` (top-level on each result) | every executed statement: `phase` (agent/gold), `step`, `sql`, `type`, `rowcount`, `error`, `duration_s` | `rowcount == 0` on a write is invisible in the observation string; gold-phase entries with `rowcount == 0` flag a broken gold task |
+| `meta.n_extra_sql_blocks` | SQL blocks beyond the first per assistant turn | the env runs only the first block; this counts SQL the agent believed it ran. Complements `n_fabricated_results` |
+| `meta.n_zero_row_writes`, `meta.gold_zero_row_writes` | derived from `sql_log` | one number per run for the two signals above |
+| `<ckpt>.config.json` sidecar | `run_config`, `max_num_steps`, `git_commit`, vLLM version + served models for both servers, `started_at` | every results file carries how it was produced; needed once 1.7B / 4B / trained checkpoints are compared |
+| `summarize.py` | columns `multi-sql`, `0-row write` | |
+
+Also: `calculate_reward` now reads each side of the DB once instead of twice (hash and per-table hashes come from the same read). Observation strings, commit/rollback and the judgement are unchanged. Not added on purpose: an "authenticated before write" rule (the user table differs per env; a keyword rule would be noise). Tests: 22.
+
 ## Self-Review
 
 **需求覆盖**：fork 远端与分支（Task 1）；起服务、thinking on、40960 上下文（Task 3）；小子集先行、两种口径估时（Task 10）；全量与详细日志（Task 7、8、11）。日志字段清单逐项对应：每轮完整消息含 thinking（Task 7 `reasoning_content`）、SQL 结果与伪造检测（原 traj 已含 `<result>` 观测，Task 5 `count_fabricated_results`）、SQL 报错计数与写前确认（Task 5）、终止原因（Task 7）、按表 hash diff（Task 6）、每轮 token 与耗时、末轮 prompt 长度（Task 7、8）、任务元信息（Task 5 + Task 8）。

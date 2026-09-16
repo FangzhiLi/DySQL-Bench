@@ -32,6 +32,8 @@ def _group_stats(rs):
             "avg_user_tokens": _mean(m.get("user_completion_tokens") or 0 for m in metas),
             "fabricated_rate": sum(1 for m in metas if (m.get("n_fabricated_results") or 0) > 0) / len(rs),
             "sql_error_rate": sum(1 for m in metas if (m.get("n_sql_errors") or 0) > 0) / len(rs),
+            "multi_sql_rate": sum(1 for m in metas if (m.get("n_extra_sql_blocks") or 0) > 0) / len(rs),
+            "zero_row_write_rate": sum(1 for m in metas if (m.get("n_zero_row_writes") or 0) > 0) / len(rs),
             "confirm_rate": (sum(1 for c in writes if c) / len(writes)) if writes else None,
             "last_prompt_p50": statistics.median(lp) if lp else None,
             "last_prompt_max": max(lp) if lp else None,
@@ -50,15 +52,16 @@ def summarize(results):
 
 
 def to_markdown(s):
-    lines = ["| group | tasks | runs | pass^1 | pass^3 | pass^5 | steps | wall s | agent tok | user tok | fab rate | sql err | confirm | last prompt p50/max | terminations |",
-             "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    lines = ["| group | tasks | runs | pass^1 | pass^3 | pass^5 | steps | wall s | agent tok | user tok | fab rate | multi-sql | sql err | 0-row write | confirm | last prompt p50/max | terminations |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     def row(name, g):
         pk = g["pass_hat_k"]
         f = lambda k: f"{100*pk[k]:.2f}" if k in pk else "-"
         conf = "-" if g["confirm_rate"] is None else f"{100*g['confirm_rate']:.0f}%"
         return (f"| {name} | {g['n_tasks']} | {g['n_runs']} | {f(1)} | {f(3)} | {f(5)} | {g['avg_steps']:.1f} | "
                 f"{g['avg_wall_s']:.0f} | {g['avg_agent_tokens']:.0f} | {g['avg_user_tokens']:.0f} | "
-                f"{100*g['fabricated_rate']:.1f}% | {100*g['sql_error_rate']:.1f}% | "
+                f"{100*g['fabricated_rate']:.1f}% | {100*g['multi_sql_rate']:.1f}% | "
+                f"{100*g['sql_error_rate']:.1f}% | {100*g['zero_row_write_rate']:.1f}% | "
                 f"{conf} | "
                 f"{g['last_prompt_p50']}/{g['last_prompt_max']} | {g['termination_counts']} |")
     lines.append(row("overall", s["overall"]))

@@ -1,7 +1,7 @@
 # dysql_bench/analysis.py
 """Pure helpers used for logging / post-hoc analysis. No evaluation semantics live here."""
 import re
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import sqlparse
 from dysql_bench.types import Task, SQL_ACTION_NAME
 
@@ -50,3 +50,35 @@ def confirmed_before_write(traj: List[dict]) -> Optional[bool]:
             if sql and sqlparse.parse(sql) and sqlparse.parse(sql)[0].get_type().upper() not in ("SELECT", "UNKNOWN"):
                 return seen_confirm
     return None
+
+
+def count_extra_sql_blocks(traj: List[dict]) -> int:
+    """SQL blocks beyond the first in each assistant message. The env executes only the first block
+    per turn, so every extra block is SQL the agent believed it ran but never did."""
+    return sum(max(0, len(_SQL_BLOCK.findall(m.get("content") or "")) - 1)
+               for m in traj if m.get("role") == "assistant")
+
+
+def _jsonable(v: Any) -> Any:
+    if isinstance(v, (bytes, bytearray, memoryview)):
+        return f"<bytes:{len(v)}>"
+    return v
+
+
+def table_row_diff(agent: Dict[str, tuple], gold: Dict[str, tuple], tables: List[str], limit: int = 20) -> Dict[str, Any]:
+    """Row-level symmetric difference for the given (mismatched) tables.
+    `agent` / `gold` map table -> tuple of row tuples as produced by Env._collect_table_data.
+    Rows are stable-column projections, so a changed row shows up once on each side."""
+    out: Dict[str, Any] = {}
+    for t in tables:
+        a, g = agent.get(t, ()), gold.get(t, ())
+        if (a and a[0] == "__ONLY_ROWCOUNT__") or (g and g[0] == "__ONLY_ROWCOUNT__"):
+            out[t] = {"rowcount_only": True, "agent": a[1] if a else None, "gold": g[1] if g else None}
+            continue
+        sa, sg = set(a), set(g)
+        only_a = sorted(sa - sg, key=repr)
+        only_g = sorted(sg - sa, key=repr)
+        out[t] = {"n_only_agent": len(only_a), "n_only_gold": len(only_g),
+                  "only_agent": [[_jsonable(v) for v in r] for r in only_a[:limit]],
+                  "only_gold": [[_jsonable(v) for v in r] for r in only_g[:limit]]}
+    return out

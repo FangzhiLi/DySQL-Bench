@@ -9,6 +9,7 @@ from hashlib import sha256
 from typing import Any, Callable, Dict, List, Type, Optional, Set, Union, Tuple
 
 from dysql_bench.envs.user import load_user, UserStrategy
+from dysql_bench.analysis import diff_table_hashes, table_row_diff
 from dysql_bench.types import (
     Action,
     Task,
@@ -28,6 +29,7 @@ VOLATILE_COL_RE = re.compile(
     r"(?i)^(last_?update|updated_?at|update_?time|modified(_at)?|modification_?time|create(d)?_?at|timestamp)$"
 )
 IGNORE_TABLES = {"sqlite_sequence", "sqlite_stat1"}
+ROW_DIFF_LIMIT = 20  # max rows kept per side per mismatched table in reward info
 
 
 ToHashable = Union[
@@ -86,6 +88,8 @@ class Env(object):
             api=self.user_model_api, user_strategy=user_strategy, model=user_model
         )
         self.actions: List[Action] = []
+        self.sql_log: List[Dict[str, Any]] = []   # analysis only: every executed statement
+        self._phase = "agent"
 
     def reset(self, task_index: Optional[int] = None) -> EnvResetResponse:
         if task_index is None:
@@ -95,6 +99,8 @@ class Env(object):
         self.conn, self.cursor, self.sql_folder_path = self.data_load_func(self.thread_id)
         self.task = self.tasks[task_index]
         self.actions = []
+        self.sql_log = []
+        self._phase = "agent"
         initial_observation = self.user.reset(instruction=self.task.instruction)
         return EnvResetResponse(
             observation=initial_observation, info=EnvInfo(task=self.task, source="user")
@@ -119,14 +125,28 @@ class Env(object):
                 sql_list = sqlparse.split(sql_code) 
                 for sql in sql_list:
                     sql = sql.strip()
-                    sql_type = sqlparse.parse(sql)[0].get_type().upper()  
-                    self.cursor.execute(sql)
-                    if sql_type == "SELECT":
-                        rows = self.cursor.fetchall()
-                        observation += f"<result>{rows}</result>\n"
-                    else:
-                        observation += f"<result>SQL execution Successfully!</result>\n"
-                        self.conn.commit()
+                    # analysis-only log entry; observation strings and commit/rollback are unchanged
+                    entry = {"phase": self._phase, "step": len(self.actions), "sql": sql,
+                             "type": None, "rowcount": None, "error": None, "duration_s": None}
+                    t0 = time.time()
+                    try:
+                        sql_type = sqlparse.parse(sql)[0].get_type().upper()
+                        entry["type"] = sql_type
+                        self.cursor.execute(sql)
+                        if sql_type == "SELECT":
+                            rows = self.cursor.fetchall()
+                            entry["rowcount"] = len(rows)
+                            observation += f"<result>{rows}</result>\n"
+                        else:
+                            entry["rowcount"] = self.cursor.rowcount
+                            observation += f"<result>SQL execution Successfully!</result>\n"
+                            self.conn.commit()
+                    except Exception as e:
+                        entry["error"] = str(e)
+                        raise
+                    finally:
+                        entry["duration_s"] = round(time.time() - t0, 4)
+                        self.sql_log.append(entry)
                 sql_end_time = time.time()
                 print(f"SQL execution successful time: {sql_end_time - sql_start_time:.2f}s")
 
@@ -197,8 +217,10 @@ class Env(object):
         return consistent_hash(to_hashable(self._collect_table_data()))
 
     def calculate_reward(self) -> RewardResult:
-        agent_tables = self.get_table_hashes()
-        data_hash = self.get_data_hash()
+        # one full read of the agent-side DB: overall hash (the judgement) + per-table data (analysis)
+        agent_data = self._collect_table_data()
+        data_hash = consistent_hash(to_hashable(agent_data))
+        agent_tables = {t: consistent_hash(to_hashable(rows)) for t, rows in agent_data}
         self.conn.close()
 
         reward = 1.0
@@ -211,20 +233,26 @@ class Env(object):
         assert self.sql_folder_path == reward_sql_folder_path, "Different sqlite database when calculating reward!"
 
         # If the task contains ground truth sql statements, use them, otherwise you need to rewrite them
-        for action in self.task.actions:
-            self.step(action)
+        self._phase = "gold"
+        try:
+            for action in self.task.actions:
+                self.step(action)
+        finally:
+            self._phase = "agent"
 
-        gt_tables = self.get_table_hashes()
-        gt_data_hash = self.get_data_hash()
+        gold_data = self._collect_table_data()
+        gt_data_hash = consistent_hash(to_hashable(gold_data))
+        gt_tables = {t: consistent_hash(to_hashable(rows)) for t, rows in gold_data}
 
         # Calculate reward complete
         self.conn.close()
 
-        from dysql_bench.analysis import diff_table_hashes
+        mismatched = diff_table_hashes(agent_tables, gt_tables)
         info = RewardActionInfo(
             r_actions=data_hash == gt_data_hash,
             gt_data_hash=gt_data_hash,
-            mismatched_tables=diff_table_hashes(agent_tables, gt_tables),
+            mismatched_tables=mismatched,
+            row_diff=table_row_diff(dict(agent_data), dict(gold_data), mismatched, limit=ROW_DIFF_LIMIT),
         )
         if not info.r_actions:
             reward = 0.0

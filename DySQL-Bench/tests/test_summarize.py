@@ -9,7 +9,8 @@ def _r(task, trial, reward, env="pagila", length="short", term="user_stop", fab=
                      "wall_s": 10.0, "agent_completion_tokens": 100, "user_completion_tokens": 20,
                      "n_fabricated_results": fab, "mismatched_tables": list(tables),
                      "n_sql_errors": 1 if fab else 0, "confirmed_before_write": True if task == 1 else None,
-                     "last_prompt_tokens": 5000 + 1000 * task}}
+                     "last_prompt_tokens": 5000 + 1000 * task,
+                     "n_extra_sql_blocks": 2 if fab else 0, "n_zero_row_writes": 1 if task == 0 else 0}}
 
 def test_summarize_pass_hat_k_and_counts():
     rs = [_r(0, 0, 1), _r(0, 1, 0), _r(1, 0, 1), _r(1, 1, 1, length="long", fab=1, tables=("a",))]
@@ -23,6 +24,8 @@ def test_summarize_pass_hat_k_and_counts():
     assert s["overall"]["sql_error_rate"] == 0.25
     assert s["overall"]["confirm_rate"] == 1.0   # only runs with a write are counted
     assert s["overall"]["last_prompt_p50"] == 5500 and s["overall"]["last_prompt_max"] == 6000
+    assert s["overall"]["multi_sql_rate"] == 0.25
+    assert s["overall"]["zero_row_write_rate"] == 0.5
     assert set(s["by_env"]) == {"pagila"}
     assert set(s["by_length"]) == {"short", "long"}
 

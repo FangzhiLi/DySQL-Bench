@@ -6,6 +6,7 @@ import time
 import random
 import threading
 import traceback
+import subprocess
 from math import comb
 from tqdm import tqdm
 from typing import List
@@ -17,7 +18,8 @@ from dysql_bench.agents.base import Agent
 from dysql_bench.types import EnvRunResult, RunConfig
 from dysql_bench.envs.user import UserStrategy
 from dysql_bench.analysis import (classify_task, count_fabricated_results,
-                                  count_sql_errors, confirmed_before_write)
+                                  count_sql_errors, confirmed_before_write,
+                                  count_extra_sql_blocks)
 
 MAX_NUM_STEPS = 30
 
@@ -41,19 +43,68 @@ def _last_prompt(traj):
     return pts[-1] if pts else None
 
 
-def build_meta(env_name, task, info, traj, user_traj, wall_s):
+_WRITE_TYPES = {"INSERT", "UPDATE", "DELETE"}
+
+
+def _zero_row_writes(sql_log, phase):
+    return sum(1 for e in sql_log or [] if e.get("phase") == phase
+               and e.get("type") in _WRITE_TYPES and e.get("rowcount") == 0)
+
+
+def build_meta(env_name, task, info, traj, user_traj, wall_s, sql_log=None):
     """Analysis-only metadata attached to each EnvRunResult. Does not affect reward."""
     ri = (info.get("reward_info") or {}).get("info") or {}
     return {"env": env_name, **classify_task(task),
             "termination": info.get("termination"), "n_steps": info.get("n_steps"),
             "n_fabricated_results": count_fabricated_results(traj),
+            "n_extra_sql_blocks": count_extra_sql_blocks(traj),
             "n_sql_errors": count_sql_errors(traj),
+            "n_zero_row_writes": _zero_row_writes(sql_log, "agent"),      # agent write that matched no row
+            "gold_zero_row_writes": _zero_row_writes(sql_log, "gold"),    # >0 means the gold itself is suspect
             "confirmed_before_write": confirmed_before_write(traj),
             "mismatched_tables": ri.get("mismatched_tables", []),
             "wall_s": round(wall_s, 2),
             "agent_completion_tokens": _sum_completion(traj),
             "user_completion_tokens": _sum_completion(user_traj),
             "last_prompt_tokens": _last_prompt(traj)}
+
+
+def _git_commit():
+    try:
+        return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"],
+                                       cwd=os.path.dirname(os.path.abspath(__file__)),
+                                       stderr=subprocess.DEVNULL, text=True).strip()
+    except Exception:
+        return None
+
+
+def _probe_server(api):
+    """Best-effort: vLLM's /version and served model ids. Never raises."""
+    import requests
+    out = {}
+    try:
+        out["version"] = requests.get(f"{api}/version", timeout=5).json()
+    except Exception as e:
+        out["version"] = f"unavailable: {type(e).__name__}"
+    try:
+        out["models"] = [m["id"] for m in requests.get(f"{api}/v1/models", timeout=5).json()["data"]]
+    except Exception as e:
+        out["models"] = f"unavailable: {type(e).__name__}"
+    return out
+
+
+def write_run_config(ckpt_path, config, server_probe=_probe_server):
+    """Sidecar <ckpt>.config.json so every results file carries how it was produced."""
+    side = ckpt_path[:-5] + ".config.json" if ckpt_path.endswith(".json") else ckpt_path + ".config.json"
+    payload = {"started_at": datetime.now().isoformat(timespec="seconds"),
+               "git_commit": _git_commit(),
+               "max_num_steps": MAX_NUM_STEPS,
+               "run_config": config.model_dump(),
+               "agent_server": server_probe(config.model_api),
+               "user_server": server_probe(config.user_model_api)}
+    with open(side, "w") as f:
+        json.dump(payload, f, indent=2)
+    return side
 
 def run(config: RunConfig) -> List[EnvRunResult]:
     assert config.env in ["retail", "eu_soccer", "music", "bowling", "entertainment", "pagila", "chinook", "car", "cookbook", "human_resources", "ice_hockey", "law_episode", "retail_world"], f"Only retail, eu_soccer, music, bowling, entertainment, pagila, chinook, car, cookbook, human_resources, ice_hockey, law_episode, retail_world envs are supported"
@@ -75,6 +126,8 @@ def run(config: RunConfig) -> List[EnvRunResult]:
             with open(ckpt_path) as f:
                 prior_results = [EnvRunResult(**r) for r in json.load(f)]
         print(f"Resuming from {ckpt_path}: {len(done)} (task, trial) pairs already done")
+    if not config.resume or not os.path.exists(ckpt_path[:-5] + ".config.json"):
+        write_run_config(ckpt_path, config)
 
     print(f"Loading user with strategy: {config.user_strategy}")
     env = get_env(              
@@ -136,6 +189,7 @@ def run(config: RunConfig) -> List[EnvRunResult]:
                     max_num_steps=MAX_NUM_STEPS
                 )
                 user_traj = getattr(isolated_env.user, "messages", [])
+                sql_log = getattr(isolated_env, "sql_log", [])
                 result = EnvRunResult(
                     task_id=idx,
                     reward=res.reward,
@@ -143,8 +197,9 @@ def run(config: RunConfig) -> List[EnvRunResult]:
                     traj=res.messages,
                     trial=i,
                     user_traj=user_traj,
+                    sql_log=sql_log,
                     meta=build_meta(config.env, isolated_env.task, res.info, res.messages,
-                                    user_traj, time.time() - run_start_time),
+                                    user_traj, time.time() - run_start_time, sql_log=sql_log),
                 )
             except Exception as e:
                 result = EnvRunResult(
@@ -154,6 +209,7 @@ def run(config: RunConfig) -> List[EnvRunResult]:
                     traj=[],
                     trial=i,
                     user_traj=getattr(isolated_env.user, "messages", []),
+                    sql_log=getattr(isolated_env, "sql_log", []),
                     meta={"env": config.env, "termination": "error",
                           "wall_s": round(time.time() - run_start_time, 2)},
                 )
