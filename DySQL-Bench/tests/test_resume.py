@@ -67,3 +67,19 @@ def test_run_config_sidecar_path_and_content(monkeypatch):
         assert c["run_config"]["model"] == "m" and c["max_num_steps"] == 30
         assert c["agent_server"] == {"version": "x"} and c["user_server"] == {"version": "x"}
         assert "git_commit" in c and "started_at" in c
+
+def test_agent_failures_recorded_as_error_are_not_rerun():
+    from dysql_bench.run import load_prior, reclassify_error
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "ckpt.json")
+        rows = [{"task_id": 1, "trial": 0, "reward": 0, "traj": [], "meta": {"termination": "error"},
+                 "info": {"error": "'choices'", "traceback": "...\nKeyError: 'choices'"}},
+                {"task_id": 2, "trial": 0, "reward": 0, "traj": [], "meta": {"termination": "error"},
+                 "info": {"error": "x", "traceback": "...\nTypeError: expected string or bytes-like object, got 'NoneType'"}},
+                {"task_id": 3, "trial": 0, "reward": 0, "traj": [], "meta": {"termination": "error"},
+                 "info": {"error": "conn", "traceback": "...\nrequests.exceptions.ConnectionError: refused"}}]
+        json.dump(rows, open(p, "w"))
+        assert reclassify_error(rows[0]) == "context_overflow"
+        assert reclassify_error(rows[1]) == "length_no_content"
+        assert reclassify_error(rows[2]) is None
+        assert [r.task_id for r in load_prior(p)] == [1, 2]     # only the infra error (3) is dropped for re-run

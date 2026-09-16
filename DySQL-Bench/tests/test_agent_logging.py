@@ -67,3 +67,38 @@ def test_reasoning_field_name_from_newer_vllm(monkeypatch):
     res = sca.SQLCallingAgent(api="http://x", wiki="w", model="m").solve(FakeEnv(), 0, max_num_steps=1)
     a = [m for m in res.messages if m["role"] == "assistant"][0]
     assert a["reasoning_content"] == "thinking hard" and a["content"] == "four"
+
+def test_context_overflow_400_is_a_failure_not_an_exception(monkeypatch):
+    """vLLM 400 (prompt + max_tokens > max_model_len) -> reward 0, termination context_overflow, traj kept."""
+    calls = {"n": 0}
+    def _post(url, headers=None, json=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            body = {"choices": [{"message": {"content": "```sql\nSELECT * FROM big\n```"}, "finish_reason": "stop"}],
+                    "usage": {"prompt_tokens": 5, "completion_tokens": 5}}
+        else:
+            body = {"error": {"message": "This model's maximum context length is 40960 tokens. However, you requested 8192 output tokens and your prompt contains at least 32769 input tokens", "type": "BadRequestError", "code": 400}}
+        return types.SimpleNamespace(json=lambda: body)
+    monkeypatch.setattr(sca.requests, "post", _post)
+    class NeverDone(FakeEnv):
+        def step(self, action):
+            return EnvResponse(observation="<result>[huge]</result>", reward=0.0, done=False, info=EnvInfo(task=self.task))
+    res = sca.SQLCallingAgent(api="http://x", wiki="w", model="m").solve(NeverDone(), 0, max_num_steps=5)
+    assert res.reward == 0.0
+    assert res.info["termination"] == "context_overflow"
+    assert res.info["n_steps"] == 1
+    assert "maximum context length" in res.info["server_error"]
+    assert len([m for m in res.messages if m["role"] == "assistant"]) == 1   # first turn kept
+
+def test_none_content_after_thinking_exhausts_max_tokens(monkeypatch):
+    """finish_reason=length inside thinking -> content None -> reward 0, termination length_no_content."""
+    def _post(url, headers=None, json=None):
+        body = {"choices": [{"message": {"content": None, "reasoning": "still thinking..."}, "finish_reason": "length"}],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 8192}}
+        return types.SimpleNamespace(json=lambda: body)
+    monkeypatch.setattr(sca.requests, "post", _post)
+    res = sca.SQLCallingAgent(api="http://x", wiki="w", model="m").solve(FakeEnv(), 0, max_num_steps=5)
+    assert res.reward == 0.0
+    assert res.info["termination"] == "length_no_content"
+    a = [m for m in res.messages if m["role"] == "assistant"]
+    assert len(a) == 1 and a[0]["content"] == "" and a[0]["reasoning_content"] == "still thinking..." and a[0]["finish_reason"] == "length"

@@ -67,8 +67,29 @@ class SQLCallingAgent(Agent):
             ).json()
             latency = time.time() - t0
 
+            if "choices" not in response:
+                # vLLM rejected the request (400). In practice: prompt + max_tokens > max_model_len after a
+                # huge SELECT result was appended. Counted as a failure like max_steps; not an infra error.
+                err = (response.get("error") or {})
+                err_msg = err.get("message") if isinstance(err, dict) else str(err)
+                info["server_error"] = err_msg or str(response)[:500]
+                termination = "context_overflow" if "context length" in (err_msg or "") else "server_rejected"
+                break
+
             choice = response["choices"][0]
-            next_message = self.parse_response(choice["message"]["content"])
+            raw_content = choice["message"].get("content")
+            if raw_content is None:
+                # thinking consumed the whole budget (finish_reason=length): no answer to act on
+                messages.append({"role": "assistant", "content": "",
+                                 "reasoning_content": choice["message"].get("reasoning_content") or choice["message"].get("reasoning"),
+                                 "finish_reason": choice.get("finish_reason"),
+                                 "usage": {"prompt_tokens": (response.get("usage") or {}).get("prompt_tokens"),
+                                           "completion_tokens": (response.get("usage") or {}).get("completion_tokens")},
+                                 "latency_s": round(latency, 3)})
+                n_steps += 1
+                termination = "length_no_content"
+                break
+            next_message = self.parse_response(raw_content)
             # vLLM --reasoning-parser puts thinking in a separate field ("reasoning_content" in older
             # builds, "reasoning" in v0.19+); keep it if inline <think> parse found none
             server_reasoning = choice["message"].get("reasoning_content") or choice["message"].get("reasoning")

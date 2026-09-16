@@ -24,8 +24,28 @@ from dysql_bench.analysis import (classify_task, count_fabricated_results,
 MAX_NUM_STEPS = 30
 
 
+# Exceptions that were really agent failures before the agent handled them itself
+# (context overflow -> KeyError 'choices'; thinking exhausted max_tokens -> content None -> TypeError).
+_AGENT_FAILURE_SIGNATURES = (
+    ("KeyError: 'choices'", "context_overflow"),
+    ("expected string or bytes-like object, got 'NoneType'", "length_no_content"),
+)
+
+
+def reclassify_error(r):
+    """Map a legacy error record to its real termination label, or None if it is an infra error."""
+    tb = ((r.get("info") or {}).get("traceback") or "") + ((r.get("info") or {}).get("error") or "")
+    for sig, label in _AGENT_FAILURE_SIGNATURES:
+        if sig in tb:
+            return label
+    return None
+
+
 def _is_error(r):
-    return (r.get("meta") or {}).get("termination") == "error" or "error" in (r.get("info") or {})
+    """Infra errors (server down, connection refused, unknown exceptions) that deserve a re-run.
+    Agent failures that merely surfaced as exceptions are not errors."""
+    is_err = (r.get("meta") or {}).get("termination") == "error" or "error" in (r.get("info") or {})
+    return is_err and reclassify_error(r) is None
 
 
 def load_prior(path):
