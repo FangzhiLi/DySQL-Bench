@@ -12,6 +12,17 @@ def test_load_done_reads_task_trial_pairs():
     assert load_done("/nonexistent.json") == set()
     assert load_done(None) == set()
 
+def test_load_done_excludes_error_results_so_they_rerun():
+    from dysql_bench.run import load_prior
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "ckpt.json")
+        json.dump([{"task_id": 3, "trial": 0, "reward": 1, "info": {}, "traj": [], "meta": {"termination": "user_stop"}},
+                   {"task_id": 4, "trial": 0, "reward": 0, "info": {"error": "conn refused"}, "traj": [],
+                    "meta": {"termination": "error"}}], open(p, "w"))
+        assert load_done(p) == {(3, 0)}
+        kept = load_prior(p)
+        assert [r.task_id for r in kept] == [3]
+
 def test_build_meta():
     task = Task(user_id="1", instruction="i", actions=[Action(name="sql", kwargs={"sql": "UPDATE a SET b=1"})])
     info = {"termination": "user_stop", "n_steps": 4,

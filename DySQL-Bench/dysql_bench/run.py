@@ -24,12 +24,22 @@ from dysql_bench.analysis import (classify_task, count_fabricated_results,
 MAX_NUM_STEPS = 30
 
 
-def load_done(path):
-    """(task_id, trial) pairs already present in an existing results file."""
+def _is_error(r):
+    return (r.get("meta") or {}).get("termination") == "error" or "error" in (r.get("info") or {})
+
+
+def load_prior(path):
+    """Results from an existing file worth keeping on resume: everything except error runs
+    (server down, parse crash), which are re-run instead of being counted as failures."""
     if not path or not os.path.exists(path):
-        return set()
+        return []
     with open(path) as f:
-        return {(r["task_id"], r["trial"]) for r in json.load(f)}
+        return [EnvRunResult(**r) for r in json.load(f) if not _is_error(r)]
+
+
+def load_done(path):
+    """(task_id, trial) pairs to skip on resume. Error runs are not 'done'."""
+    return {(r.task_id, r.trial) for r in load_prior(path)}
 
 
 def _sum_completion(traj):
@@ -121,11 +131,16 @@ def run(config: RunConfig) -> List[EnvRunResult]:
     prior_results: List[EnvRunResult] = []
     if config.resume:
         ckpt_path = config.resume
-        done = load_done(ckpt_path)
+        prior_results = load_prior(ckpt_path)
+        done = {(r.task_id, r.trial) for r in prior_results}
+        n_err = 0
         if os.path.exists(ckpt_path):
             with open(ckpt_path) as f:
-                prior_results = [EnvRunResult(**r) for r in json.load(f)]
-        print(f"Resuming from {ckpt_path}: {len(done)} (task, trial) pairs already done")
+                n_err = sum(1 for r in json.load(f) if _is_error(r))
+            # rewrite without the error runs so the incremental appends below start from a clean file
+            with open(ckpt_path, "w") as f:
+                json.dump([r.model_dump() for r in prior_results], f, indent=2)
+        print(f"Resuming from {ckpt_path}: {len(done)} (task, trial) pairs already done, {n_err} error runs will be re-run")
     if not config.resume or not os.path.exists(ckpt_path[:-5] + ".config.json"):
         write_run_config(ckpt_path, config)
 
