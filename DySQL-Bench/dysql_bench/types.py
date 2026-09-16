@@ -26,6 +26,7 @@ class RewardOutputInfo(BaseModel):
 class RewardActionInfo(BaseModel):
     r_actions: float
     gt_data_hash: str
+    mismatched_tables: List[str] = []
 
 
 class RewardResult(BaseModel):

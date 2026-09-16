@@ -152,24 +152,22 @@ class Env(object):
             
         return EnvResponse(observation=observation, reward=reward, done=done, info=info)
 
-    def get_data_hash(self) -> str:
+    def _collect_table_data(self) -> list:
         """
-        Read all data from all tables and compute their hash values.  
-        It is necessary to read all the data; otherwise, the target table might be correctly modified by the model in the end,  
+        Read all data from all tables.
+        It is necessary to read all the data; otherwise, the target table might be correctly modified by the model in the end,
         but other tables could have been incorrectly modified during the search process.
         """
-
-        all_data = []                       
+        all_data = []
         self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        all_tables = {row[0] for row in self.cursor.fetchall()} - {"sqlite_sequence", "sqlite_stat1"}
+        all_tables = {row[0] for row in self.cursor.fetchall()} - IGNORE_TABLES
 
         for table in self.table_names:
             if table not in all_tables:
                 continue
 
             self.cursor.execute(f'PRAGMA table_info("{table}")')
-            cols_info = self.cursor.fetchall()
-            cols = [c[1] for c in cols_info]
+            cols = [c[1] for c in self.cursor.fetchall()]
 
             if not cols:
                 all_data.append((table, ()))
@@ -180,19 +178,26 @@ class Env(object):
 
             if stable_cols:
                 sel = ", ".join(f'"{c}"' for c in stable_cols)
-                ob = ", ".join(f'"{c}"' for c in stable_cols)
                 # Add rowid to ensure stable order
-                self.cursor.execute(f'SELECT {sel} FROM "{table}" ORDER BY {ob}, rowid')
-                rows = self.cursor.fetchall()
-                all_data.append((table, tuple(rows)))
+                self.cursor.execute(f'SELECT {sel} FROM "{table}" ORDER BY {sel}, rowid')
+                all_data.append((table, tuple(self.cursor.fetchall())))
             else:
                 self.cursor.execute(f'SELECT COUNT(*) FROM "{table}"')
                 n = self.cursor.fetchone()[0]
                 all_data.append((table, ("__ONLY_ROWCOUNT__", n)))
 
-        return consistent_hash(to_hashable(all_data))
+        return all_data
+
+    def get_table_hashes(self) -> Dict[str, str]:
+        """Per-table hashes, for analysis only (which tables differ from gold)."""
+        return {t: consistent_hash(to_hashable(rows)) for t, rows in self._collect_table_data()}
+
+    def get_data_hash(self) -> str:
+        """Overall hash over all table data. Evaluation semantics unchanged."""
+        return consistent_hash(to_hashable(self._collect_table_data()))
 
     def calculate_reward(self) -> RewardResult:
+        agent_tables = self.get_table_hashes()
         data_hash = self.get_data_hash()
         self.conn.close()
 
@@ -209,13 +214,17 @@ class Env(object):
         for action in self.task.actions:
             self.step(action)
 
+        gt_tables = self.get_table_hashes()
         gt_data_hash = self.get_data_hash()
 
         # Calculate reward complete
         self.conn.close()
-        
+
+        from dysql_bench.analysis import diff_table_hashes
         info = RewardActionInfo(
-            r_actions=data_hash == gt_data_hash, gt_data_hash=gt_data_hash
+            r_actions=data_hash == gt_data_hash,
+            gt_data_hash=gt_data_hash,
+            mismatched_tables=diff_table_hashes(agent_tables, gt_tables),
         )
         if not info.r_actions:
             reward = 0.0
