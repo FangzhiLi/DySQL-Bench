@@ -13,9 +13,9 @@ def _mean(vals):
 
 
 def _group_stats(rs):
-    by_task = defaultdict(list)
+    by_task = defaultdict(list)   # keyed by (env, task_id): task ids restart at 0 in every env
     for r in rs:
-        by_task[r["task_id"]].append(1 if abs(r["reward"] - 1) < 1e-6 else 0)
+        by_task[((r.get("meta") or {}).get("env"), r["task_id"])].append(1 if abs(r["reward"] - 1) < 1e-6 else 0)
     n_trials = max(len(v) for v in by_task.values())
     pk = {}
     for k in range(1, n_trials + 1):

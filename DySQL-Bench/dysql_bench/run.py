@@ -29,6 +29,7 @@ MAX_NUM_STEPS = 30
 _AGENT_FAILURE_SIGNATURES = (
     ("KeyError: 'choices'", "context_overflow"),
     ("expected string or bytes-like object, got 'NoneType'", "length_no_content"),
+    ("IndexError: list index out of range", "malformed_sql_block"),
 )
 
 

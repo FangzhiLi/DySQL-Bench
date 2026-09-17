@@ -35,3 +35,8 @@ def test_markdown_renders_with_error_runs():
                         "meta": {"env": "pagila", "termination": "error", "wall_s": 1.0}}]
     md = to_markdown(summarize(rs))
     assert "overall" in md and "error" in md
+
+def test_same_task_id_in_different_envs_are_different_tasks():
+    rs = [_r(0, 0, 1, env="pagila"), _r(0, 0, 0, env="retail")]
+    s = summarize(rs)
+    assert s["overall"]["n_tasks"] == 2 and s["overall"]["pass_hat_k"] == {1: 0.5}

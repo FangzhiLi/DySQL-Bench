@@ -102,3 +102,13 @@ def test_none_content_after_thinking_exhausts_max_tokens(monkeypatch):
     assert res.info["termination"] == "length_no_content"
     a = [m for m in res.messages if m["role"] == "assistant"]
     assert len(a) == 1 and a[0]["content"] == "" and a[0]["reasoning_content"] == "still thinking..." and a[0]["finish_reason"] == "length"
+
+def test_unclosed_sql_block_is_a_labeled_failure(monkeypatch):
+    def _post(url, headers=None, json=None):
+        body = {"choices": [{"message": {"content": "<sql>SELECT 1 FROM t"}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
+        return types.SimpleNamespace(json=lambda: body)
+    monkeypatch.setattr(sca.requests, "post", _post)
+    res = sca.SQLCallingAgent(api="http://x", wiki="w", model="m").solve(FakeEnv(), 0, max_num_steps=3)
+    assert res.reward == 0.0 and res.info["termination"] == "malformed_sql_block" and res.info["n_steps"] == 1
+    assert [m for m in res.messages if m["role"] == "assistant"][0]["content"] == "<sql>SELECT 1 FROM t"

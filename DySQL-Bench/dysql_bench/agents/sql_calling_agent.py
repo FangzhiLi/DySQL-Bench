@@ -104,7 +104,13 @@ class SQLCallingAgent(Agent):
             next_message["latency_s"] = round(latency, 3)
             n_steps += 1
 
-            action = message_to_action(next_message)
+            try:
+                action = message_to_action(next_message)
+            except IndexError:
+                # opened a ```sql / <sql> block but never closed it: malformed output, counted as a failure
+                messages.append(next_message)
+                termination = "malformed_sql_block"
+                break
             env_response = env.step(action)
             reward = env_response.reward
             info = {**info, **env_response.info.model_dump()}
