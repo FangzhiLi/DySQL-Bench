@@ -27,10 +27,10 @@
 
 | 服务 | 模型 | 端口 | 容器名 | 权重 | GPU_UTIL | 折合内存 |
 |---|---|---|---|---|---|---|
-| user sim | Qwen/Qwen2.5-72B-Instruct-AWQ | 8001 | dysql-user | ~40 GB | 0.38（不变） | 46 GB |
+| user sim | Qwen/Qwen2.5-72B-Instruct-AWQ | 8001 | dysql-user | 38.8 GiB | **0.50**（原 0.38） | 57 GB |
 | agent A | Qwen/Qwen3-1.7B（bf16） | 8000 | dysql-agent-1.7b | 3.4 GB | 0.10 | 12 GB |
 | agent B | Qwen/Qwen3-4B（bf16） | 8002 | dysql-agent-4b | 8 GB | 0.15 | 18 GB |
-| 合计 | | | | | 0.63 | 76 GB，剩 45 GB 给 host、reward 计算加载 sqlite |
+| 合计 | | | | | 0.75 | 91 GB；实测三服务空闲时 `free -g` available 26 GB（与 32B 那轮相当） |
 
 KV 依据：32B 那轮 agent KV 峰值 42%（约 7 GB，≈27k token 并发在飞）。1.7B 每 token KV 是 32B-AWQ 的 0.44 倍（28 层 vs 64 层），4B 是 0.56 倍，所以 3 GB / 4 GB 就够，上表留了一倍余量。现在 32B agent 占 0.36（44 GB），停掉后腾出的空间比两个小模型合计还多 14 GB。
 
@@ -48,6 +48,7 @@ KV 依据：32B 那轮 agent KV 峰值 42%（约 7 GB，≈27k token 并发在�
 | `--served-model-name` | qwen3-32b-awq | qwen3-1.7b / qwen3-4b | 会进入结果文件名，见 1.4 |
 | 容器名 / 端口 | dysql-agent / 8000 | dysql-agent-1.7b:8000、dysql-agent-4b:8002 | 两个 agent 共存 |
 | user sim `--max-num-seqs` | 16 | **32** | 两条 run 共用 |
+| user sim `--gpu-memory-utilization` | 0.38 | **0.50** | 实测 2026-09-18：0.38 × 113 GiB = 43 GiB 预算，权重 38.8 GiB，KV 只剩 1.9–5.2 GiB，两次启动失败、第三次勉强 17k token；0.50 给 KV 16.4 GiB = 53,584 token |
 | `--reasoning-parser qwen3`、`enable_thinking` | 有 / on | 不变 | thinking 输出走 `message.reasoning`，harness 已兼容 |
 | 采样、max_tokens、max steps | 见 Global Constraints | 不变 | 可比性 |
 | HF 缓存 | 已有 32B | **需下载** Qwen/Qwen3-1.7B、Qwen/Qwen3-4B | 缓存里目前没有，磁盘剩 2.7 TB，huggingface.co 可达 |
@@ -78,7 +79,7 @@ harness 代码（`dysql_bench/`）除 Task 1b 的目录名外无需改动：`--m
 
 ### 1.5 需要注意的地方（运行期）
 
-1. **起容器顺序**：先 `docker rm -f dysql-agent`（32B）；再重启 user sim（MAX_SEQS=32）并等 :8001 就绪；再起 1.7B 等 :8000；再起 4B 等 :8002。大模型先起，因为它的内存 profiling 最脆弱。
+1. **起容器顺序**：先 `docker rm -f dysql-agent`（32B）；再重启 user sim（MAX_SEQS=32 GPU_UTIL=0.50）并等 :8001 就绪；再起 1.7B 等 :8000；再起 4B 等 :8002。大模型先起，因为它的内存 profiling 最脆弱。
 2. **eu_soccer 不要两条 run 同时跑**：reward 计算每线程整份加载 299 MB 的库。4B 那条 run 用 `ENV_ORDER=reverse`，让 eu_soccer 一头一尾错开；eu_soccer 的并发 8 覆盖保留。
 3. **续跑**：任何一条 run 中断，原样重跑同一条 nohup 命令即可，`--resume` 会跳过已完成、重跑 `error` 的。单个 agent 容器挂了由 `--restart unless-stopped` 拉回；不行就单独重跑它的 serve 命令，**不要碰 dysql-user**。
 4. **预期会多出来、但不需要修的失败**（都已是带标签的失败类别，计入 pass^1 分母）：
@@ -498,7 +499,7 @@ Expected: `no run active`；`free` 的 available 比之前（约 22 GB）多出�
 
 ```bash
 cd /home/wmd3i/Documents/Isa/DySQL-Bench/DySQL-Bench
-MAX_SEQS=32 bash scripts/serve_user_sim.sh
+MAX_SEQS=32 GPU_UTIL=0.50 bash scripts/serve_user_sim.sh
 bash scripts/wait_ready.sh 8001
 docker logs dysql-user 2>&1 | grep -oE 'GPU KV cache size: [0-9,]+ tokens' | tail -1
 ```

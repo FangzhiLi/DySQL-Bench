@@ -33,3 +33,19 @@ so a concurrently loading second model shifts the baseline under it. **Start one
 agent  : "What is 2+2? Answer in one word." -> content 'four', reasoning 152 tok, finish stop
 user   : "Say hi in one line."              -> 'Hi there!', 4 completion tokens
 ```
+
+## 2026-09-18: three-server layout for the 1.7B / 4B parallel baselines
+
+| service | model | quant | gpu-mem-util | max-num-seqs | weights | KV cache |
+|---|---|---|---|---|---|---|
+| user sim :8001 | Qwen/Qwen2.5-72B-Instruct-AWQ | awq_marlin | **0.50** | 32 | 38.77 GiB | 16.35 GiB = 53,584 tokens |
+| agent :8000 | Qwen/Qwen3-1.7B | none (bf16) | 0.10 | 32 | 3.22 GiB | 6.16 GiB = 57,680 tokens |
+| agent :8002 | Qwen/Qwen3-4B | none (bf16) | 0.15 | 32 | 7.56 GiB | 9.51 GiB = 69,264 tokens |
+
+Idle after all three up: `free -g` used 95, available 26.
+
+**Pitfall: 0.38 is not enough for the 72B user sim.** The budget is util × 113.3 GiB (121.7 GB); at 0.38 that is 43 GiB and the
+weights alone are 38.8 GiB. The first two starts died with `Available KV cache memory: 1.87 / 4.91 GiB` (< 5.0 GiB needed for one
+16k request); the third got 5.24 GiB = 17k tokens. It only ever worked at 0.38 before because the profiler baseline happened to
+fall right. Use ≥ 0.46 for this model; 0.50 gives 53k tokens.
+
