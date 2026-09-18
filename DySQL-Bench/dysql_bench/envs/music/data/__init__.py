@@ -14,7 +14,7 @@ def load_sql_data(thread_id: int):
         os.mkdir(tmp_folder_path)
 
     # The data storage for the current thread is in the folder tmp/thread_i
-    sql_folder_path = os.path.join(tmp_folder_path, f"thread_{thread_id}")
+    sql_folder_path = os.path.join(tmp_folder_path, f"thread_{os.getpid()}_{thread_id}")
     if not os.path.exists(sql_folder_path):
         os.mkdir(sql_folder_path)
     
