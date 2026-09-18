@@ -570,6 +570,12 @@ Expected: 两个 summary 的 overall 行存在，`terminations` 字典可读；u
 
 同时记录：pass 数、`estimate.md` 给出的全量预估小时数。10 个任务通过 0 个**不是**停下的理由（零样本基线本来就可能很低），只有 termination 全是 `error` 之类的基础设施问题才停下排查。
 
+### Task 8 结果（2026-09-18）
+
+已完成，见 `docs/results/2026-09-18-small-agent-pilot.md`。基础设施全绿；1.7B 1/10（唯一通过是 gold no-op），4B 0/10；
+主导失败是 SQL 包在 `<result>` / `<action>` 里没被执行；`length_no_content` 0/10 与 1/10，低于门槛，**全量保持 thinking on**。
+预估单条 run 20–29 h（token 口径），两条并行 25–35 h。**Task 9 等用户决定后再启动。**
+
 ### Task 9: 启动两条全量 run 并监控
 
 **Files:** 产出 `results/full_qwen3_1.7b_think_on_c16/`、`results/full_qwen3_4b_think_on_c16/`（若 Task 8 改了模式，tag 中 `think_on` 换成 `think_off`）。
