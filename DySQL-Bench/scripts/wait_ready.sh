@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
-# scripts/wait_ready.sh -- block until both servers answer /v1/models (timeout 30 min)
+# scripts/wait_ready.sh [port ...] -- block until every listed vLLM server answers /v1/models with 200 (default: 8000 8001). 30 min timeout.
 set -u
+PORTS=("$@"); [ ${#PORTS[@]} -eq 0 ] && PORTS=(8000 8001)
 for i in $(seq 1 180); do
-  a=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/v1/models || true)
-  u=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8001/v1/models || true)
-  if [ "$a" = "200" ] && [ "$u" = "200" ]; then echo "both ready"; exit 0; fi
+  ok=1
+  for p in "${PORTS[@]}"; do
+    code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$p/v1/models" || true)
+    [ "$code" = "200" ] || ok=0
+  done
+  if [ "$ok" = "1" ]; then echo "ready: ${PORTS[*]}"; exit 0; fi
   sleep 10
 done
-echo "timeout"; exit 1
+echo "timeout waiting for ${PORTS[*]}"; exit 1
