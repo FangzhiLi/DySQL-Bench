@@ -576,6 +576,13 @@ Expected: 两个 summary 的 overall 行存在，`terminations` 字典可读；u
 主导失败是 SQL 包在 `<result>` / `<action>` 里没被执行；`length_no_content` 0/10 与 1/10，低于门槛，**全量保持 thinking on**。
 预估单条 run 20–29 h（token 口径），两条并行 25–35 h。**Task 9 等用户决定后再启动。**
 
+### Task 9 / 10 结果（2026-09-19）
+
+全量跑完：1.7B 21.6 h，4B 25.3 h，并行，无重启无续跑。**pass^1：4B 29.8 %，1.7B 16.2 %**（32B-AWQ 46.1 %）；
+不含 gold no-op：28.2 % / 13.3 %。两个小模型 56 % 的失败是 SQL 包在 `<action>` / `<result>` 里没被执行。
+报告：`docs/results/2026-09-19-qwen3-1.7b-4b-full.md`（一份合并报告代替计划里的两份单模型报告 + 一份对比）。
+Ops 修正：1.7B 的 GPU_UTIL 0.10 偏紧（KV 3 % 时间打满），下次给 ≥ 0.15。
+
 ### Task 9: 启动两条全量 run 并监控
 
 **Files:** 产出 `results/full_qwen3_1.7b_think_on_c16/`、`results/full_qwen3_4b_think_on_c16/`（若 Task 8 改了模式，tag 中 `think_on` 换成 `think_off`）。
