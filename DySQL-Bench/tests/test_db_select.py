@@ -1,8 +1,8 @@
 # tests/test_db_select.py
 from dysql_bench.db_select import (profile_db, row_key, infer_fks, is_person_table, transaction_tables,
                                    schema_items, containment, is_fragmented, evaluate, dedup, declared_fks,
-                                   validate_fks)
-from tests._sqlite_fixtures import make_db as _db, rows as _rows, SHOP
+                                   validate_fks, infer_fks_by_value)
+from tests._sqlite_fixtures import make_db as _db, rows as _rows, SHOP, WWE
 
 def test_profile_db_reads_tables_rows_pk_fk(tmp_path):
     p = profile_db(_db(tmp_path, "shop", SHOP))
@@ -202,3 +202,28 @@ def test_infer_fk_one_to_one_extension_needs_larger_parent(tmp_path):
     """ + _rows("customers", 3, lambda i: f"{i},'c{i}'") + _rows("supplementary_demographics", 2, lambda i: f"{i},'o'")))
     assert [(f["table"], f["cols"][0], f["ref_table"]) for f in infer_fks(p)] == \
         [("supplementary_demographics", "cust_id", "customers")]
+
+# --- Task 3: value-based inference ---
+
+def test_infer_by_value_finds_role_named_fks(tmp_path):
+    p = profile_db(_db(tmp_path, "wwe", WWE))
+    covered = {(f["table"], f["cols"][0].lower()) for f in infer_fks(p)}   # card_id -> Cards by name
+    got = sorted((f["table"], f["cols"][0], f["ref_table"], f["source"]) for f in infer_fks_by_value(p, covered))
+    assert got == [("Matches", "loser_id", "Wrestlers", "value"), ("Matches", "winner_id", "Wrestlers", "value")]
+
+def test_infer_by_value_rejects_ambiguous_match(tmp_path):
+    # winner_id values 0..39 exist in both Wrestlers.id and Cards.id -> two candidates -> no FK
+    p = profile_db(_db(tmp_path, "amb", """
+        CREATE TABLE Wrestlers (id INTEGER PRIMARY KEY, name TEXT);
+        CREATE TABLE Cards (id INTEGER PRIMARY KEY, title TEXT);
+        CREATE TABLE Matches (id INTEGER PRIMARY KEY, winner_id INTEGER);
+    """ + _rows("Wrestlers", 40, lambda i: f"{i},'w{i}'") + _rows("Cards", 40, lambda i: f"{i},'c{i}'")
+          + _rows("Matches", 200, lambda i: f"{i},{i%40}")))
+    assert infer_fks_by_value(p, set()) == []
+
+def test_infer_by_value_needs_enough_distinct_values(tmp_path):
+    p = profile_db(_db(tmp_path, "few", """
+        CREATE TABLE Wrestlers (id INTEGER PRIMARY KEY, name TEXT);
+        CREATE TABLE Matches (id INTEGER PRIMARY KEY, winner_id INTEGER, note TEXT);
+    """ + _rows("Wrestlers", 40, lambda i: f"{i},'w{i}'") + _rows("Matches", 200, lambda i: f"{i},{i%3},'x'")))
+    assert infer_fks_by_value(p, set()) == []

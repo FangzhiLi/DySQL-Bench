@@ -125,6 +125,42 @@ def infer_fks(p):
                             "ref_cols": [keys[cands[0]]], "source": "name"})
     return out
 
+
+SAMPLE_ROWS = 5000  # rows sampled per column when inferring FKs by value
+
+
+def infer_fks_by_value(p, covered, min_hit=0.99, min_distinct=20):
+    """Role-named FKs (winner_id, loser_id, *_order_id) that no name rule catches: an id-like column whose
+    sampled non-empty values (almost) all fall inside exactly one other table's key. `covered` holds
+    (table, col_lower) pairs already explained by declared or name-inferred FKs."""
+    keys = {t["name"]: row_key(t) for t in p["tables"] if row_key(t)}
+    rows = {t["name"]: t["rows"] for t in p["tables"]}
+    c = _open(p["path"])
+    out = []
+    for t in p["tables"]:
+        own = keys.get(t["name"])
+        for col in t["cols"]:
+            if (t["name"], col.lower()) in covered or col == own or not _fk_candidate(col):
+                continue
+            distinct = c.execute(f"SELECT count(DISTINCT {_q(col)}) FROM {_q(t['name'])}").fetchone()[0]
+            if distinct < min_distinct:
+                continue
+            hits = []
+            for ref, k in keys.items():
+                if ref == t["name"] or rows[ref] < distinct:
+                    continue
+                n, h = c.execute(
+                    f"SELECT count(*), coalesce(sum({_q(col)} IN (SELECT {_q(k)} FROM {_q(ref)})), 0) FROM "
+                    f"(SELECT {_q(col)} FROM {_q(t['name'])} WHERE {_q(col)} IS NOT NULL AND {_q(col)} != '' "
+                    f"LIMIT {SAMPLE_ROWS})").fetchone()
+                if n and h / n >= min_hit:
+                    hits.append(ref)
+            if len(hits) == 1:
+                out.append({"table": t["name"], "cols": [col], "ref_table": hits[0],
+                            "ref_cols": [keys[hits[0]]], "source": "value"})
+    c.close()
+    return out
+
 def is_person_table(name, cols):
     return bool(PERSON.search(name.lower())) or any(_norm(c) in NAME_COLS for c in cols)
 

@@ -20,3 +20,12 @@ CREATE TABLE orders (order_id INTEGER PRIMARY KEY, customer_id INTEGER REFERENCE
 """ + rows("customers", 60, lambda i: f"{i},'a{i}','b{i}'") \
     + rows("products", 60, lambda i: f"{i},'p{i}',1.0") \
     + rows("orders", 100, lambda i: f"{i},{i%60},{i%60},1")
+
+# 200 wrestlers but only 40 cards: winner/loser ids 0..199 fit Wrestlers only (TEXT ids, like the real WWE DB);
+# `champion` is a role-named FK without an id suffix, supplied manually in the tests
+WWE = """
+CREATE TABLE Wrestlers (id INTEGER PRIMARY KEY, name TEXT);
+CREATE TABLE Cards (id INTEGER PRIMARY KEY, title TEXT);
+CREATE TABLE Matches (id INTEGER PRIMARY KEY, card_id INTEGER, winner_id TEXT, loser_id TEXT, champion INTEGER);
+""" + rows("Wrestlers", 200, lambda i: f"{i},'w{i}'") + rows("Cards", 40, lambda i: f"{i},'c{i}'") \
+    + rows("Matches", 200, lambda i: f"{i},{i%40},'{i%200}','{(i+1)%200}',{i%200}")
