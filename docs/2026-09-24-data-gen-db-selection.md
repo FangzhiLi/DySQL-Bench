@@ -18,7 +18,7 @@
   - Spider 1.0：`chinook_1`、`store_1`（Chinook）、`sakila_1`（Sakila/Pagila）、`soccer_1`（EU_soccer 去掉 Match）
   - BIRD：6 个原库，加 `movie_3`（Sakila）、`european_football_2`（EU_soccer）
   - Spider2-lite：7 个原库，加 `sqlite-sakila`、`northwind`（retail_world 是 Northwind 子集）
-- 这份清单是人工识别的。还要用表名集合 Jaccard 相似度（阈值约 0.5）对全部候选跑一遍兜底。
+- 清单之外，再用 schema 重叠度兜底：把每个库表示成归一化的 `表.列` 集合，计算包含度 = 交集 ÷ 较小一方的大小，≥ 0.6 视为同源。用包含度而不用 Jaccard，是因为子集/超集副本（northwind ⊃ retail_world、soccer_1 ⊂ EU_soccer）的 Jaccard 只有 0.3–0.4。
 
 另外，跨来源的重复库要去重，避免同一份数据被过度采样，例如：Spider1 `formula_1` / BIRD `formula_1` / Spider2 `f1`，Spider1 `baseball_1` / Spider2 `Baseball`，Spider1 `bike_1` / BIRD `bike_share_1`。
 
@@ -41,20 +41,38 @@
 - 每库任务上限（例如 ≤ 80），避免复制 DySQL 里两个库占 39% 的偏斜。
 - 按领域分层：体育、零售/订单、内容媒体、人事/教育、医疗/科学。
 
-## 各来源的初步通过情况
+## 自动筛选结果（2026-09-24）
 
-用 A（只用清单，未跑 Jaccard）加 C 的表数/列数/行数，再加"声明 FK ≥ 2"跑了一遍（2026-09-24，基于 PRAGMA 统计）：
+实现：`DySQL-Bench/dysql_bench/db_select.py`（测试 `tests/test_db_select.py`），运行脚本 `DySQL-Bench/scripts/select_dbs.py`。全量结果写到 `DySQL-Bench/results/db_select/db_select_all.csv`（不进 git），通过且去重后的候选写到 `docs/data_gen/candidate_dbs.csv`。
 
-| 来源 | 库总数 | 排除泄漏后 | 通过尺寸 + FK≥2 | 备注 |
-|---|---|---|---|---|
-| BIRD（train 69 + dev 11） | 80 | 72 | 58 | 主要来源。超出尺寸：hockey、mondial_geo、soccer_2016、works_cycles |
-| Spider 1.0 | 206 | 202 | 16 | 大多数库数据太少（中位 11 行/表）。通过的：aan_1, activity_1, bakery_1, car_1, college_2, college_3, cre_Drama_Workshop_Groups, csu_1, flight_2, flight_4, formula_1, hr_1, voter_1, wine_1, world_1, wta_1 |
-| Spider2-lite（SQLite） | 30 | 21 | 1（school_scheduling） | 被"声明 FK"卡掉的居多，按上面 B 的放宽规则重算。`city_legislation`、`modern_data`、`education_business`、`oracle_sql` 是多个无关数据集拼在一起的库，领域不连贯，建议排除或按子数据集拆开 |
-| SynSQL-2.5M | 16,583 | 16,583 | — | 不能直接用：75% 的表只有 2 行，20% 是空表，写任务要么 no-op 要么平凡。价值在于 schema（PK/FK 齐全、无泄漏风险），要用必须先填充数据，作为单独的工作项 |
+规则怎么落地的：
+- **行定位键：** 单列 PK；没有 PK 时，用值唯一且非空的 id 类列（列名以 id / _key / _code 结尾），优先选列名里含表名的那一列。
+- **推断 FK：** 列名等于另一张表的行定位键，或列名为 `<表名>_id`，且目标唯一时才采纳。
+- **事务表：** 有出向 FK（声明或推断），且行数 ≥ 50。
+- **"可定位"：** 至少一张事务表有行定位键。
+- **拼凑库：** FK 图最大连通分量覆盖的表 < 60% 时判为拼凑库，排除。
+- **去重：** schema 包含度 ≥ 0.6 视为同一个库，按 BIRD > Spider2 > Spider1 > SynSQL 的优先级只保留一份。
 
-B 的其余条件（事务表、人物表、写目标可定位）还没自动化，是下一步。
+| 来源 | 库总数 | 通过 | 重复 | 保留 | 主要淘汰原因（一个库可有多个） |
+|---|---|---|---|---|---|
+| BIRD（train 69 + dev 11） | 80 | 36 | 0 | 36 | 文件 > 100 MB 22 个，行数 17，表数 10，事务表无键 9，泄漏 9，FK 8 |
+| Spider2-lite（SQLite） | 30 | 3 | 0 | 3 | 拼凑库 10，泄漏 9，文件 > 100 MB 8，事务表无键 4 |
+| Spider 1.0 | 206 | 10 | 2 | 8 | 行数不足 183，无事务表 182 |
+| SynSQL-2.5M | 16,583 | 0 | 0 | 0 | 全部因行数不足/无事务表淘汰（表内只有 0–2 行） |
+| **合计** | | | | **47** | 其中 34 个有人物实体表；13 个没有（如 genes、toxicology、world、flight_2） |
+
+保留的库：
+- **BIRD：** address, beer_factory, books, car_retails, chicago_crime, college_completion, computer_student, disney, genes, legislator, mental_health_survey, movie, movielens, olympics, professional_basketball, public_review_platform, regional_sales, restaurant, retail_complains, shakespeare, shipping, social_media, student_loan, superstore, synthea, university, video_games, world, california_schools, debit_card_specializing, financial, formula_1, student_club, superhero, thrombosis_prediction, toxicology
+- **Spider2-lite：** AdventureWorks、IPL（这两个的 FK 全靠推断，要人工抽查）、school_scheduling
+- **Spider 1.0：** aan_1, car_1, college_2, college_3, csu_1, flight_2, flight_4, hr_1。formula_1、world_1 与 BIRD 同源，已去重
+
+待决定：
+1. **`simpson_episodes` 算不算泄漏。** 它与 law_episode 是同一套 schema 模板（包含度 0.88），但数据是另一部剧。目前按泄漏排除（训练它等于提前见过 law_episode 的 schema）。
+2. **100 MB 文件上限。** 有 10 个库只因文件大小被淘汰，数据本身合格：BIRD 的 food_inspection_2、menu、music_platform_2、card_games、codebase_community；Spider2 的 Airlines、WWE，以及 Brazilian_E_Commerce / E_commerce / electronic_sales（三个是同一份 Olist 数据）。可以放宽上限，或者抽样缩小后再用。
+3. **没有人物实体表的 13 个库**（软条件）：留着的话 persona 要编，任务会更像 cars/cookbook。
 
 ## 数据来源
 
 - 库级统计 dump、主题标签：`docs/benchmark_db_catalog.xlsx`（未进 git，由 scratchpad 脚本生成）
+- 原始库文件目前在 `/tmp/claude-1000/...` 的 scratchpad 里（BIRD train/dev、Spider 1.0、Spider2-lite 本地 SQLite、SynSQL），不是持久位置
 - DySQL 13 个库明细：`docs/dysql_db_info.md`
