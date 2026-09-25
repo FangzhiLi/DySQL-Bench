@@ -1,0 +1,4766 @@
+{
+ "bird:address": [
+  {
+   "table": "CBSA",
+   "key": "CBSA",
+   "kind": "entity",
+   "rows": 465,
+   "names": [
+    "CBSA_name"
+   ],
+   "down": [
+    "zip_data",
+    "alias",
+    "area_code",
+    "avoid",
+    "country",
+    "zip_congress"
+   ],
+   "up": [
+    "congress",
+    "state"
+   ],
+   "update_targets": [
+    "CBSA",
+    "zip_data",
+    "alias",
+    "country",
+    "congress",
+    "state"
+   ]
+  },
+  {
+   "table": "state",
+   "key": "abbreviation",
+   "kind": "entity",
+   "rows": 62,
+   "names": [
+    "name"
+   ],
+   "down": [
+    "congress",
+    "zip_data",
+    "country",
+    "zip_congress",
+    "alias",
+    "area_code",
+    "avoid"
+   ],
+   "up": [
+    "CBSA"
+   ],
+   "update_targets": [
+    "state",
+    "congress",
+    "zip_data",
+    "country",
+    "alias",
+    "CBSA"
+   ]
+  },
+  {
+   "table": "congress",
+   "key": "cognress_rep_id",
+   "kind": "person_named",
+   "rows": 540,
+   "names": [
+    "first_name",
+    "last_name"
+   ],
+   "down": [
+    "zip_congress"
+   ],
+   "up": [
+    "state",
+    "zip_data"
+   ],
+   "update_targets": [
+    "congress",
+    "state",
+    "zip_data"
+   ]
+  },
+  {
+   "table": "zip_data",
+   "key": "zip_code",
+   "kind": "entity",
+   "rows": 41563,
+   "names": [],
+   "down": [
+    "alias",
+    "area_code",
+    "avoid",
+    "country",
+    "zip_congress"
+   ],
+   "up": [
+    "CBSA",
+    "congress",
+    "state"
+   ],
+   "update_targets": [
+    "zip_data",
+    "alias",
+    "country",
+    "CBSA",
+    "congress",
+    "state"
+   ]
+  },
+  {
+   "table": "alias",
+   "key": "zip_code",
+   "kind": "entity",
+   "rows": 41701,
+   "names": [],
+   "down": [
+    "zip_data",
+    "area_code",
+    "avoid",
+    "country",
+    "zip_congress"
+   ],
+   "up": [
+    "CBSA",
+    "congress",
+    "state"
+   ],
+   "update_targets": [
+    "alias",
+    "zip_data",
+    "country",
+    "CBSA",
+    "congress",
+    "state"
+   ]
+  }
+ ],
+ "bird:airline": [
+  {
+   "table": "Air Carriers",
+   "key": "Code",
+   "kind": "entity",
+   "rows": 1656,
+   "names": [],
+   "down": [
+    "Airlines"
+   ],
+   "up": [
+    "Airports"
+   ],
+   "update_targets": [
+    "Air Carriers",
+    "Airlines",
+    "Airports"
+   ]
+  },
+  {
+   "table": "Airports",
+   "key": "Code",
+   "kind": "entity",
+   "rows": 6510,
+   "names": [],
+   "down": [
+    "Airlines"
+   ],
+   "up": [
+    "Air Carriers"
+   ],
+   "update_targets": [
+    "Airports",
+    "Airlines",
+    "Air Carriers"
+   ]
+  }
+ ],
+ "bird:beer_factory": [
+  {
+   "table": "customers",
+   "key": "CustomerID",
+   "kind": "person_named",
+   "rows": 554,
+   "names": [
+    "First",
+    "Last"
+   ],
+   "down": [
+    "rootbeerreview",
+    "transaction"
+   ],
+   "up": [
+    "location",
+    "rootbeer",
+    "rootbeerbrand"
+   ],
+   "update_targets": [
+    "customers",
+    "rootbeerreview",
+    "transaction",
+    "location",
+    "rootbeer",
+    "rootbeerbrand"
+   ]
+  },
+  {
+   "table": "rootbeerbrand",
+   "key": "BrandID",
+   "kind": "entity",
+   "rows": 24,
+   "names": [
+    "BrandName",
+    "BreweryName"
+   ],
+   "down": [
+    "rootbeer",
+    "rootbeerreview",
+    "transaction"
+   ],
+   "up": [
+    "customers",
+    "geolocation",
+    "location"
+   ],
+   "update_targets": [
+    "rootbeerbrand",
+    "rootbeer",
+    "rootbeerreview",
+    "transaction",
+    "customers",
+    "geolocation",
+    "location"
+   ]
+  },
+  {
+   "table": "rootbeer",
+   "key": "RootBeerID",
+   "kind": "entity",
+   "rows": 6430,
+   "names": [],
+   "down": [
+    "transaction"
+   ],
+   "up": [
+    "customers",
+    "geolocation",
+    "location",
+    "rootbeerbrand"
+   ],
+   "update_targets": [
+    "rootbeer",
+    "transaction",
+    "customers",
+    "geolocation",
+    "location",
+    "rootbeerbrand"
+   ]
+  }
+ ],
+ "bird:book_publishing_company": [
+  {
+   "table": "authors",
+   "key": "au_id",
+   "kind": "person_named",
+   "rows": 23,
+   "names": [
+    "au_lname",
+    "au_fname"
+   ],
+   "down": [
+    "titleauthor"
+   ],
+   "up": [
+    "titles"
+   ],
+   "update_targets": [
+    "authors",
+    "titleauthor",
+    "titles"
+   ]
+  },
+  {
+   "table": "jobs",
+   "key": "job_id",
+   "kind": "entity",
+   "rows": 14,
+   "names": [],
+   "down": [
+    "employee"
+   ],
+   "up": [
+    "publishers"
+   ],
+   "update_targets": [
+    "jobs",
+    "employee",
+    "publishers"
+   ]
+  },
+  {
+   "table": "publishers",
+   "key": "pub_id",
+   "kind": "entity",
+   "rows": 8,
+   "names": [
+    "pub_name"
+   ],
+   "down": [
+    "employee",
+    "pub_info",
+    "titles",
+    "roysched",
+    "sales",
+    "titleauthor"
+   ],
+   "up": [
+    "authors",
+    "jobs",
+    "stores"
+   ],
+   "update_targets": [
+    "publishers",
+    "employee",
+    "titles",
+    "roysched",
+    "sales",
+    "titleauthor",
+    "authors",
+    "jobs",
+    "stores"
+   ]
+  },
+  {
+   "table": "employee",
+   "key": "emp_id",
+   "kind": "person_named",
+   "rows": 43,
+   "names": [
+    "fname",
+    "lname"
+   ],
+   "down": [],
+   "up": [
+    "jobs",
+    "publishers"
+   ],
+   "update_targets": [
+    "employee",
+    "jobs",
+    "publishers"
+   ]
+  },
+  {
+   "table": "stores",
+   "key": "stor_id",
+   "kind": "entity",
+   "rows": 6,
+   "names": [
+    "stor_name"
+   ],
+   "down": [
+    "discounts",
+    "sales"
+   ],
+   "up": [
+    "titles"
+   ],
+   "update_targets": [
+    "stores",
+    "discounts",
+    "sales",
+    "titles"
+   ]
+  },
+  {
+   "table": "titles",
+   "key": "title_id",
+   "kind": "entity",
+   "rows": 18,
+   "names": [
+    "title"
+   ],
+   "down": [
+    "roysched",
+    "sales",
+    "titleauthor"
+   ],
+   "up": [
+    "authors",
+    "publishers",
+    "stores"
+   ],
+   "update_targets": [
+    "titles",
+    "roysched",
+    "sales",
+    "titleauthor",
+    "authors",
+    "publishers",
+    "stores"
+   ]
+  }
+ ],
+ "bird:books": [
+  {
+   "table": "author",
+   "key": "author_id",
+   "kind": "person_named",
+   "rows": 9235,
+   "names": [
+    "author_name"
+   ],
+   "down": [
+    "book_author"
+   ],
+   "up": [
+    "book"
+   ],
+   "update_targets": [
+    "author",
+    "book"
+   ]
+  },
+  {
+   "table": "book_language",
+   "key": "language_id",
+   "kind": "entity",
+   "rows": 27,
+   "names": [
+    "language_name"
+   ],
+   "down": [
+    "book",
+    "book_author",
+    "order_line"
+   ],
+   "up": [
+    "author",
+    "cust_order",
+    "publisher"
+   ],
+   "update_targets": [
+    "book_language",
+    "book",
+    "order_line",
+    "author",
+    "cust_order",
+    "publisher"
+   ]
+  },
+  {
+   "table": "country",
+   "key": "country_id",
+   "kind": "entity",
+   "rows": 232,
+   "names": [
+    "country_name"
+   ],
+   "down": [
+    "address",
+    "customer_address",
+    "cust_order"
+   ],
+   "up": [
+    "customer",
+    "shipping_method"
+   ],
+   "update_targets": [
+    "country",
+    "address",
+    "customer_address",
+    "cust_order",
+    "customer",
+    "shipping_method"
+   ]
+  },
+  {
+   "table": "address",
+   "key": "address_id",
+   "kind": "entity",
+   "rows": 1000,
+   "names": [
+    "street_name"
+   ],
+   "down": [
+    "customer_address",
+    "cust_order",
+    "order_history",
+    "order_line"
+   ],
+   "up": [
+    "book",
+    "country",
+    "customer",
+    "order_status",
+    "shipping_method"
+   ],
+   "update_targets": [
+    "address",
+    "customer_address",
+    "cust_order",
+    "order_history",
+    "order_line",
+    "book",
+    "country",
+    "customer",
+    "order_status",
+    "shipping_method"
+   ]
+  },
+  {
+   "table": "customer",
+   "key": "customer_id",
+   "kind": "person_named",
+   "rows": 2000,
+   "names": [
+    "first_name",
+    "last_name"
+   ],
+   "down": [
+    "customer_address",
+    "cust_order",
+    "order_history",
+    "order_line"
+   ],
+   "up": [
+    "address",
+    "book",
+    "order_status",
+    "shipping_method"
+   ],
+   "update_targets": [
+    "customer",
+    "customer_address",
+    "cust_order",
+    "order_history",
+    "order_line",
+    "address",
+    "book",
+    "order_status",
+    "shipping_method"
+   ]
+  },
+  {
+   "table": "order_status",
+   "key": "status_id",
+   "kind": "entity",
+   "rows": 6,
+   "names": [],
+   "down": [
+    "order_history",
+    "address_status"
+   ],
+   "up": [
+    "cust_order"
+   ],
+   "update_targets": [
+    "order_status",
+    "order_history",
+    "address_status",
+    "cust_order"
+   ]
+  },
+  {
+   "table": "publisher",
+   "key": "publisher_id",
+   "kind": "entity",
+   "rows": 2264,
+   "names": [
+    "publisher_name"
+   ],
+   "down": [
+    "book",
+    "book_author",
+    "order_line"
+   ],
+   "up": [
+    "author",
+    "book_language",
+    "cust_order"
+   ],
+   "update_targets": [
+    "publisher",
+    "book",
+    "order_line",
+    "author",
+    "book_language",
+    "cust_order"
+   ]
+  },
+  {
+   "table": "book",
+   "key": "book_id",
+   "kind": "entity",
+   "rows": 11127,
+   "names": [
+    "title"
+   ],
+   "down": [
+    "book_author",
+    "order_line"
+   ],
+   "up": [
+    "author",
+    "book_language",
+    "cust_order",
+    "publisher"
+   ],
+   "update_targets": [
+    "book",
+    "order_line",
+    "author",
+    "book_language",
+    "cust_order",
+    "publisher"
+   ]
+  },
+  {
+   "table": "cust_order",
+   "key": "order_id",
+   "kind": "entity",
+   "rows": 7550,
+   "names": [],
+   "down": [
+    "order_history",
+    "order_line"
+   ],
+   "up": [
+    "address",
+    "book",
+    "customer",
+    "order_status",
+    "shipping_method"
+   ],
+   "update_targets": [
+    "cust_order",
+    "order_history",
+    "order_line",
+    "address",
+    "book",
+    "customer",
+    "order_status",
+    "shipping_method"
+   ]
+  }
+ ],
+ "bird:car_retails": [
+  {
+   "table": "offices",
+   "key": "officeCode",
+   "kind": "entity",
+   "rows": 7,
+   "names": [],
+   "down": [
+    "employees",
+    "customers"
+   ],
+   "up": [],
+   "update_targets": [
+    "offices",
+    "employees",
+    "customers"
+   ]
+  },
+  {
+   "table": "employees",
+   "key": "employeeNumber",
+   "kind": "person_named",
+   "rows": 23,
+   "names": [
+    "lastName",
+    "firstName"
+   ],
+   "down": [
+    "customers",
+    "orders",
+    "payments"
+   ],
+   "up": [
+    "offices"
+   ],
+   "update_targets": [
+    "employees",
+    "customers",
+    "orders",
+    "payments",
+    "offices"
+   ]
+  },
+  {
+   "table": "customers",
+   "key": "customerNumber",
+   "kind": "person_named",
+   "rows": 122,
+   "names": [
+    "customerName",
+    "contactLastName",
+    "contactFirstName"
+   ],
+   "down": [
+    "orders",
+    "payments",
+    "orderdetails"
+   ],
+   "up": [
+    "employees",
+    "products"
+   ],
+   "update_targets": [
+    "customers",
+    "orders",
+    "payments",
+    "orderdetails",
+    "employees",
+    "products"
+   ]
+  },
+  {
+   "table": "orders",
+   "key": "orderNumber",
+   "kind": "entity",
+   "rows": 326,
+   "names": [],
+   "down": [
+    "orderdetails"
+   ],
+   "up": [
+    "customers",
+    "products"
+   ],
+   "update_targets": [
+    "orders",
+    "orderdetails",
+    "customers",
+    "products"
+   ]
+  },
+  {
+   "table": "productlines",
+   "key": "productLine",
+   "kind": "entity",
+   "rows": 7,
+   "names": [],
+   "down": [
+    "products",
+    "orderdetails"
+   ],
+   "up": [
+    "orders"
+   ],
+   "update_targets": [
+    "products",
+    "orderdetails",
+    "orders"
+   ]
+  },
+  {
+   "table": "products",
+   "key": "productCode",
+   "kind": "entity",
+   "rows": 110,
+   "names": [
+    "productName"
+   ],
+   "down": [
+    "orderdetails"
+   ],
+   "up": [
+    "orders",
+    "productlines"
+   ],
+   "update_targets": [
+    "products",
+    "orderdetails",
+    "orders"
+   ]
+  }
+ ],
+ "bird:chicago_crime": [
+  {
+   "table": "Community_Area",
+   "key": "community_area_no",
+   "kind": "entity",
+   "rows": 77,
+   "names": [
+    "community_area_name"
+   ],
+   "down": [
+    "Neighborhood",
+    "Crime"
+   ],
+   "up": [
+    "District",
+    "FBI_Code",
+    "IUCR",
+    "Ward"
+   ],
+   "update_targets": [
+    "Community_Area",
+    "Neighborhood",
+    "Crime",
+    "District",
+    "FBI_Code",
+    "IUCR",
+    "Ward"
+   ]
+  },
+  {
+   "table": "District",
+   "key": "district_no",
+   "kind": "entity",
+   "rows": 22,
+   "names": [
+    "district_name"
+   ],
+   "down": [
+    "Crime"
+   ],
+   "up": [
+    "Community_Area",
+    "FBI_Code",
+    "IUCR",
+    "Ward"
+   ],
+   "update_targets": [
+    "District",
+    "Crime",
+    "Community_Area",
+    "FBI_Code",
+    "IUCR",
+    "Ward"
+   ]
+  },
+  {
+   "table": "FBI_Code",
+   "key": "fbi_code_no",
+   "kind": "entity",
+   "rows": 26,
+   "names": [
+    "title"
+   ],
+   "down": [
+    "Crime"
+   ],
+   "up": [
+    "Community_Area",
+    "District",
+    "IUCR",
+    "Ward"
+   ],
+   "update_targets": [
+    "FBI_Code",
+    "Crime",
+    "Community_Area",
+    "District",
+    "IUCR",
+    "Ward"
+   ]
+  },
+  {
+   "table": "IUCR",
+   "key": "iucr_no",
+   "kind": "entity",
+   "rows": 401,
+   "names": [],
+   "down": [
+    "Crime"
+   ],
+   "up": [
+    "Community_Area",
+    "District",
+    "FBI_Code",
+    "Ward"
+   ],
+   "update_targets": [
+    "IUCR",
+    "Crime",
+    "Community_Area",
+    "District",
+    "FBI_Code",
+    "Ward"
+   ]
+  },
+  {
+   "table": "Ward",
+   "key": "ward_no",
+   "kind": "entity",
+   "rows": 50,
+   "names": [
+    "alderman_first_name",
+    "alderman_last_name"
+   ],
+   "down": [
+    "Crime"
+   ],
+   "up": [
+    "Community_Area",
+    "District",
+    "FBI_Code",
+    "IUCR"
+   ],
+   "update_targets": [
+    "Ward",
+    "Crime",
+    "Community_Area",
+    "District",
+    "FBI_Code",
+    "IUCR"
+   ]
+  }
+ ],
+ "bird:citeseer": [
+  {
+   "table": "paper",
+   "key": "paper_id",
+   "kind": "entity",
+   "rows": 3312,
+   "names": [
+    "class_label"
+   ],
+   "down": [
+    "content",
+    "cites"
+   ],
+   "up": [],
+   "update_targets": [
+    "paper"
+   ]
+  }
+ ],
+ "bird:college_completion": [
+  {
+   "table": "institution_details",
+   "key": "unitid",
+   "kind": "entity",
+   "rows": 3798,
+   "names": [
+    "chronname"
+   ],
+   "down": [
+    "institution_grads",
+    "state_sector_grads",
+    "state_sector_details"
+   ],
+   "up": [],
+   "update_targets": [
+    "institution_details",
+    "institution_grads",
+    "state_sector_grads",
+    "state_sector_details"
+   ]
+  }
+ ],
+ "bird:computer_student": [
+  {
+   "table": "course",
+   "key": "course_id",
+   "kind": "entity",
+   "rows": 132,
+   "names": [],
+   "down": [
+    "taughtBy"
+   ],
+   "up": [
+    "person"
+   ],
+   "update_targets": [
+    "course",
+    "person"
+   ]
+  },
+  {
+   "table": "person",
+   "key": "p_id",
+   "kind": "person_id_only",
+   "rows": 278,
+   "names": [],
+   "down": [
+    "taughtBy"
+   ],
+   "up": [
+    "course"
+   ],
+   "update_targets": [
+    "person",
+    "course"
+   ]
+  }
+ ],
+ "bird:disney": [
+  {
+   "table": "characters",
+   "key": "movie_title",
+   "kind": "entity",
+   "rows": 56,
+   "names": [
+    "movie_title"
+   ],
+   "down": [
+    "director",
+    "voice-actors"
+   ],
+   "up": [],
+   "update_targets": [
+    "characters",
+    "director",
+    "voice-actors"
+   ]
+  },
+  {
+   "table": "voice-actors",
+   "key": "character",
+   "kind": "person_id_only",
+   "rows": 922,
+   "names": [],
+   "down": [
+    "characters",
+    "director"
+   ],
+   "up": [],
+   "update_targets": [
+    "voice-actors",
+    "characters",
+    "director"
+   ]
+  }
+ ],
+ "bird:food_inspection": [
+  {
+   "table": "businesses",
+   "key": "business_id",
+   "kind": "entity",
+   "rows": 6358,
+   "names": [
+    "name",
+    "owner_name"
+   ],
+   "down": [
+    "inspections",
+    "violations"
+   ],
+   "up": [],
+   "update_targets": [
+    "businesses",
+    "inspections",
+    "violations"
+   ]
+  }
+ ],
+ "bird:food_inspection_2": [
+  {
+   "table": "employee",
+   "key": "employee_id",
+   "kind": "person_named",
+   "rows": 75,
+   "names": [
+    "first_name",
+    "last_name"
+   ],
+   "down": [
+    "inspection",
+    "violation"
+   ],
+   "up": [
+    "establishment",
+    "inspection_point"
+   ],
+   "update_targets": [
+    "employee",
+    "inspection",
+    "violation",
+    "establishment",
+    "inspection_point"
+   ]
+  },
+  {
+   "table": "establishment",
+   "key": "license_no",
+   "kind": "entity",
+   "rows": 31642,
+   "names": [
+    "dba_name",
+    "aka_name"
+   ],
+   "down": [
+    "inspection",
+    "violation"
+   ],
+   "up": [
+    "employee",
+    "inspection_point"
+   ],
+   "update_targets": [
+    "establishment",
+    "inspection",
+    "violation",
+    "employee",
+    "inspection_point"
+   ]
+  },
+  {
+   "table": "inspection",
+   "key": "inspection_id",
+   "kind": "entity",
+   "rows": 143870,
+   "names": [],
+   "down": [
+    "violation"
+   ],
+   "up": [
+    "employee",
+    "establishment",
+    "inspection_point"
+   ],
+   "update_targets": [
+    "inspection",
+    "violation",
+    "employee",
+    "establishment",
+    "inspection_point"
+   ]
+  },
+  {
+   "table": "inspection_point",
+   "key": "point_id",
+   "kind": "entity",
+   "rows": 46,
+   "names": [],
+   "down": [
+    "violation"
+   ],
+   "up": [
+    "inspection"
+   ],
+   "update_targets": [
+    "inspection_point",
+    "violation",
+    "inspection"
+   ]
+  }
+ ],
+ "bird:genes": [
+  {
+   "table": "Classification",
+   "key": "GeneID",
+   "kind": "entity",
+   "rows": 862,
+   "names": [],
+   "down": [
+    "Genes",
+    "Interactions"
+   ],
+   "up": [],
+   "update_targets": [
+    "Classification",
+    "Genes",
+    "Interactions"
+   ]
+  }
+ ],
+ "bird:legislator": [
+  {
+   "table": "historical",
+   "key": "bioguide_id",
+   "kind": "person_named",
+   "rows": 11864,
+   "names": [
+    "first_name",
+    "last_name",
+    "middle_name",
+    "nickname_name",
+    "official_full_name",
+    "suffix_name"
+   ],
+   "down": [
+    "historical-terms"
+   ],
+   "up": [],
+   "update_targets": [
+    "historical",
+    "historical-terms"
+   ]
+  },
+  {
+   "table": "historical-terms",
+   "key": "bioguide",
+   "kind": "person_named",
+   "rows": 11864,
+   "names": [
+    "last",
+    "name"
+   ],
+   "down": [],
+   "up": [
+    "historical"
+   ],
+   "update_targets": [
+    "historical-terms",
+    "historical"
+   ]
+  }
+ ],
+ "bird:mental_health_survey": [
+  {
+   "table": "Question",
+   "key": "questionid",
+   "kind": "entity",
+   "rows": 105,
+   "names": [],
+   "down": [
+    "Answer"
+   ],
+   "up": [
+    "Survey"
+   ],
+   "update_targets": [
+    "Question",
+    "Answer",
+    "Survey"
+   ]
+  },
+  {
+   "table": "Survey",
+   "key": "SurveyID",
+   "kind": "entity",
+   "rows": 5,
+   "names": [],
+   "down": [
+    "Answer"
+   ],
+   "up": [
+    "Question"
+   ],
+   "update_targets": [
+    "Survey",
+    "Answer",
+    "Question"
+   ]
+  }
+ ],
+ "bird:menu": [
+  {
+   "table": "Dish",
+   "key": "id",
+   "kind": "entity",
+   "rows": 426713,
+   "names": [
+    "name"
+   ],
+   "down": [
+    "MenuItem"
+   ],
+   "up": [
+    "MenuPage"
+   ],
+   "update_targets": [
+    "Dish",
+    "MenuItem",
+    "MenuPage"
+   ]
+  },
+  {
+   "table": "Menu",
+   "key": "id",
+   "kind": "entity",
+   "rows": 17527,
+   "names": [
+    "name"
+   ],
+   "down": [
+    "MenuPage",
+    "MenuItem"
+   ],
+   "up": [
+    "Dish"
+   ],
+   "update_targets": [
+    "Menu",
+    "MenuPage",
+    "MenuItem",
+    "Dish"
+   ]
+  },
+  {
+   "table": "MenuPage",
+   "key": "id",
+   "kind": "entity",
+   "rows": 66937,
+   "names": [],
+   "down": [
+    "MenuItem"
+   ],
+   "up": [
+    "Dish",
+    "Menu"
+   ],
+   "update_targets": [
+    "MenuPage",
+    "MenuItem",
+    "Dish",
+    "Menu"
+   ]
+  }
+ ],
+ "bird:movie": [
+  {
+   "table": "actor",
+   "key": "ActorID",
+   "kind": "person_named",
+   "rows": 2713,
+   "names": [
+    "Name"
+   ],
+   "down": [
+    "characters"
+   ],
+   "up": [
+    "movie"
+   ],
+   "update_targets": [
+    "actor",
+    "characters",
+    "movie"
+   ]
+  },
+  {
+   "table": "movie",
+   "key": "MovieID",
+   "kind": "entity",
+   "rows": 634,
+   "names": [
+    "Title"
+   ],
+   "down": [
+    "characters"
+   ],
+   "up": [
+    "actor"
+   ],
+   "update_targets": [
+    "movie",
+    "characters",
+    "actor"
+   ]
+  }
+ ],
+ "bird:movielens": [
+  {
+   "table": "users",
+   "key": "userid",
+   "kind": "person_id_only",
+   "rows": 6039,
+   "names": [],
+   "down": [
+    "u2base"
+   ],
+   "up": [
+    "movies"
+   ],
+   "update_targets": [
+    "users",
+    "u2base",
+    "movies"
+   ]
+  },
+  {
+   "table": "directors",
+   "key": "directorid",
+   "kind": "entity",
+   "rows": 2201,
+   "names": [],
+   "down": [
+    "movies2directors"
+   ],
+   "up": [
+    "movies"
+   ],
+   "update_targets": [
+    "directors",
+    "movies2directors",
+    "movies"
+   ]
+  },
+  {
+   "table": "actors",
+   "key": "actorid",
+   "kind": "person_id_only",
+   "rows": 98690,
+   "names": [],
+   "down": [
+    "movies2actors"
+   ],
+   "up": [
+    "movies"
+   ],
+   "update_targets": [
+    "actors",
+    "movies2actors",
+    "movies"
+   ]
+  },
+  {
+   "table": "movies",
+   "key": "movieid",
+   "kind": "entity",
+   "rows": 3832,
+   "names": [],
+   "down": [
+    "movies2actors",
+    "movies2directors",
+    "u2base"
+   ],
+   "up": [
+    "actors",
+    "directors",
+    "users"
+   ],
+   "update_targets": [
+    "movies",
+    "movies2actors",
+    "movies2directors",
+    "u2base",
+    "actors",
+    "directors",
+    "users"
+   ]
+  }
+ ],
+ "bird:movies_4": [
+  {
+   "table": "country",
+   "key": "country_id",
+   "kind": "entity",
+   "rows": 88,
+   "names": [
+    "country_name"
+   ],
+   "down": [
+    "production_country"
+   ],
+   "up": [
+    "movie"
+   ],
+   "update_targets": [
+    "country",
+    "movie"
+   ]
+  },
+  {
+   "table": "department",
+   "key": "department_id",
+   "kind": "entity",
+   "rows": 12,
+   "names": [
+    "department_name"
+   ],
+   "down": [
+    "movie_crew"
+   ],
+   "up": [
+    "movie",
+    "person"
+   ],
+   "update_targets": [
+    "department",
+    "movie_crew",
+    "movie",
+    "person"
+   ]
+  },
+  {
+   "table": "genre",
+   "key": "genre_id",
+   "kind": "entity",
+   "rows": 20,
+   "names": [
+    "genre_name"
+   ],
+   "down": [
+    "movie_genres"
+   ],
+   "up": [
+    "movie"
+   ],
+   "update_targets": [
+    "genre",
+    "movie"
+   ]
+  },
+  {
+   "table": "keyword",
+   "key": "keyword_id",
+   "kind": "entity",
+   "rows": 9794,
+   "names": [
+    "keyword_name"
+   ],
+   "down": [
+    "movie_keywords"
+   ],
+   "up": [
+    "movie"
+   ],
+   "update_targets": [
+    "keyword",
+    "movie"
+   ]
+  },
+  {
+   "table": "language",
+   "key": "language_id",
+   "kind": "entity",
+   "rows": 88,
+   "names": [
+    "language_name"
+   ],
+   "down": [
+    "movie_languages"
+   ],
+   "up": [
+    "language_role",
+    "movie"
+   ],
+   "update_targets": [
+    "language",
+    "movie_languages",
+    "language_role",
+    "movie"
+   ]
+  },
+  {
+   "table": "movie",
+   "key": "movie_id",
+   "kind": "entity",
+   "rows": 4627,
+   "names": [
+    "title"
+   ],
+   "down": [
+    "movie_genres",
+    "movie_languages",
+    "movie_crew",
+    "production_country",
+    "movie_cast",
+    "movie_keywords",
+    "movie_company"
+   ],
+   "up": [
+    "country",
+    "department",
+    "gender",
+    "genre",
+    "keyword",
+    "language",
+    "language_role",
+    "person",
+    "production_company"
+   ],
+   "update_targets": [
+    "movie",
+    "movie_languages",
+    "movie_crew",
+    "movie_cast",
+    "country",
+    "department",
+    "gender",
+    "genre",
+    "keyword",
+    "language",
+    "language_role",
+    "person",
+    "production_company"
+   ]
+  },
+  {
+   "table": "person",
+   "key": "person_id",
+   "kind": "person_named",
+   "rows": 104838,
+   "names": [
+    "person_name"
+   ],
+   "down": [
+    "movie_crew",
+    "movie_cast"
+   ],
+   "up": [
+    "department",
+    "gender",
+    "movie"
+   ],
+   "update_targets": [
+    "person",
+    "movie_crew",
+    "movie_cast",
+    "department",
+    "gender",
+    "movie"
+   ]
+  },
+  {
+   "table": "production_company",
+   "key": "company_id",
+   "kind": "entity",
+   "rows": 5047,
+   "names": [
+    "company_name"
+   ],
+   "down": [
+    "movie_company"
+   ],
+   "up": [
+    "movie"
+   ],
+   "update_targets": [
+    "production_company",
+    "movie"
+   ]
+  }
+ ],
+ "bird:olympics": [
+  {
+   "table": "city",
+   "key": "id",
+   "kind": "entity",
+   "rows": 42,
+   "names": [
+    "city_name"
+   ],
+   "down": [
+    "games_city"
+   ],
+   "up": [
+    "games"
+   ],
+   "update_targets": [
+    "city",
+    "games"
+   ]
+  },
+  {
+   "table": "games",
+   "key": "id",
+   "kind": "entity",
+   "rows": 51,
+   "names": [
+    "games_name"
+   ],
+   "down": [
+    "games_city",
+    "games_competitor",
+    "competitor_event"
+   ],
+   "up": [
+    "city",
+    "event",
+    "medal",
+    "person"
+   ],
+   "update_targets": [
+    "games",
+    "games_competitor",
+    "competitor_event",
+    "city",
+    "event",
+    "medal",
+    "person"
+   ]
+  },
+  {
+   "table": "noc_region",
+   "key": "id",
+   "kind": "entity",
+   "rows": 231,
+   "names": [
+    "region_name"
+   ],
+   "down": [
+    "person_region"
+   ],
+   "up": [
+    "person"
+   ],
+   "update_targets": [
+    "noc_region",
+    "person"
+   ]
+  },
+  {
+   "table": "person",
+   "key": "id",
+   "kind": "person_named",
+   "rows": 128854,
+   "names": [
+    "full_name"
+   ],
+   "down": [
+    "games_competitor",
+    "person_region",
+    "competitor_event"
+   ],
+   "up": [
+    "event",
+    "games",
+    "medal",
+    "noc_region"
+   ],
+   "update_targets": [
+    "person",
+    "games_competitor",
+    "competitor_event",
+    "event",
+    "games",
+    "medal",
+    "noc_region"
+   ]
+  },
+  {
+   "table": "games_competitor",
+   "key": "id",
+   "kind": "entity",
+   "rows": 180252,
+   "names": [],
+   "down": [
+    "competitor_event"
+   ],
+   "up": [
+    "event",
+    "games",
+    "medal",
+    "person"
+   ],
+   "update_targets": [
+    "games_competitor",
+    "competitor_event",
+    "event",
+    "games",
+    "medal",
+    "person"
+   ]
+  },
+  {
+   "table": "sport",
+   "key": "id",
+   "kind": "entity",
+   "rows": 66,
+   "names": [
+    "sport_name"
+   ],
+   "down": [
+    "event",
+    "competitor_event"
+   ],
+   "up": [
+    "games_competitor",
+    "medal"
+   ],
+   "update_targets": [
+    "sport",
+    "event",
+    "competitor_event",
+    "games_competitor",
+    "medal"
+   ]
+  },
+  {
+   "table": "event",
+   "key": "id",
+   "kind": "entity",
+   "rows": 757,
+   "names": [
+    "event_name"
+   ],
+   "down": [
+    "competitor_event"
+   ],
+   "up": [
+    "games_competitor",
+    "medal",
+    "sport"
+   ],
+   "update_targets": [
+    "event",
+    "competitor_event",
+    "games_competitor",
+    "medal",
+    "sport"
+   ]
+  }
+ ],
+ "bird:professional_basketball": [
+  {
+   "table": "draft",
+   "key": "id",
+   "kind": "person_named",
+   "rows": 8621,
+   "names": [
+    "firstName",
+    "lastName",
+    "suffixName"
+   ],
+   "down": [],
+   "up": [
+    "players",
+    "teams"
+   ],
+   "update_targets": [
+    "draft",
+    "players",
+    "teams"
+   ]
+  },
+  {
+   "table": "players",
+   "key": "playerID",
+   "kind": "person_named",
+   "rows": 5062,
+   "names": [
+    "firstName",
+    "middleName",
+    "lastName",
+    "fullGivenName"
+   ],
+   "down": [
+    "awards_players",
+    "player_allstar",
+    "players_teams",
+    "draft"
+   ],
+   "up": [
+    "teams"
+   ],
+   "update_targets": [
+    "players",
+    "awards_players",
+    "player_allstar",
+    "players_teams",
+    "draft",
+    "teams"
+   ]
+  }
+ ],
+ "bird:public_review_platform": [
+  {
+   "table": "Attributes",
+   "key": "attribute_id",
+   "kind": "entity",
+   "rows": 80,
+   "names": [
+    "attribute_name"
+   ],
+   "down": [
+    "Business_Attributes"
+   ],
+   "up": [
+    "Business"
+   ],
+   "update_targets": [
+    "Attributes",
+    "Business_Attributes",
+    "Business"
+   ]
+  },
+  {
+   "table": "Categories",
+   "key": "category_id",
+   "kind": "entity",
+   "rows": 591,
+   "names": [
+    "category_name"
+   ],
+   "down": [
+    "Business_Categories"
+   ],
+   "up": [
+    "Business"
+   ],
+   "update_targets": [
+    "Categories",
+    "Business"
+   ]
+  },
+  {
+   "table": "Compliments",
+   "key": "compliment_id",
+   "kind": "entity",
+   "rows": 11,
+   "names": [],
+   "down": [
+    "Users_Compliments"
+   ],
+   "up": [
+    "Users"
+   ],
+   "update_targets": [
+    "Compliments",
+    "Users_Compliments",
+    "Users"
+   ]
+  },
+  {
+   "table": "Days",
+   "key": "day_id",
+   "kind": "entity",
+   "rows": 7,
+   "names": [],
+   "down": [
+    "Business_Hours",
+    "Checkins"
+   ],
+   "up": [
+    "Business"
+   ],
+   "update_targets": [
+    "Days",
+    "Business_Hours",
+    "Checkins",
+    "Business"
+   ]
+  },
+  {
+   "table": "Years",
+   "key": "year_id",
+   "kind": "entity",
+   "rows": 10,
+   "names": [],
+   "down": [
+    "Elite"
+   ],
+   "up": [
+    "Users"
+   ],
+   "update_targets": [
+    "Years",
+    "Users"
+   ]
+  },
+  {
+   "table": "Business",
+   "key": "business_id",
+   "kind": "entity",
+   "rows": 15585,
+   "names": [],
+   "down": [
+    "Business_Attributes",
+    "Business_Categories",
+    "Business_Hours",
+    "Checkins",
+    "Reviews",
+    "Tips"
+   ],
+   "up": [
+    "Attributes",
+    "Categories",
+    "Days",
+    "Users"
+   ],
+   "update_targets": [
+    "Business",
+    "Business_Attributes",
+    "Business_Hours",
+    "Checkins",
+    "Reviews",
+    "Tips",
+    "Attributes",
+    "Categories",
+    "Days",
+    "Users"
+   ]
+  },
+  {
+   "table": "Users",
+   "key": "user_id",
+   "kind": "person_id_only",
+   "rows": 70817,
+   "names": [],
+   "down": [
+    "Elite",
+    "Reviews",
+    "Tips",
+    "Users_Compliments"
+   ],
+   "up": [
+    "Business",
+    "Compliments",
+    "Years"
+   ],
+   "update_targets": [
+    "Users",
+    "Reviews",
+    "Tips",
+    "Users_Compliments",
+    "Business",
+    "Compliments",
+    "Years"
+   ]
+  }
+ ],
+ "bird:regional_sales": [
+  {
+   "table": "Customers",
+   "key": "CustomerID",
+   "kind": "person_named",
+   "rows": 50,
+   "names": [
+    "Customer Names"
+   ],
+   "down": [
+    "Sales Orders"
+   ],
+   "up": [
+    "Products",
+    "Sales Team",
+    "Store Locations"
+   ],
+   "update_targets": [
+    "Customers",
+    "Sales Orders",
+    "Products",
+    "Sales Team",
+    "Store Locations"
+   ]
+  },
+  {
+   "table": "Products",
+   "key": "ProductID",
+   "kind": "entity",
+   "rows": 47,
+   "names": [
+    "Product Name"
+   ],
+   "down": [
+    "Sales Orders"
+   ],
+   "up": [
+    "Customers",
+    "Sales Team",
+    "Store Locations"
+   ],
+   "update_targets": [
+    "Products",
+    "Sales Orders",
+    "Customers",
+    "Sales Team",
+    "Store Locations"
+   ]
+  },
+  {
+   "table": "Regions",
+   "key": "StateCode",
+   "kind": "entity",
+   "rows": 48,
+   "names": [],
+   "down": [
+    "Store Locations",
+    "Sales Orders"
+   ],
+   "up": [
+    "Customers",
+    "Products",
+    "Sales Team"
+   ],
+   "update_targets": [
+    "Regions",
+    "Store Locations",
+    "Sales Orders",
+    "Customers",
+    "Products",
+    "Sales Team"
+   ]
+  },
+  {
+   "table": "Sales Team",
+   "key": "SalesTeamID",
+   "kind": "entity",
+   "rows": 28,
+   "names": [],
+   "down": [
+    "Sales Orders"
+   ],
+   "up": [
+    "Customers",
+    "Products",
+    "Store Locations"
+   ],
+   "update_targets": [
+    "Sales Team",
+    "Sales Orders",
+    "Customers",
+    "Products",
+    "Store Locations"
+   ]
+  },
+  {
+   "table": "Store Locations",
+   "key": "StoreID",
+   "kind": "entity",
+   "rows": 367,
+   "names": [
+    "City Name"
+   ],
+   "down": [
+    "Sales Orders"
+   ],
+   "up": [
+    "Customers",
+    "Products",
+    "Regions",
+    "Sales Team"
+   ],
+   "update_targets": [
+    "Store Locations",
+    "Sales Orders",
+    "Customers",
+    "Products",
+    "Regions",
+    "Sales Team"
+   ]
+  }
+ ],
+ "bird:restaurant": [
+  {
+   "table": "geographic",
+   "key": "city",
+   "kind": "entity",
+   "rows": 168,
+   "names": [],
+   "down": [
+    "generalinfo",
+    "location"
+   ],
+   "up": [],
+   "update_targets": [
+    "geographic",
+    "generalinfo",
+    "location"
+   ]
+  },
+  {
+   "table": "generalinfo",
+   "key": "id_restaurant",
+   "kind": "entity",
+   "rows": 9590,
+   "names": [
+    "label"
+   ],
+   "down": [
+    "location"
+   ],
+   "up": [
+    "geographic"
+   ],
+   "update_targets": [
+    "generalinfo",
+    "location",
+    "geographic"
+   ]
+  }
+ ],
+ "bird:retail_complains": [
+  {
+   "table": "state",
+   "key": "StateCode",
+   "kind": "entity",
+   "rows": 48,
+   "names": [],
+   "down": [
+    "district",
+    "client",
+    "reviews"
+   ],
+   "up": [],
+   "update_targets": [
+    "state",
+    "district",
+    "client",
+    "reviews"
+   ]
+  },
+  {
+   "table": "client",
+   "key": "client_id",
+   "kind": "person_named",
+   "rows": 5369,
+   "names": [
+    "first",
+    "last"
+   ],
+   "down": [
+    "callcenterlogs",
+    "events"
+   ],
+   "up": [
+    "district"
+   ],
+   "update_targets": [
+    "client",
+    "callcenterlogs",
+    "events",
+    "district"
+   ]
+  },
+  {
+   "table": "district",
+   "key": "district_id",
+   "kind": "entity",
+   "rows": 77,
+   "names": [],
+   "down": [
+    "client",
+    "reviews",
+    "callcenterlogs",
+    "events"
+   ],
+   "up": [
+    "state"
+   ],
+   "update_targets": [
+    "district",
+    "client",
+    "reviews",
+    "callcenterlogs",
+    "events",
+    "state"
+   ]
+  }
+ ],
+ "bird:shakespeare": [
+  {
+   "table": "chapters",
+   "key": "id",
+   "kind": "entity",
+   "rows": 945,
+   "names": [],
+   "down": [
+    "paragraphs"
+   ],
+   "up": [
+    "characters",
+    "works"
+   ],
+   "update_targets": [
+    "chapters",
+    "paragraphs",
+    "characters",
+    "works"
+   ]
+  },
+  {
+   "table": "characters",
+   "key": "id",
+   "kind": "entity",
+   "rows": 1266,
+   "names": [
+    "CharName"
+   ],
+   "down": [
+    "paragraphs"
+   ],
+   "up": [
+    "chapters"
+   ],
+   "update_targets": [
+    "characters",
+    "paragraphs",
+    "chapters"
+   ]
+  },
+  {
+   "table": "works",
+   "key": "id",
+   "kind": "entity",
+   "rows": 43,
+   "names": [
+    "Title",
+    "LongTitle"
+   ],
+   "down": [
+    "chapters",
+    "paragraphs"
+   ],
+   "up": [
+    "characters"
+   ],
+   "update_targets": [
+    "works",
+    "chapters",
+    "paragraphs",
+    "characters"
+   ]
+  }
+ ],
+ "bird:shipping": [
+  {
+   "table": "city",
+   "key": "city_id",
+   "kind": "entity",
+   "rows": 601,
+   "names": [
+    "city_name"
+   ],
+   "down": [
+    "shipment"
+   ],
+   "up": [
+    "customer",
+    "driver",
+    "truck"
+   ],
+   "update_targets": [
+    "city",
+    "shipment",
+    "customer",
+    "driver",
+    "truck"
+   ]
+  },
+  {
+   "table": "customer",
+   "key": "cust_id",
+   "kind": "person_named",
+   "rows": 100,
+   "names": [
+    "cust_name"
+   ],
+   "down": [
+    "shipment"
+   ],
+   "up": [
+    "city",
+    "driver",
+    "truck"
+   ],
+   "update_targets": [
+    "customer",
+    "shipment",
+    "city",
+    "driver",
+    "truck"
+   ]
+  },
+  {
+   "table": "driver",
+   "key": "driver_id",
+   "kind": "person_named",
+   "rows": 11,
+   "names": [
+    "first_name",
+    "last_name"
+   ],
+   "down": [
+    "shipment"
+   ],
+   "up": [
+    "city",
+    "customer",
+    "truck"
+   ],
+   "update_targets": [
+    "driver",
+    "shipment",
+    "city",
+    "customer",
+    "truck"
+   ]
+  },
+  {
+   "table": "truck",
+   "key": "truck_id",
+   "kind": "entity",
+   "rows": 12,
+   "names": [],
+   "down": [
+    "shipment"
+   ],
+   "up": [
+    "city",
+    "customer",
+    "driver"
+   ],
+   "update_targets": [
+    "truck",
+    "shipment",
+    "city",
+    "customer",
+    "driver"
+   ]
+  }
+ ],
+ "bird:shooting": [
+  {
+   "table": "incidents",
+   "key": "case_number",
+   "kind": "entity",
+   "rows": 219,
+   "names": [],
+   "down": [
+    "officers",
+    "subjects"
+   ],
+   "up": [],
+   "update_targets": [
+    "incidents",
+    "officers",
+    "subjects"
+   ]
+  }
+ ],
+ "bird:social_media": [
+  {
+   "table": "location",
+   "key": "LocationID",
+   "kind": "entity",
+   "rows": 6211,
+   "names": [],
+   "down": [
+    "twitter"
+   ],
+   "up": [
+    "user"
+   ],
+   "update_targets": [
+    "location",
+    "twitter",
+    "user"
+   ]
+  },
+  {
+   "table": "user",
+   "key": "UserID",
+   "kind": "person_id_only",
+   "rows": 99260,
+   "names": [],
+   "down": [
+    "twitter"
+   ],
+   "up": [
+    "location"
+   ],
+   "update_targets": [
+    "user",
+    "twitter",
+    "location"
+   ]
+  }
+ ],
+ "bird:student_loan": [
+  {
+   "table": "person",
+   "key": "name",
+   "kind": "person_named",
+   "rows": 1000,
+   "names": [
+    "name"
+   ],
+   "down": [
+    "disabled",
+    "enlist",
+    "filed_for_bankrupcy",
+    "longest_absense_from_school",
+    "male",
+    "no_payment_due",
+    "unemployed",
+    "enrolled"
+   ],
+   "up": [
+    "bool"
+   ],
+   "update_targets": [
+    "enlist",
+    "longest_absense_from_school",
+    "no_payment_due",
+    "enrolled"
+   ]
+  }
+ ],
+ "bird:synthea": [
+  {
+   "table": "patients",
+   "key": "patient",
+   "kind": "person_named",
+   "rows": 1462,
+   "names": [
+    "first",
+    "last"
+   ],
+   "down": [
+    "encounters",
+    "allergies",
+    "careplans",
+    "conditions",
+    "immunizations",
+    "medications",
+    "observations",
+    "procedures",
+    "claims"
+   ],
+   "up": [],
+   "update_targets": [
+    "patients",
+    "encounters",
+    "allergies",
+    "careplans",
+    "conditions",
+    "immunizations",
+    "medications",
+    "observations",
+    "procedures",
+    "claims"
+   ]
+  },
+  {
+   "table": "encounters",
+   "key": "ID",
+   "kind": "entity",
+   "rows": 20524,
+   "names": [],
+   "down": [
+    "allergies",
+    "careplans",
+    "conditions",
+    "immunizations",
+    "medications",
+    "observations",
+    "procedures"
+   ],
+   "up": [
+    "patients"
+   ],
+   "update_targets": [
+    "encounters",
+    "allergies",
+    "careplans",
+    "conditions",
+    "immunizations",
+    "medications",
+    "observations",
+    "procedures",
+    "patients"
+   ]
+  }
+ ],
+ "bird:university": [
+  {
+   "table": "country",
+   "key": "id",
+   "kind": "entity",
+   "rows": 74,
+   "names": [
+    "country_name"
+   ],
+   "down": [
+    "university",
+    "university_ranking_year",
+    "university_year"
+   ],
+   "up": [
+    "ranking_criteria"
+   ],
+   "update_targets": [
+    "country",
+    "university",
+    "university_ranking_year",
+    "university_year",
+    "ranking_criteria"
+   ]
+  },
+  {
+   "table": "ranking_criteria",
+   "key": "id",
+   "kind": "entity",
+   "rows": 21,
+   "names": [
+    "criteria_name"
+   ],
+   "down": [
+    "university_ranking_year"
+   ],
+   "up": [
+    "ranking_system",
+    "university"
+   ],
+   "update_targets": [
+    "ranking_criteria",
+    "university_ranking_year",
+    "ranking_system",
+    "university"
+   ]
+  },
+  {
+   "table": "university",
+   "key": "id",
+   "kind": "entity",
+   "rows": 1247,
+   "names": [
+    "university_name"
+   ],
+   "down": [
+    "university_ranking_year",
+    "university_year"
+   ],
+   "up": [
+    "country",
+    "ranking_criteria"
+   ],
+   "update_targets": [
+    "university",
+    "university_ranking_year",
+    "university_year",
+    "country",
+    "ranking_criteria"
+   ]
+  }
+ ],
+ "bird:video_games": [
+  {
+   "table": "genre",
+   "key": "id",
+   "kind": "entity",
+   "rows": 12,
+   "names": [
+    "genre_name"
+   ],
+   "down": [
+    "game",
+    "game_publisher"
+   ],
+   "up": [
+    "publisher"
+   ],
+   "update_targets": [
+    "genre",
+    "game",
+    "game_publisher",
+    "publisher"
+   ]
+  },
+  {
+   "table": "game",
+   "key": "id",
+   "kind": "entity",
+   "rows": 11317,
+   "names": [
+    "game_name"
+   ],
+   "down": [
+    "game_publisher",
+    "game_platform"
+   ],
+   "up": [
+    "genre",
+    "platform",
+    "publisher"
+   ],
+   "update_targets": [
+    "game",
+    "game_publisher",
+    "game_platform",
+    "genre",
+    "platform",
+    "publisher"
+   ]
+  },
+  {
+   "table": "platform",
+   "key": "id",
+   "kind": "entity",
+   "rows": 31,
+   "names": [
+    "platform_name"
+   ],
+   "down": [
+    "game_platform",
+    "region_sales"
+   ],
+   "up": [
+    "game_publisher",
+    "region"
+   ],
+   "update_targets": [
+    "platform",
+    "game_platform",
+    "region_sales",
+    "game_publisher",
+    "region"
+   ]
+  },
+  {
+   "table": "publisher",
+   "key": "id",
+   "kind": "entity",
+   "rows": 577,
+   "names": [
+    "publisher_name"
+   ],
+   "down": [
+    "game_publisher",
+    "game_platform"
+   ],
+   "up": [
+    "game",
+    "platform"
+   ],
+   "update_targets": [
+    "publisher",
+    "game_publisher",
+    "game_platform",
+    "game",
+    "platform"
+   ]
+  },
+  {
+   "table": "game_publisher",
+   "key": "id",
+   "kind": "entity",
+   "rows": 11732,
+   "names": [],
+   "down": [
+    "game_platform",
+    "region_sales"
+   ],
+   "up": [
+    "game",
+    "platform",
+    "publisher",
+    "region"
+   ],
+   "update_targets": [
+    "game_publisher",
+    "game_platform",
+    "region_sales",
+    "game",
+    "platform",
+    "publisher",
+    "region"
+   ]
+  },
+  {
+   "table": "game_platform",
+   "key": "id",
+   "kind": "entity",
+   "rows": 16326,
+   "names": [],
+   "down": [
+    "region_sales"
+   ],
+   "up": [
+    "game_publisher",
+    "platform",
+    "region"
+   ],
+   "update_targets": [
+    "game_platform",
+    "region_sales",
+    "game_publisher",
+    "platform",
+    "region"
+   ]
+  }
+ ],
+ "bird:california_schools": [
+  {
+   "table": "schools",
+   "key": "CDSCode",
+   "kind": "entity",
+   "rows": 17686,
+   "names": [
+    "EdOpsName",
+    "EILName"
+   ],
+   "down": [
+    "frpm",
+    "satscores"
+   ],
+   "up": [],
+   "update_targets": [
+    "schools",
+    "frpm",
+    "satscores"
+   ]
+  }
+ ],
+ "bird:card_games": [
+  {
+   "table": "cards",
+   "key": "id",
+   "kind": "entity",
+   "rows": 56822,
+   "names": [
+    "asciiName",
+    "faceName",
+    "flavorName",
+    "name"
+   ],
+   "down": [
+    "foreign_data",
+    "legalities",
+    "rulings"
+   ],
+   "up": [],
+   "update_targets": [
+    "cards",
+    "foreign_data",
+    "legalities",
+    "rulings"
+   ]
+  },
+  {
+   "table": "legalities",
+   "key": "id",
+   "kind": "entity",
+   "rows": 427907,
+   "names": [],
+   "down": [
+    "cards",
+    "foreign_data",
+    "rulings"
+   ],
+   "up": [],
+   "update_targets": [
+    "legalities",
+    "cards",
+    "foreign_data",
+    "rulings"
+   ]
+  },
+  {
+   "table": "sets",
+   "key": "id",
+   "kind": "entity",
+   "rows": 551,
+   "names": [
+    "mcmName",
+    "name"
+   ],
+   "down": [
+    "set_translations"
+   ],
+   "up": [],
+   "update_targets": [
+    "sets",
+    "set_translations"
+   ]
+  }
+ ],
+ "bird:debit_card_specializing": [
+  {
+   "table": "customers",
+   "key": "CustomerID",
+   "kind": "person_id_only",
+   "rows": 32461,
+   "names": [],
+   "down": [
+    "yearmonth",
+    "transactions_1k"
+   ],
+   "up": [
+    "gasstations",
+    "products"
+   ],
+   "update_targets": [
+    "customers",
+    "yearmonth",
+    "transactions_1k",
+    "gasstations",
+    "products"
+   ]
+  },
+  {
+   "table": "gasstations",
+   "key": "GasStationID",
+   "kind": "entity",
+   "rows": 5716,
+   "names": [],
+   "down": [
+    "transactions_1k"
+   ],
+   "up": [
+    "customers",
+    "products"
+   ],
+   "update_targets": [
+    "gasstations",
+    "transactions_1k",
+    "customers",
+    "products"
+   ]
+  },
+  {
+   "table": "products",
+   "key": "ProductID",
+   "kind": "entity",
+   "rows": 591,
+   "names": [],
+   "down": [
+    "transactions_1k"
+   ],
+   "up": [
+    "customers",
+    "gasstations"
+   ],
+   "update_targets": [
+    "products",
+    "transactions_1k",
+    "customers",
+    "gasstations"
+   ]
+  }
+ ],
+ "bird:financial": [
+  {
+   "table": "account",
+   "key": "account_id",
+   "kind": "entity",
+   "rows": 4500,
+   "names": [],
+   "down": [
+    "disp",
+    "loan",
+    "order",
+    "trans",
+    "card"
+   ],
+   "up": [
+    "client",
+    "district"
+   ],
+   "update_targets": [
+    "account",
+    "disp",
+    "loan",
+    "order",
+    "trans",
+    "card",
+    "client",
+    "district"
+   ]
+  },
+  {
+   "table": "client",
+   "key": "client_id",
+   "kind": "person_id_only",
+   "rows": 5369,
+   "names": [],
+   "down": [
+    "disp",
+    "card"
+   ],
+   "up": [
+    "account",
+    "district"
+   ],
+   "update_targets": [
+    "client",
+    "disp",
+    "card",
+    "account",
+    "district"
+   ]
+  },
+  {
+   "table": "disp",
+   "key": "disp_id",
+   "kind": "entity",
+   "rows": 5369,
+   "names": [],
+   "down": [
+    "card"
+   ],
+   "up": [
+    "account",
+    "client"
+   ],
+   "update_targets": [
+    "disp",
+    "card",
+    "account",
+    "client"
+   ]
+  },
+  {
+   "table": "district",
+   "key": "district_id",
+   "kind": "entity",
+   "rows": 77,
+   "names": [],
+   "down": [
+    "account",
+    "client",
+    "disp",
+    "loan",
+    "order",
+    "trans"
+   ],
+   "up": [],
+   "update_targets": [
+    "district",
+    "account",
+    "client",
+    "disp",
+    "loan",
+    "order",
+    "trans"
+   ]
+  }
+ ],
+ "bird:student_club": [
+  {
+   "table": "event",
+   "key": "event_id",
+   "kind": "entity",
+   "rows": 42,
+   "names": [
+    "event_name"
+   ],
+   "down": [
+    "attendance",
+    "budget",
+    "expense"
+   ],
+   "up": [
+    "member"
+   ],
+   "update_targets": [
+    "event",
+    "budget",
+    "expense",
+    "member"
+   ]
+  },
+  {
+   "table": "major",
+   "key": "major_id",
+   "kind": "entity",
+   "rows": 113,
+   "names": [
+    "major_name"
+   ],
+   "down": [
+    "member",
+    "attendance",
+    "expense",
+    "income"
+   ],
+   "up": [
+    "budget",
+    "event",
+    "zip_code"
+   ],
+   "update_targets": [
+    "major",
+    "member",
+    "expense",
+    "income",
+    "budget",
+    "event",
+    "zip_code"
+   ]
+  },
+  {
+   "table": "zip_code",
+   "key": "zip_code",
+   "kind": "entity",
+   "rows": 41877,
+   "names": [],
+   "down": [
+    "member",
+    "attendance",
+    "expense",
+    "income"
+   ],
+   "up": [
+    "budget",
+    "event",
+    "major"
+   ],
+   "update_targets": [
+    "zip_code",
+    "member",
+    "expense",
+    "income",
+    "budget",
+    "event",
+    "major"
+   ]
+  },
+  {
+   "table": "budget",
+   "key": "budget_id",
+   "kind": "entity",
+   "rows": 52,
+   "names": [],
+   "down": [
+    "expense"
+   ],
+   "up": [
+    "event",
+    "member"
+   ],
+   "update_targets": [
+    "budget",
+    "expense",
+    "event",
+    "member"
+   ]
+  },
+  {
+   "table": "member",
+   "key": "member_id",
+   "kind": "person_named",
+   "rows": 33,
+   "names": [
+    "first_name",
+    "last_name"
+   ],
+   "down": [
+    "attendance",
+    "expense",
+    "income"
+   ],
+   "up": [
+    "budget",
+    "event",
+    "major",
+    "zip_code"
+   ],
+   "update_targets": [
+    "member",
+    "expense",
+    "income",
+    "budget",
+    "event",
+    "major",
+    "zip_code"
+   ]
+  }
+ ],
+ "bird:superhero": [
+  {
+   "table": "attribute",
+   "key": "id",
+   "kind": "entity",
+   "rows": 6,
+   "names": [
+    "attribute_name"
+   ],
+   "down": [
+    "hero_attribute"
+   ],
+   "up": [
+    "superhero"
+   ],
+   "update_targets": [
+    "attribute",
+    "hero_attribute",
+    "superhero"
+   ]
+  },
+  {
+   "table": "colour",
+   "key": "id",
+   "kind": "entity",
+   "rows": 35,
+   "names": [],
+   "down": [
+    "superhero",
+    "hero_attribute",
+    "hero_power"
+   ],
+   "up": [
+    "alignment",
+    "attribute",
+    "gender",
+    "publisher",
+    "race",
+    "superpower"
+   ],
+   "update_targets": [
+    "colour",
+    "superhero",
+    "hero_attribute",
+    "alignment",
+    "attribute",
+    "gender",
+    "publisher",
+    "race",
+    "superpower"
+   ]
+  },
+  {
+   "table": "publisher",
+   "key": "id",
+   "kind": "entity",
+   "rows": 25,
+   "names": [
+    "publisher_name"
+   ],
+   "down": [
+    "superhero",
+    "hero_attribute",
+    "hero_power"
+   ],
+   "up": [
+    "alignment",
+    "attribute",
+    "colour",
+    "gender",
+    "race",
+    "superpower"
+   ],
+   "update_targets": [
+    "publisher",
+    "superhero",
+    "hero_attribute",
+    "alignment",
+    "attribute",
+    "colour",
+    "gender",
+    "race",
+    "superpower"
+   ]
+  },
+  {
+   "table": "race",
+   "key": "id",
+   "kind": "entity",
+   "rows": 61,
+   "names": [],
+   "down": [
+    "superhero",
+    "hero_attribute",
+    "hero_power"
+   ],
+   "up": [
+    "alignment",
+    "attribute",
+    "colour",
+    "gender",
+    "publisher",
+    "superpower"
+   ],
+   "update_targets": [
+    "race",
+    "superhero",
+    "hero_attribute",
+    "alignment",
+    "attribute",
+    "colour",
+    "gender",
+    "publisher",
+    "superpower"
+   ]
+  },
+  {
+   "table": "superhero",
+   "key": "id",
+   "kind": "person_named",
+   "rows": 750,
+   "names": [
+    "superhero_name",
+    "full_name"
+   ],
+   "down": [
+    "hero_attribute",
+    "hero_power"
+   ],
+   "up": [
+    "alignment",
+    "attribute",
+    "colour",
+    "gender",
+    "publisher",
+    "race",
+    "superpower"
+   ],
+   "update_targets": [
+    "superhero",
+    "hero_attribute",
+    "alignment",
+    "attribute",
+    "colour",
+    "gender",
+    "publisher",
+    "race",
+    "superpower"
+   ]
+  },
+  {
+   "table": "superpower",
+   "key": "id",
+   "kind": "entity",
+   "rows": 167,
+   "names": [
+    "power_name"
+   ],
+   "down": [
+    "hero_power"
+   ],
+   "up": [
+    "superhero"
+   ],
+   "update_targets": [
+    "superpower",
+    "superhero"
+   ]
+  }
+ ],
+ "bird:toxicology": [
+  {
+   "table": "atom",
+   "key": "atom_id",
+   "kind": "entity",
+   "rows": 12333,
+   "names": [],
+   "down": [
+    "connected"
+   ],
+   "up": [
+    "bond",
+    "molecule"
+   ],
+   "update_targets": [
+    "atom",
+    "connected",
+    "bond",
+    "molecule"
+   ]
+  },
+  {
+   "table": "bond",
+   "key": "bond_id",
+   "kind": "entity",
+   "rows": 12379,
+   "names": [],
+   "down": [
+    "connected"
+   ],
+   "up": [
+    "atom",
+    "molecule"
+   ],
+   "update_targets": [
+    "bond",
+    "connected",
+    "atom",
+    "molecule"
+   ]
+  },
+  {
+   "table": "molecule",
+   "key": "molecule_id",
+   "kind": "entity",
+   "rows": 343,
+   "names": [
+    "label"
+   ],
+   "down": [
+    "atom",
+    "bond",
+    "connected"
+   ],
+   "up": [],
+   "update_targets": [
+    "molecule",
+    "atom",
+    "bond",
+    "connected"
+   ]
+  }
+ ],
+ "spider2:AdventureWorks": [
+  {
+   "table": "salesperson",
+   "key": "businessentityid",
+   "kind": "person_id_only",
+   "rows": 17,
+   "names": [],
+   "down": [
+    "salesorderheader",
+    "SalesPersonQuotaHistory",
+    "salesorderdetail"
+   ],
+   "up": [
+    "currencyrate",
+    "product",
+    "salesterritory"
+   ],
+   "update_targets": [
+    "salesperson",
+    "salesorderheader",
+    "SalesPersonQuotaHistory",
+    "salesorderdetail",
+    "currencyrate",
+    "product",
+    "salesterritory"
+   ]
+  },
+  {
+   "table": "product",
+   "key": "productid",
+   "kind": "entity",
+   "rows": 504,
+   "names": [
+    "NAME"
+   ],
+   "down": [
+    "productreview",
+    "salesorderdetail",
+    "salesorderheader"
+   ],
+   "up": [
+    "currencyrate",
+    "productsubcategory",
+    "salesperson",
+    "salesterritory"
+   ],
+   "update_targets": [
+    "product",
+    "productreview",
+    "salesorderdetail",
+    "salesorderheader",
+    "currencyrate",
+    "productsubcategory",
+    "salesperson",
+    "salesterritory"
+   ]
+  },
+  {
+   "table": "productsubcategory",
+   "key": "productsubcategoryid",
+   "kind": "entity",
+   "rows": 37,
+   "names": [
+    "name"
+   ],
+   "down": [
+    "product",
+    "productreview",
+    "salesorderdetail"
+   ],
+   "up": [
+    "productcategory",
+    "salesorderheader"
+   ],
+   "update_targets": [
+    "productsubcategory",
+    "product",
+    "productreview",
+    "salesorderdetail",
+    "productcategory",
+    "salesorderheader"
+   ]
+  },
+  {
+   "table": "salesorderdetail",
+   "key": "salesorderdetailid",
+   "kind": "entity",
+   "rows": 121317,
+   "names": [],
+   "down": [
+    "salesorderheader"
+   ],
+   "up": [
+    "currencyrate",
+    "product",
+    "salesperson",
+    "salesterritory"
+   ],
+   "update_targets": [
+    "salesorderdetail",
+    "salesorderheader",
+    "currencyrate",
+    "product",
+    "salesperson",
+    "salesterritory"
+   ]
+  },
+  {
+   "table": "salesorderheader",
+   "key": "salesorderid",
+   "kind": "entity",
+   "rows": 31465,
+   "names": [],
+   "down": [
+    "salesorderdetail"
+   ],
+   "up": [
+    "currencyrate",
+    "product",
+    "salesperson",
+    "salesterritory"
+   ],
+   "update_targets": [
+    "salesorderheader",
+    "salesorderdetail",
+    "currencyrate",
+    "product",
+    "salesperson",
+    "salesterritory"
+   ]
+  },
+  {
+   "table": "salesterritory",
+   "key": "territoryid",
+   "kind": "entity",
+   "rows": 10,
+   "names": [
+    "name"
+   ],
+   "down": [
+    "salesperson",
+    "salesorderheader",
+    "SalesPersonQuotaHistory",
+    "salesorderdetail"
+   ],
+   "up": [
+    "currencyrate",
+    "product"
+   ],
+   "update_targets": [
+    "salesterritory",
+    "salesperson",
+    "salesorderheader",
+    "SalesPersonQuotaHistory",
+    "salesorderdetail",
+    "currencyrate",
+    "product"
+   ]
+  },
+  {
+   "table": "currencyrate",
+   "key": "currencyrateid",
+   "kind": "entity",
+   "rows": 13532,
+   "names": [],
+   "down": [
+    "salesorderheader",
+    "salesorderdetail"
+   ],
+   "up": [
+    "product",
+    "salesperson",
+    "salesterritory"
+   ],
+   "update_targets": [
+    "currencyrate",
+    "salesorderheader",
+    "salesorderdetail",
+    "product",
+    "salesperson",
+    "salesterritory"
+   ]
+  }
+ ],
+ "spider2:Airlines": [
+  {
+   "table": "aircrafts_data",
+   "key": "aircraft_code",
+   "kind": "entity",
+   "rows": 9,
+   "names": [],
+   "down": [
+    "flights",
+    "seats",
+    "boarding_passes",
+    "ticket_flights"
+   ],
+   "up": [],
+   "update_targets": [
+    "aircrafts_data",
+    "flights",
+    "seats",
+    "boarding_passes",
+    "ticket_flights"
+   ]
+  },
+  {
+   "table": "flights",
+   "key": "flight_id",
+   "kind": "entity",
+   "rows": 33121,
+   "names": [],
+   "down": [
+    "boarding_passes",
+    "ticket_flights"
+   ],
+   "up": [
+    "aircrafts_data"
+   ],
+   "update_targets": [
+    "flights",
+    "boarding_passes",
+    "ticket_flights",
+    "aircrafts_data"
+   ]
+  }
+ ],
+ "spider2:Brazilian_E_Commerce": [
+  {
+   "table": "olist_customers",
+   "key": "customer_id",
+   "kind": "person_id_only",
+   "rows": 99441,
+   "names": [],
+   "down": [
+    "olist_orders",
+    "olist_order_reviews",
+    "olist_order_items",
+    "olist_order_payments"
+   ],
+   "up": [
+    "olist_sellers"
+   ],
+   "update_targets": [
+    "olist_customers",
+    "olist_orders",
+    "olist_order_reviews",
+    "olist_order_items",
+    "olist_order_payments",
+    "olist_sellers"
+   ]
+  },
+  {
+   "table": "olist_sellers",
+   "key": "seller_id",
+   "kind": "person_id_only",
+   "rows": 3095,
+   "names": [],
+   "down": [
+    "olist_order_items"
+   ],
+   "up": [
+    "olist_orders"
+   ],
+   "update_targets": [
+    "olist_sellers",
+    "olist_order_items",
+    "olist_orders"
+   ]
+  },
+  {
+   "table": "olist_orders",
+   "key": "order_id",
+   "kind": "entity",
+   "rows": 99441,
+   "names": [],
+   "down": [
+    "olist_order_reviews",
+    "olist_order_items",
+    "olist_order_payments"
+   ],
+   "up": [
+    "olist_customers",
+    "olist_sellers"
+   ],
+   "update_targets": [
+    "olist_orders",
+    "olist_order_reviews",
+    "olist_order_items",
+    "olist_order_payments",
+    "olist_customers",
+    "olist_sellers"
+   ]
+  }
+ ],
+ "spider2:IPL": [
+  {
+   "table": "player",
+   "key": "player_id",
+   "kind": "person_named",
+   "rows": 468,
+   "names": [
+    "player_name",
+    "country_name"
+   ],
+   "down": [
+    "player_match",
+    "ball_by_ball",
+    "wicket_taken"
+   ],
+   "up": [
+    "match",
+    "team"
+   ],
+   "update_targets": [
+    "player",
+    "player_match",
+    "ball_by_ball",
+    "wicket_taken",
+    "match",
+    "team"
+   ]
+  },
+  {
+   "table": "team",
+   "key": "team_id",
+   "kind": "entity",
+   "rows": 12,
+   "names": [
+    "name"
+   ],
+   "down": [
+    "player_match"
+   ],
+   "up": [
+    "match",
+    "player"
+   ],
+   "update_targets": [
+    "team",
+    "player_match",
+    "match",
+    "player"
+   ]
+  },
+  {
+   "table": "match",
+   "key": "match_id",
+   "kind": "entity",
+   "rows": 567,
+   "names": [],
+   "down": [
+    "player_match",
+    "ball_by_ball",
+    "batsman_scored",
+    "wicket_taken",
+    "extra_runs"
+   ],
+   "up": [
+    "player",
+    "team"
+   ],
+   "update_targets": [
+    "match",
+    "player_match",
+    "ball_by_ball",
+    "batsman_scored",
+    "wicket_taken",
+    "extra_runs",
+    "player",
+    "team"
+   ]
+  }
+ ],
+ "spider2:WWE": [
+  {
+   "table": "Promotions",
+   "key": "id",
+   "kind": "entity",
+   "rows": 6,
+   "names": [
+    "name"
+   ],
+   "down": [
+    "Cards",
+    "Matches"
+   ],
+   "up": [
+    "Belts",
+    "Events",
+    "Locations",
+    "Match_Types",
+    "Tables",
+    "Wrestlers"
+   ],
+   "update_targets": [
+    "Promotions",
+    "Cards",
+    "Matches",
+    "Belts",
+    "Events",
+    "Locations",
+    "Match_Types",
+    "Tables",
+    "Wrestlers"
+   ]
+  },
+  {
+   "table": "Tables",
+   "key": "id",
+   "kind": "entity",
+   "rows": 1270,
+   "names": [],
+   "down": [
+    "Cards",
+    "Matches"
+   ],
+   "up": [
+    "Belts",
+    "Events",
+    "Locations",
+    "Match_Types",
+    "Promotions",
+    "Wrestlers"
+   ],
+   "update_targets": [
+    "Tables",
+    "Cards",
+    "Matches",
+    "Belts",
+    "Events",
+    "Locations",
+    "Match_Types",
+    "Promotions",
+    "Wrestlers"
+   ]
+  },
+  {
+   "table": "Cards",
+   "key": "id",
+   "kind": "entity",
+   "rows": 12639,
+   "names": [],
+   "down": [
+    "Matches"
+   ],
+   "up": [
+    "Belts",
+    "Events",
+    "Locations",
+    "Match_Types",
+    "Promotions",
+    "Tables",
+    "Wrestlers"
+   ],
+   "update_targets": [
+    "Cards",
+    "Matches",
+    "Belts",
+    "Events",
+    "Locations",
+    "Match_Types",
+    "Promotions",
+    "Tables",
+    "Wrestlers"
+   ]
+  },
+  {
+   "table": "Locations",
+   "key": "id",
+   "kind": "entity",
+   "rows": 609,
+   "names": [
+    "name"
+   ],
+   "down": [
+    "Cards",
+    "Matches"
+   ],
+   "up": [
+    "Belts",
+    "Events",
+    "Match_Types",
+    "Promotions",
+    "Tables",
+    "Wrestlers"
+   ],
+   "update_targets": [
+    "Locations",
+    "Cards",
+    "Matches",
+    "Belts",
+    "Events",
+    "Match_Types",
+    "Promotions",
+    "Tables",
+    "Wrestlers"
+   ]
+  },
+  {
+   "table": "Events",
+   "key": "id",
+   "kind": "entity",
+   "rows": 5033,
+   "names": [
+    "name"
+   ],
+   "down": [
+    "Cards",
+    "Matches"
+   ],
+   "up": [
+    "Belts",
+    "Locations",
+    "Match_Types",
+    "Promotions",
+    "Tables",
+    "Wrestlers"
+   ],
+   "update_targets": [
+    "Events",
+    "Cards",
+    "Matches",
+    "Belts",
+    "Locations",
+    "Match_Types",
+    "Promotions",
+    "Tables",
+    "Wrestlers"
+   ]
+  },
+  {
+   "table": "Belts",
+   "key": "id",
+   "kind": "entity",
+   "rows": 143,
+   "names": [
+    "name"
+   ],
+   "down": [
+    "Matches"
+   ],
+   "up": [
+    "Cards",
+    "Match_Types",
+    "Wrestlers"
+   ],
+   "update_targets": [
+    "Belts",
+    "Matches",
+    "Cards",
+    "Match_Types",
+    "Wrestlers"
+   ]
+  },
+  {
+   "table": "Wrestlers",
+   "key": "id",
+   "kind": "person_named",
+   "rows": 17182,
+   "names": [
+    "name"
+   ],
+   "down": [
+    "Matches"
+   ],
+   "up": [
+    "Belts",
+    "Cards",
+    "Match_Types"
+   ],
+   "update_targets": [
+    "Wrestlers",
+    "Matches",
+    "Belts",
+    "Cards",
+    "Match_Types"
+   ]
+  },
+  {
+   "table": "Match_Types",
+   "key": "id",
+   "kind": "entity",
+   "rows": 1208,
+   "names": [
+    "name"
+   ],
+   "down": [
+    "Matches"
+   ],
+   "up": [
+    "Belts",
+    "Cards",
+    "Wrestlers"
+   ],
+   "update_targets": [
+    "Match_Types",
+    "Matches",
+    "Belts",
+    "Cards",
+    "Wrestlers"
+   ]
+  }
+ ],
+ "spider2:delivery_center": [
+  {
+   "table": "channels",
+   "key": "channel_id",
+   "kind": "entity",
+   "rows": 40,
+   "names": [
+    "channel_name"
+   ],
+   "down": [
+    "orders",
+    "deliveries",
+    "payments"
+   ],
+   "up": [
+    "drivers",
+    "stores"
+   ],
+   "update_targets": [
+    "channels",
+    "orders",
+    "deliveries",
+    "payments",
+    "drivers",
+    "stores"
+   ]
+  },
+  {
+   "table": "drivers",
+   "key": "driver_id",
+   "kind": "person_id_only",
+   "rows": 4824,
+   "names": [],
+   "down": [
+    "deliveries"
+   ],
+   "up": [
+    "orders"
+   ],
+   "update_targets": [
+    "drivers",
+    "deliveries",
+    "orders"
+   ]
+  },
+  {
+   "table": "hubs",
+   "key": "hub_id",
+   "kind": "entity",
+   "rows": 32,
+   "names": [
+    "hub_name"
+   ],
+   "down": [
+    "stores",
+    "orders"
+   ],
+   "up": [
+    "channels"
+   ],
+   "update_targets": [
+    "hubs",
+    "stores",
+    "orders",
+    "channels"
+   ]
+  },
+  {
+   "table": "stores",
+   "key": "store_id",
+   "kind": "entity",
+   "rows": 951,
+   "names": [
+    "store_name"
+   ],
+   "down": [
+    "orders",
+    "deliveries",
+    "payments"
+   ],
+   "up": [
+    "channels",
+    "drivers",
+    "hubs"
+   ],
+   "update_targets": [
+    "stores",
+    "orders",
+    "deliveries",
+    "payments",
+    "channels",
+    "drivers",
+    "hubs"
+   ]
+  },
+  {
+   "table": "orders",
+   "key": "order_id",
+   "kind": "entity",
+   "rows": 368999,
+   "names": [],
+   "down": [
+    "deliveries",
+    "payments"
+   ],
+   "up": [
+    "channels",
+    "drivers",
+    "stores"
+   ],
+   "update_targets": [
+    "orders",
+    "deliveries",
+    "payments",
+    "channels",
+    "drivers",
+    "stores"
+   ]
+  }
+ ],
+ "spider2:imdb_movies": [
+  {
+   "table": "names",
+   "key": "id",
+   "kind": "entity",
+   "rows": 25735,
+   "names": [
+    "name"
+   ],
+   "down": [
+    "director_mapping",
+    "role_mapping"
+   ],
+   "up": [
+    "ratings"
+   ],
+   "update_targets": [
+    "names",
+    "role_mapping",
+    "ratings"
+   ]
+  },
+  {
+   "table": "ratings",
+   "key": "movie_id",
+   "kind": "entity",
+   "rows": 7997,
+   "names": [],
+   "down": [
+    "genre",
+    "director_mapping",
+    "role_mapping"
+   ],
+   "up": [
+    "names"
+   ],
+   "update_targets": [
+    "ratings",
+    "genre",
+    "role_mapping",
+    "names"
+   ]
+  }
+ ],
+ "spider2:school_scheduling": [
+  {
+   "table": "Buildings",
+   "key": "BuildingCode",
+   "kind": "entity",
+   "rows": 6,
+   "names": [
+    "BuildingName"
+   ],
+   "down": [
+    "Class_Rooms",
+    "Classes"
+   ],
+   "up": [
+    "Subjects"
+   ],
+   "update_targets": [
+    "Buildings",
+    "Class_Rooms",
+    "Classes",
+    "Subjects"
+   ]
+  },
+  {
+   "table": "Categories",
+   "key": "CategoryID",
+   "kind": "entity",
+   "rows": 19,
+   "names": [],
+   "down": [
+    "Faculty_Categories",
+    "Subjects",
+    "Classes",
+    "Faculty_Subjects"
+   ],
+   "up": [
+    "Class_Rooms",
+    "Departments",
+    "Faculty"
+   ],
+   "update_targets": [
+    "Categories",
+    "Subjects",
+    "Classes",
+    "Faculty_Subjects",
+    "Class_Rooms",
+    "Departments",
+    "Faculty"
+   ]
+  },
+  {
+   "table": "Class_Rooms",
+   "key": "ClassRoomID",
+   "kind": "entity",
+   "rows": 47,
+   "names": [],
+   "down": [
+    "Classes",
+    "Faculty_Classes",
+    "Student_Schedules"
+   ],
+   "up": [
+    "Buildings",
+    "Staff",
+    "Student_Class_Status",
+    "Students",
+    "Subjects"
+   ],
+   "update_targets": [
+    "Class_Rooms",
+    "Classes",
+    "Student_Schedules",
+    "Buildings",
+    "Staff",
+    "Student_Class_Status",
+    "Students",
+    "Subjects"
+   ]
+  },
+  {
+   "table": "Classes",
+   "key": "ClassID",
+   "kind": "entity",
+   "rows": 147,
+   "names": [],
+   "down": [
+    "Faculty_Classes",
+    "Student_Schedules"
+   ],
+   "up": [
+    "Class_Rooms",
+    "Staff",
+    "Student_Class_Status",
+    "Students",
+    "Subjects"
+   ],
+   "update_targets": [
+    "Classes",
+    "Student_Schedules",
+    "Class_Rooms",
+    "Staff",
+    "Student_Class_Status",
+    "Students",
+    "Subjects"
+   ]
+  },
+  {
+   "table": "Departments",
+   "key": "DepartmentID",
+   "kind": "entity",
+   "rows": 5,
+   "names": [
+    "DeptName"
+   ],
+   "down": [
+    "Categories",
+    "Faculty_Categories",
+    "Subjects"
+   ],
+   "up": [
+    "Faculty",
+    "Staff"
+   ],
+   "update_targets": [
+    "Departments",
+    "Categories",
+    "Subjects",
+    "Faculty",
+    "Staff"
+   ]
+  },
+  {
+   "table": "Faculty",
+   "key": "StaffID",
+   "kind": "person_id_only",
+   "rows": 24,
+   "names": [],
+   "down": [
+    "Faculty_Categories",
+    "Faculty_Subjects"
+   ],
+   "up": [
+    "Categories",
+    "Staff",
+    "Subjects"
+   ],
+   "update_targets": [
+    "Faculty",
+    "Faculty_Subjects",
+    "Categories",
+    "Staff",
+    "Subjects"
+   ]
+  },
+  {
+   "table": "Majors",
+   "key": "MajorID",
+   "kind": "entity",
+   "rows": 7,
+   "names": [],
+   "down": [
+    "Students",
+    "Student_Schedules"
+   ],
+   "up": [
+    "Classes",
+    "Student_Class_Status"
+   ],
+   "update_targets": [
+    "Majors",
+    "Students",
+    "Student_Schedules",
+    "Classes",
+    "Student_Class_Status"
+   ]
+  },
+  {
+   "table": "Staff",
+   "key": "StaffID",
+   "kind": "person_named",
+   "rows": 27,
+   "names": [
+    "StfFirstName",
+    "StfLastname"
+   ],
+   "down": [
+    "Departments",
+    "Faculty",
+    "Faculty_Classes",
+    "Categories",
+    "Faculty_Categories",
+    "Faculty_Subjects"
+   ],
+   "up": [
+    "Classes",
+    "Subjects"
+   ],
+   "update_targets": [
+    "Staff",
+    "Departments",
+    "Faculty",
+    "Categories",
+    "Faculty_Subjects",
+    "Classes",
+    "Subjects"
+   ]
+  },
+  {
+   "table": "Students",
+   "key": "StudentID",
+   "kind": "person_named",
+   "rows": 19,
+   "names": [
+    "StudFirstName",
+    "StudLastName"
+   ],
+   "down": [
+    "Student_Schedules"
+   ],
+   "up": [
+    "Classes",
+    "Majors",
+    "Student_Class_Status"
+   ],
+   "update_targets": [
+    "Students",
+    "Student_Schedules",
+    "Classes",
+    "Majors",
+    "Student_Class_Status"
+   ]
+  },
+  {
+   "table": "Subjects",
+   "key": "SubjectID",
+   "kind": "entity",
+   "rows": 56,
+   "names": [
+    "SubjectName"
+   ],
+   "down": [
+    "Classes",
+    "Faculty_Subjects",
+    "Faculty_Classes",
+    "Student_Schedules"
+   ],
+   "up": [
+    "Categories",
+    "Class_Rooms",
+    "Faculty",
+    "Staff",
+    "Student_Class_Status",
+    "Students"
+   ],
+   "update_targets": [
+    "Subjects",
+    "Classes",
+    "Faculty_Subjects",
+    "Student_Schedules",
+    "Categories",
+    "Class_Rooms",
+    "Faculty",
+    "Staff",
+    "Student_Class_Status",
+    "Students"
+   ]
+  }
+ ],
+ "spider1:bike_1": [
+  {
+   "table": "station",
+   "key": "id",
+   "kind": "entity",
+   "rows": 70,
+   "names": [
+    "name"
+   ],
+   "down": [
+    "status",
+    "trip"
+   ],
+   "up": [],
+   "update_targets": [
+    "station",
+    "status",
+    "trip"
+   ]
+  }
+ ],
+ "spider1:college_2": [
+  {
+   "table": "department",
+   "key": "dept_name",
+   "kind": "entity",
+   "rows": 20,
+   "names": [
+    "dept_name"
+   ],
+   "down": [
+    "course",
+    "instructor",
+    "student",
+    "section",
+    "prereq",
+    "teaches",
+    "advisor",
+    "takes"
+   ],
+   "up": [
+    "classroom"
+   ],
+   "update_targets": [
+    "department",
+    "course",
+    "instructor",
+    "student",
+    "section",
+    "advisor",
+    "takes",
+    "classroom"
+   ]
+  },
+  {
+   "table": "course",
+   "key": "course_id",
+   "kind": "entity",
+   "rows": 200,
+   "names": [
+    "title",
+    "dept_name"
+   ],
+   "down": [
+    "section",
+    "prereq",
+    "teaches",
+    "takes"
+   ],
+   "up": [
+    "classroom",
+    "department",
+    "instructor",
+    "student"
+   ],
+   "update_targets": [
+    "course",
+    "section",
+    "takes",
+    "classroom",
+    "department",
+    "instructor",
+    "student"
+   ]
+  },
+  {
+   "table": "instructor",
+   "key": "ID",
+   "kind": "person_named",
+   "rows": 50,
+   "names": [
+    "name",
+    "dept_name"
+   ],
+   "down": [
+    "teaches",
+    "advisor"
+   ],
+   "up": [
+    "department",
+    "section",
+    "student"
+   ],
+   "update_targets": [
+    "instructor",
+    "advisor",
+    "department",
+    "section",
+    "student"
+   ]
+  },
+  {
+   "table": "student",
+   "key": "ID",
+   "kind": "person_named",
+   "rows": 2000,
+   "names": [
+    "name",
+    "dept_name"
+   ],
+   "down": [
+    "takes",
+    "advisor"
+   ],
+   "up": [
+    "department",
+    "instructor",
+    "section"
+   ],
+   "update_targets": [
+    "student",
+    "takes",
+    "advisor",
+    "department",
+    "instructor",
+    "section"
+   ]
+  }
+ ],
+ "spider1:csu_1": [
+  {
+   "table": "Campuses",
+   "key": "Id",
+   "kind": "entity",
+   "rows": 23,
+   "names": [],
+   "down": [
+    "csu_fees",
+    "degrees",
+    "discipline_enrollments",
+    "enrollments",
+    "faculty"
+   ],
+   "up": [],
+   "update_targets": [
+    "Campuses",
+    "csu_fees",
+    "degrees",
+    "discipline_enrollments",
+    "enrollments",
+    "faculty"
+   ]
+  }
+ ],
+ "spider1:flight_4": [
+  {
+   "table": "airports",
+   "key": "apid",
+   "kind": "entity",
+   "rows": 7184,
+   "names": [
+    "name"
+   ],
+   "down": [
+    "routes"
+   ],
+   "up": [
+    "airlines"
+   ],
+   "update_targets": [
+    "airports",
+    "routes",
+    "airlines"
+   ]
+  },
+  {
+   "table": "airlines",
+   "key": "alid",
+   "kind": "entity",
+   "rows": 6162,
+   "names": [
+    "name"
+   ],
+   "down": [
+    "routes"
+   ],
+   "up": [
+    "airports"
+   ],
+   "update_targets": [
+    "airlines",
+    "routes",
+    "airports"
+   ]
+  }
+ ],
+ "spider1:hr_1": [
+  {
+   "table": "countries",
+   "key": "COUNTRY_ID",
+   "kind": "entity",
+   "rows": 25,
+   "names": [
+    "COUNTRY_NAME"
+   ],
+   "down": [
+    "locations",
+    "departments"
+   ],
+   "up": [
+    "regions"
+   ],
+   "update_targets": [
+    "countries",
+    "locations",
+    "departments",
+    "regions"
+   ]
+  },
+  {
+   "table": "departments",
+   "key": "DEPARTMENT_ID",
+   "kind": "entity",
+   "rows": 27,
+   "names": [
+    "DEPARTMENT_NAME"
+   ],
+   "down": [
+    "employees",
+    "job_history"
+   ],
+   "up": [
+    "jobs",
+    "locations"
+   ],
+   "update_targets": [
+    "departments",
+    "employees",
+    "job_history",
+    "jobs",
+    "locations"
+   ]
+  },
+  {
+   "table": "jobs",
+   "key": "JOB_ID",
+   "kind": "entity",
+   "rows": 19,
+   "names": [
+    "JOB_TITLE"
+   ],
+   "down": [
+    "employees",
+    "job_history"
+   ],
+   "up": [
+    "departments"
+   ],
+   "update_targets": [
+    "jobs",
+    "employees",
+    "job_history",
+    "departments"
+   ]
+  },
+  {
+   "table": "employees",
+   "key": "EMPLOYEE_ID",
+   "kind": "person_named",
+   "rows": 107,
+   "names": [
+    "FIRST_NAME",
+    "LAST_NAME"
+   ],
+   "down": [
+    "job_history"
+   ],
+   "up": [
+    "departments",
+    "jobs"
+   ],
+   "update_targets": [
+    "employees",
+    "job_history",
+    "departments",
+    "jobs"
+   ]
+  },
+  {
+   "table": "locations",
+   "key": "LOCATION_ID",
+   "kind": "entity",
+   "rows": 23,
+   "names": [],
+   "down": [
+    "departments",
+    "employees",
+    "job_history"
+   ],
+   "up": [
+    "countries",
+    "jobs"
+   ],
+   "update_targets": [
+    "locations",
+    "departments",
+    "employees",
+    "job_history",
+    "countries",
+    "jobs"
+   ]
+  }
+ ],
+ "spider1:wine_1": [
+  {
+   "table": "grapes",
+   "key": "ID",
+   "kind": "entity",
+   "rows": 20,
+   "names": [],
+   "down": [
+    "wine"
+   ],
+   "up": [
+    "appellations"
+   ],
+   "update_targets": [
+    "grapes",
+    "wine",
+    "appellations"
+   ]
+  },
+  {
+   "table": "appellations",
+   "key": "No",
+   "kind": "entity",
+   "rows": 57,
+   "names": [],
+   "down": [
+    "wine"
+   ],
+   "up": [
+    "grapes"
+   ],
+   "update_targets": [
+    "appellations",
+    "wine",
+    "grapes"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,8 @@
+{
+  "spider2:IPL": [
+    {"table": "ball_by_ball", "cols": ["striker"], "ref_table": "player", "ref_cols": ["player_id"]},
+    {"table": "ball_by_ball", "cols": ["non_striker"], "ref_table": "player", "ref_cols": ["player_id"]},
+    {"table": "ball_by_ball", "cols": ["bowler"], "ref_table": "player", "ref_cols": ["player_id"]},
+    {"table": "wicket_taken", "cols": ["player_out"], "ref_table": "player", "ref_cols": ["player_id"]}
+  ]
+}
