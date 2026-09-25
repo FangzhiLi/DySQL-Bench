@@ -28,3 +28,6 @@ DySQL-Bench/results/
 
 *.egg-info/
 
+
+# large generated artifacts (regenerate from scripts)
+docs/benchmark_db_catalog.xlsx
