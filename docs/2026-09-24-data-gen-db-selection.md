@@ -81,6 +81,13 @@
    - BIRD dev（3）：california_schools、card_games、toxicology
    - Spider2-lite（1）：Airlines
    - Spider 1.0 train（1）：flight_4
+4. **分阶段安排：先用有人物表的库，没有人物表的库视结果再加。**
+   - **第一阶段：** 只在上面 34 个有人物表的库上生成任务。persona 取自库里真实的一行人物记录（姓名、邮箱等可查），agent policy 里"先在库里找到用户、验证身份"这条规则也能执行。
+   - **第二阶段（可选）：** 第一阶段训完后，看各 eval 环境的成绩。如果其他环境都涨了、唯独没有人物表的 car/cookbook 没涨，再把备注 3 里的 14 个库加回来；如果它们也跟着涨了，就不做。依据：基线里这两个环境并不一致地更难（32B / 4B / 1.7B：car 55.6 / 44.4 / 14.8%，cookbook 27.5 / 17.6 / 11.8%，全部 13 个环境 46.1 / 29.8 / 16.2%），合计 78 个任务，占 eval 的 7%。
+   - **做第二阶段前要先定两件事：**
+     1. **persona 的来源和格式。** 按库的领域定义固定的几种角色（如 cars 用"车行经理""车主"，cookbook 用"菜谱作者"），名字、联系方式可以编，但格式统一，并写进任务元数据。
+     2. **这类库的 agent policy。** 去掉"在库里找到用户"这一步，换成可执行的规则，比如只核对用户提供的记录 id 是否存在。
+   - **为什么不能照搬 DySQL 的做法：** DySQL 仓库发布的生成脚本只覆盖 complex_oracle 和 music（从"一个客户 + 其交易记录"的数据池采样），建数据池的代码和 cars/cookbook 的生成脚本都没有发布。从 cars/cookbook 的任务看，persona 是 LLM 凭空编的：姓名、职业、邮箱都不在库里（如 "I am Markus Klein, an auto dealer"），口吻混杂（"My name is…"、"You are Alex…"、"Your name is Andrew…"），有的任务没有身份，`user_id` 格式也不统一（`'1'`、`'sabrina_wright'`、`'Maggie Palmer'`）。而且这两个环境的 agent policy 照抄了"authenticate the user identity by locating their user"，但库里没有用户表可查，规则无法执行。
 
 ## 数据来源
 
