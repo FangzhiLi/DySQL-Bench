@@ -30,6 +30,19 @@ def _composite_key(c, t, cols):
     return []
 
 
+def _col_stats(c, t, cols):
+    """Per column: rows that are NULL or '', rows that are exactly '', average length of non-empty values."""
+    out = {}
+    for i in range(0, len(cols), 200):  # SQLite caps result columns at 2000
+        part = cols[i:i + 200]
+        sel = ", ".join(f"sum({_q(x)} IS NULL OR {_q(x)} = ''), sum({_q(x)} = ''), avg(nullif(length({_q(x)}), 0))"
+                        for x in part)
+        r = c.execute(f"SELECT {sel} FROM {_q(t)}").fetchone()
+        out.update({x: {"empty": r[3 * j] or 0, "blank": r[3 * j + 1] or 0, "avg_len": float(r[3 * j + 2] or 0.0)}
+                    for j, x in enumerate(part)})
+    return out
+
+
 def profile_db(path):
     c = _open(path)
     names = [r[0] for r in c.execute("select name from sqlite_master where type='table' "
@@ -49,8 +62,9 @@ def profile_db(path):
             f"select count(distinct {_q(x)}) = count(*) and count({_q(x)}) = count(*) from {_q(t)}").fetchone()[0]] \
             if not pk and scan else []
         composite = _composite_key(c, t, cols) if not pk and not unique and scan else []
+        stats = _col_stats(c, t, cols) if scan else {}
         tables.append({"name": t, "cols": cols, "pk": pk, "unique_keys": unique, "composite_key": composite,
-                       "fks": list(fks.values()), "rows": rows})
+                       "fks": list(fks.values()), "rows": rows, "stats": stats})
     c.close()
     return {"db": os.path.splitext(os.path.basename(path))[0], "path": path,
             "size_mb": os.path.getsize(path) / 2**20, "tables": tables}

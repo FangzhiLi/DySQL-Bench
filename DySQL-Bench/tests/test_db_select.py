@@ -249,3 +249,28 @@ def test_composite_key_rejects_duplicates_and_nulls(tmp_path):
 def test_single_pk_table_has_no_composite_key(tmp_path):
     p = profile_db(_db(tmp_path, "shop", SHOP))
     assert all(t["composite_key"] == [] for t in p["tables"])
+
+# --- Task 5: column stats ---
+
+def test_col_stats_empty_blank_and_avg_len(tmp_path):
+    p = profile_db(_db(tmp_path, "st", """
+        CREATE TABLE t (id INTEGER PRIMARY KEY, note TEXT, html TEXT);
+        INSERT INTO t VALUES (1,'ab',NULL),(2,'',NULL),(3,NULL,'xxxxxxxxxx');"""))
+    s = p["tables"][0]["stats"]
+    assert s["note"] == {"empty": 2, "blank": 1, "avg_len": 2.0}
+    assert s["html"] == {"empty": 2, "blank": 0, "avg_len": 10.0}
+    assert s["id"]["empty"] == 0
+
+def test_col_stats_on_quoted_names(tmp_path):
+    p = profile_db(_db(tmp_path, "sp", """
+        CREATE TABLE "Sales Orders" ("Order Number" TEXT PRIMARY KEY, "Sales Channel" TEXT);
+        CREATE TABLE "voice-actors" ("voice-actor" TEXT, movie TEXT);
+        INSERT INTO "Sales Orders" VALUES ('o1','web');
+        INSERT INTO "voice-actors" VALUES ('Joan','Chicken Little');"""))
+    t = {x["name"]: x for x in p["tables"]}
+    assert t["Sales Orders"]["stats"]["Sales Channel"]["avg_len"] == 3.0
+    assert t["voice-actors"]["stats"]["voice-actor"]["empty"] == 0
+
+def test_col_stats_skipped_for_empty_table(tmp_path):
+    p = profile_db(_db(tmp_path, "e", "CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT);"))
+    assert p["tables"][0]["stats"] == {}
