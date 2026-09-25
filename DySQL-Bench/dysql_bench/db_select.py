@@ -73,7 +73,13 @@ def transaction_tables(p, min_rows, extra_fks=()):
     return [t["name"] for t in p["tables"] if t["name"] in has_fk and t["rows"] >= min_rows]
 
 def schema_items(p):
-    return {f"{_norm(t['name'])}.{_norm(c)}" for t in p["tables"] for c in t["cols"]}
+    """Normalized table.column items; a prefix shared by >= half the tables (e.g. `olist_`) is dropped."""
+    heads = [m.group(1).lower() for t in p["tables"] if (m := re.match(r"([A-Za-z0-9]+)_", t["name"]))]
+    top = max(set(heads), key=heads.count) if heads else None
+    strip = top if top and heads.count(top) >= max(2, len(p["tables"]) / 2) else None
+    def tname(n):
+        return n[len(strip) + 1:] if strip and n.lower().startswith(strip + "_") else n
+    return {f"{_norm(tname(t['name']))}.{_norm(c)}" for t in p["tables"] for c in t["cols"]}
 
 def containment(a, b):
     """Share of the smaller schema's table.column items found in the other (catches subset/superset copies)."""

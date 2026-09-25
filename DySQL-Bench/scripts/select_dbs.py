@@ -21,7 +21,7 @@ LEAK = {"spider1": {"chinook_1", "store_1", "sakila_1", "soccer_1"},
                  "retail_world", "cars", "human_resources"},
         "spider2": {"sqlite-sakila", "northwind", "EU_soccer", "complex_oracle", "BowlingLeague",
                     "EntertainmentAgency", "Pagila", "chinook", "music"}}
-CFG = dict(tables=(3, 20), max_cols=250, rows=(200, 3_000_000), max_mb=100, min_fks=2,
+CFG = dict(tables=(3, 20), max_cols=250, rows=(200, 3_000_000), max_mb=300, min_fks=2,
            txn_min_rows=50, min_component_share=0.6, overlap=0.6)
 DEDUP_ORDER = ["bird", "spider2", "spider1", "synsql"]
 COLS = ["source", "db", "pass", "dup_of", "fail_reasons", "n_tables", "n_cols", "total_rows", "size_mb",

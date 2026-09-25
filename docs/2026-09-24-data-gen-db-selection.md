@@ -33,15 +33,15 @@
 ### C. 尺寸区间（为小模型和 rollout 成本，不是为像 DySQL）
 
 - 表数 3–20，全库列数 ≤ 约 250：保证 schema 能放进 Qwen3-1.7B/4B 的 prompt。
-- 总行数 ≥ 200，≤ 约 300 万；文件 ≤ 约 100 MB：GRPO 每个 rollout 都要复制/重置 DB，complex_oracle 这种百万行规模已经偏慢。
-- 写目标表不能为空，避免 no-op gold（每条 gold 写操作都要检查实际影响行数 > 0）。
+- 总行数 ≥ 200，≤ 约 300 万；文件 ≤ 300 MB。上限取 DySQL 里最大的库：EU_soccer 只有 22 万行，但文件有 299 MB（Match 表存了大段 XML 文本），它有 215 个任务、占 eval 的 20%，训练集的上限不能比它低。文件大小主要由文本列决定，和行数关系不大。32B 基线里 EU_soccer 每个任务都复制一次 DB，没出现问题，所以 rollout 复制成本在这个量级可以接受。
+- 空表可以作为 INSERT 目标（DySQL 的 BowlingLeague 就往空表 `Bowler_Scores_Archive` 写了 87 次，大多是归档用的 INSERT）；只有 UPDATE/DELETE 作用在空表或没命中行时才是 no-op。因此生成任务时要检查：每条 gold UPDATE/DELETE 实际影响的行数 > 0。选库阶段只要求至少一张 ≥ 50 行的事务表。
 
 ### D. 配额
 
 - 每库任务上限（例如 ≤ 80），避免复制 DySQL 里两个库占 39% 的偏斜。
 - 按领域分层：体育、零售/订单、内容媒体、人事/教育、医疗/科学。
 
-## 自动筛选结果（2026-09-24）
+## 自动筛选结果（2026-09-25 更新）
 
 实现：`DySQL-Bench/dysql_bench/db_select.py`（测试 `tests/test_db_select.py`），运行脚本 `DySQL-Bench/scripts/select_dbs.py`。全量结果写到 `DySQL-Bench/results/db_select/db_select_all.csv`（不进 git），通过且去重后的候选写到 `docs/data_gen/candidate_dbs.csv`。
 
@@ -51,25 +51,25 @@
 - **事务表：** 有出向 FK（声明或推断），且行数 ≥ 50。
 - **"可定位"：** 至少一张事务表有行定位键。
 - **拼凑库：** FK 图最大连通分量覆盖的表 < 60% 时判为拼凑库，排除。
-- **去重：** schema 包含度 ≥ 0.6 视为同一个库，按 BIRD > Spider2 > Spider1 > SynSQL 的优先级只保留一份。
+- **去重：** schema 包含度 ≥ 0.6 视为同一个库，按 BIRD > Spider2 > Spider1 > SynSQL 的优先级只保留一份。计算前先去掉一个库里半数以上表共用的表名前缀（如 `olist_`），否则同一份 Olist 数据的三个副本因表名不同而认不出来。
 
 | 来源 | 库总数 | 通过 | 重复 | 保留 | 主要淘汰原因（一个库可有多个） |
 |---|---|---|---|---|---|
-| BIRD（train 69 + dev 11） | 80 | 36 | 0 | 36 | 文件 > 100 MB 22 个，行数 17，表数 10，事务表无键 9，泄漏 9，FK 8 |
-| Spider2-lite（SQLite） | 30 | 3 | 0 | 3 | 拼凑库 10，泄漏 9，文件 > 100 MB 8，事务表无键 4 |
+| BIRD（train 69 + dev 11） | 80 | 39 | 0 | 39 | 行数 17，文件 > 300 MB 15，表数 10，事务表无键 9，泄漏 9，FK 8 |
+| Spider2-lite（SQLite） | 30 | 8 | 2 | 6 | 拼凑库 10，泄漏 9，事务表无键 4，表数 3，无事务表 3 |
 | Spider 1.0 | 206 | 10 | 2 | 8 | 行数不足 183，无事务表 182 |
 | SynSQL-2.5M | 16,583 | 0 | 0 | 0 | 全部因行数不足/无事务表淘汰（表内只有 0–2 行） |
-| **合计** | | | | **47** | 其中 34 个有人物实体表；13 个没有（如 genes、toxicology、world、flight_2） |
+| **合计** | | | | **53** | 其中 37 个有人物实体表；16 个没有（如 genes、toxicology、world、Airlines、flight_2） |
 
 保留的库：
-- **BIRD：** address, beer_factory, books, car_retails, chicago_crime, college_completion, computer_student, disney, genes, legislator, mental_health_survey, movie, movielens, olympics, professional_basketball, public_review_platform, regional_sales, restaurant, retail_complains, shakespeare, shipping, social_media, student_loan, superstore, synthea, university, video_games, world, california_schools, debit_card_specializing, financial, formula_1, student_club, superhero, thrombosis_prediction, toxicology
-- **Spider2-lite：** AdventureWorks、IPL（这两个的 FK 全靠推断，要人工抽查）、school_scheduling
+- **BIRD：** address, beer_factory, books, car_retails, chicago_crime, college_completion, computer_student, disney, food_inspection_2, genes, legislator, menu, mental_health_survey, movie, movielens, olympics, professional_basketball, public_review_platform, regional_sales, restaurant, retail_complains, shakespeare, shipping, social_media, student_loan, superstore, synthea, university, video_games, world, california_schools, card_games, debit_card_specializing, financial, formula_1, student_club, superhero, thrombosis_prediction, toxicology
+- **Spider2-lite：** AdventureWorks、Airlines、Brazilian_E_Commerce（E_commerce、electronic_sales 是同一份 Olist 数据，已去重）、IPL、WWE、school_scheduling。除 school_scheduling 外，其余 5 个的 FK 全靠推断，要人工抽查
 - **Spider 1.0：** aan_1, car_1, college_2, college_3, csu_1, flight_2, flight_4, hr_1。formula_1、world_1 与 BIRD 同源，已去重
 
 待决定：
 1. **`simpson_episodes` 算不算泄漏。** 它与 law_episode 是同一套 schema 模板（包含度 0.88），但数据是另一部剧。目前按泄漏排除（训练它等于提前见过 law_episode 的 schema）。
-2. **100 MB 文件上限。** 有 10 个库只因文件大小被淘汰，数据本身合格：BIRD 的 food_inspection_2、menu、music_platform_2、card_games、codebase_community；Spider2 的 Airlines、WWE，以及 Brazilian_E_Commerce / E_commerce / electronic_sales（三个是同一份 Olist 数据）。可以放宽上限，或者抽样缩小后再用。
-3. **没有人物实体表的 13 个库**（软条件）：留着的话 persona 要编，任务会更像 cars/cookbook。
+2. **超过 300 MB 的库。** 上限已从 100 MB 放宽到 300 MB（2026-09-25）。仍有 2 个库只因文件大小被淘汰：BIRD 的 codebase_community（459 MB）和 music_platform_2（1.5 GB）。要用的话需要先抽样缩小。
+3. **没有人物实体表的 16 个库**（软条件）：留着的话 persona 要编，任务会更像 cars/cookbook。
 
 ## 数据来源
 

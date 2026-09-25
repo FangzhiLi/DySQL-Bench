@@ -63,6 +63,12 @@ def test_schema_items_normalize_case_underscore_plural(tmp_path):
     p = profile_db(_db(tmp_path, "n", "CREATE TABLE Invoice_Lines (Invoice_Id INT, Qty INT);"))
     assert schema_items(p) == {"invoiceline.invoiceid", "invoiceline.qty"}
 
+def test_schema_items_strip_prefix_shared_by_most_tables(tmp_path):
+    p = profile_db(_db(tmp_path, "olist", """
+        CREATE TABLE olist_orders (order_id TEXT); CREATE TABLE olist_customers (customer_id TEXT);
+        CREATE TABLE translation (name TEXT);"""))
+    assert schema_items(p) == {"order.orderid", "customer.customerid", "translation.name"}
+
 def test_containment_is_relative_to_smaller_schema():
     small, big = {"a.x", "a.y"}, {"a.x", "a.y", "b.z", "c.w"}
     assert containment(small, big) == 1.0 == containment(big, small)
