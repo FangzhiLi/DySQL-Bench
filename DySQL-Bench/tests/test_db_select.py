@@ -1,24 +1,8 @@
 # tests/test_db_select.py
-import sqlite3
 from dysql_bench.db_select import (profile_db, row_key, infer_fks, is_person_table, transaction_tables,
-                                   schema_items, containment, is_fragmented, evaluate, dedup)
-
-def _db(tmp_path, name, script):
-    p = tmp_path / f"{name}.sqlite"
-    c = sqlite3.connect(p); c.executescript("BEGIN;" + script + "COMMIT;"); c.close()
-    return str(p)
-
-def _rows(table, n, fmt):
-    return "".join(f"INSERT INTO {table} VALUES ({fmt(i)});" for i in range(n))
-
-SHOP = """
-CREATE TABLE customers (customer_id INTEGER PRIMARY KEY, first_name TEXT, last_name TEXT);
-CREATE TABLE products (product_id INTEGER PRIMARY KEY, name TEXT, price REAL);
-CREATE TABLE orders (order_id INTEGER PRIMARY KEY, customer_id INTEGER REFERENCES customers(customer_id),
-                     product_id INTEGER REFERENCES products(product_id), qty INTEGER);
-""" + _rows("customers", 60, lambda i: f"{i},'a{i}','b{i}'") \
-    + _rows("products", 60, lambda i: f"{i},'p{i}',1.0") \
-    + _rows("orders", 100, lambda i: f"{i},{i%60},{i%60},1")
+                                   schema_items, containment, is_fragmented, evaluate, dedup, declared_fks,
+                                   validate_fks)
+from tests._sqlite_fixtures import make_db as _db, rows as _rows, SHOP
 
 def test_profile_db_reads_tables_rows_pk_fk(tmp_path):
     p = profile_db(_db(tmp_path, "shop", SHOP))
@@ -140,3 +124,41 @@ def test_dedup_keeps_preferred_source():
             dict(source="bird", db="shop", **{"pass": True}, schema=["order.orderid", "customer.customerid"])]
     out = dedup(rows, order=["bird", "spider2", "spider1"], threshold=0.6)
     assert [r["dup_of"] for r in out] == ["bird:formula_1", None, None]
+
+# --- Task 1: FK hit rate ---
+
+def test_validate_fks_hit_rate_counts_non_empty_child_values(tmp_path):
+    p = profile_db(_db(tmp_path, "half", """
+        CREATE TABLE customers (customer_id INTEGER PRIMARY KEY);
+        CREATE TABLE orders (order_id INTEGER PRIMARY KEY, customer_id INTEGER REFERENCES customers(customer_id));
+        INSERT INTO customers VALUES (1),(2);
+        INSERT INTO orders VALUES (1,1),(2,2),(3,9),(4,8),(5,NULL),(6,'');"""))
+    assert validate_fks(p, declared_fks(p)) == [{"table": "orders", "cols": ["customer_id"], "ref_table": "customers",
+                                                 "ref_cols": ["customer_id"], "source": "declared", "hit": 0.5}]
+
+def test_fk_hit_rate_without_child_values_is_unverified(tmp_path):
+    p = profile_db(_db(tmp_path, "empty", """
+        CREATE TABLE customers (customer_id INTEGER PRIMARY KEY);
+        CREATE TABLE orders (order_id INTEGER PRIMARY KEY, customer_id INTEGER REFERENCES customers(customer_id));
+        CREATE TABLE archive (order_id INTEGER PRIMARY KEY, customer_id INTEGER REFERENCES customers(customer_id));
+        INSERT INTO customers VALUES (1);
+        INSERT INTO orders VALUES (1,NULL),(2,'');"""))
+    assert [f["hit"] for f in validate_fks(p, declared_fks(p))] == [None, None]
+
+def test_fk_hit_rate_resolves_ref_table_case_insensitively(tmp_path):
+    p = profile_db(_db(tmp_path, "case", """
+        CREATE TABLE customers (customer_id INTEGER PRIMARY KEY);
+        CREATE TABLE orders (order_id INTEGER PRIMARY KEY, customer_id INTEGER REFERENCES Customers(customer_id));
+        INSERT INTO customers VALUES (1);
+        INSERT INTO orders VALUES (1,1);"""))
+    f = validate_fks(p, declared_fks(p))[0]
+    assert f["ref_table"] == "customers" and f["hit"] == 1.0
+
+def test_fk_hit_rate_fills_omitted_ref_column_with_pk(tmp_path):
+    p = profile_db(_db(tmp_path, "omit", """
+        CREATE TABLE customers (customer_id INTEGER PRIMARY KEY);
+        CREATE TABLE orders (order_id INTEGER PRIMARY KEY, customer_id INTEGER REFERENCES customers);
+        INSERT INTO customers VALUES (1);
+        INSERT INTO orders VALUES (1,1),(2,2);"""))
+    f = validate_fks(p, declared_fks(p))[0]
+    assert f["ref_cols"] == ["customer_id"] and f["hit"] == 0.5

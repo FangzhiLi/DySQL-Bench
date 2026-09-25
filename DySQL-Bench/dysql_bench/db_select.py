@@ -11,24 +11,34 @@ NAME_COLS = {"firstname", "lastname", "fname", "lname", "fullname"}
 ID_LIKE = re.compile(r"(id|_key|_code)$", re.I)
 UNIQUE_SCAN_MAX_ROWS = 3_000_000  # skip COUNT(DISTINCT) on huge tables; they fail the size filter anyway
 
+
+def _q(name):
+    return '"' + name.replace('"', '""') + '"'
+
+
+def _open(path):
+    return sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+
+
 def profile_db(path):
-    c = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    c = _open(path)
     names = [r[0] for r in c.execute("select name from sqlite_master where type='table' "
                                      "and name not like 'sqlite_%' order by rowid")]
     tables = []
     for t in names:
-        info = c.execute(f'pragma table_info("{t}")').fetchall()
+        info = c.execute(f"pragma table_info({_q(t)})").fetchall()
+        cols = [i[1] for i in info]
         fks = {}
-        for r in c.execute(f'pragma foreign_key_list("{t}")').fetchall():
+        for r in c.execute(f"pragma foreign_key_list({_q(t)})").fetchall():
             f = fks.setdefault(r[0], {"cols": [], "ref_table": r[2], "ref_cols": []})
             f["cols"].append(r[3]); f["ref_cols"].append(r[4])
         pk = [i[1] for i in sorted(info, key=lambda i: i[5]) if i[5] > 0]
-        rows = c.execute(f'select count(*) from "{t}"').fetchone()[0]
-        unique = []
-        if not pk and 0 < rows <= UNIQUE_SCAN_MAX_ROWS:
-            unique = [i[1] for i in info if ID_LIKE.search(i[1]) and c.execute(
-                f'select count(distinct "{i[1]}") = count(*) and count("{i[1]}") = count(*) from "{t}"').fetchone()[0]]
-        tables.append({"name": t, "cols": [i[1] for i in info], "pk": pk, "unique_keys": unique,
+        rows = c.execute(f"select count(*) from {_q(t)}").fetchone()[0]
+        scan = 0 < rows <= UNIQUE_SCAN_MAX_ROWS
+        unique = [x for x in cols if ID_LIKE.search(x) and c.execute(
+            f"select count(distinct {_q(x)}) = count(*) and count({_q(x)}) = count(*) from {_q(t)}").fetchone()[0]] \
+            if not pk and scan else []
+        tables.append({"name": t, "cols": cols, "pk": pk, "unique_keys": unique,
                        "fks": list(fks.values()), "rows": rows})
     c.close()
     return {"db": os.path.splitext(os.path.basename(path))[0], "path": path,
@@ -44,6 +54,50 @@ def row_key(t):
         return t["pk"][0]
     stem = _norm(re.split(r"[^A-Za-z0-9]", t["name"])[-1])
     return next((k for k in t["unique_keys"] if stem and stem in _norm(k)), (t["unique_keys"] or [None])[0])
+
+def declared_fks(p):
+    """Flatten the per-table PRAGMA foreign keys into the common fk dict format."""
+    return [{"table": t["name"], "cols": f["cols"], "ref_table": f["ref_table"], "ref_cols": f["ref_cols"],
+             "source": "declared"} for t in p["tables"] for f in t["fks"]]
+
+
+def _resolve_ref_cols(ref, ref_cols):
+    """Fill ref columns omitted in the DDL (`REFERENCES customers`) with the referenced table's PK."""
+    if all(rc is None for rc in ref_cols) and len(ref["pk"]) == len(ref_cols):
+        return list(ref["pk"])
+    return [rc or (ref["pk"][0] if len(ref["pk"]) == 1 else None) for rc in ref_cols]
+
+
+def fk_hit_rate(c, fk, p):
+    """Share of the child's non-null, non-empty key values found in the referenced table.
+    None when there is nothing to check (empty child, or every value empty): unverified, not wrong."""
+    tables = {t["name"].lower(): t for t in p["tables"]}
+    ref = tables.get(fk["ref_table"].lower())
+    if not ref or any(rc is None for rc in fk["ref_cols"]):
+        return 0.0
+    cols = ", ".join(_q(x) for x in fk["cols"])
+    rcols = ", ".join(_q(x) for x in fk["ref_cols"])
+    notnull = " AND ".join(f"{_q(x)} IS NOT NULL AND {_q(x)} != ''" for x in fk["cols"])
+    n, hit = c.execute(f"SELECT count(*), coalesce(sum(({cols}) IN (SELECT {rcols} FROM {_q(ref['name'])})), 0) "
+                       f"FROM {_q(fk['table'])} WHERE {notnull}").fetchone()
+    return hit / n if n else None
+
+
+def validate_fks(p, fks):
+    """Resolve ref table names/columns and attach the data-checked hit rate (None = unverified) to every fk."""
+    tables = {t["name"].lower(): t for t in p["tables"]}
+    c = _open(p["path"])
+    out = []
+    for f in fks:
+        ref = tables.get(f["ref_table"].lower())
+        g = {**f, "ref_table": ref["name"] if ref else f["ref_table"],
+             "ref_cols": _resolve_ref_cols(ref, f["ref_cols"]) if ref else f["ref_cols"]}
+        h = fk_hit_rate(c, g, p)
+        g["hit"] = None if h is None else round(h, 3)
+        out.append(g)
+    c.close()
+    return out
+
 
 def infer_fks(p):
     """Join keys implied by column names, for DBs that declare few FKs (e.g. Kaggle CSV imports)."""
