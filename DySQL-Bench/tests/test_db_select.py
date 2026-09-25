@@ -203,6 +203,15 @@ def test_infer_by_value_rejects_ambiguous_match(tmp_path):
           + _rows("Matches", 200, lambda i: f"{i},{i%40}")))
     assert infer_fks_by_value(p, set()) == []
 
+def test_infer_by_value_needs_the_child_to_cover_part_of_the_ref_keys(tmp_path):
+    # complex_oracle: 60 calendar_month_id values all fall inside customers.cust_id 1..55,500 by coincidence;
+    # a real role FK (winner_id -> Wrestlers) covers most of the referenced keys
+    p = profile_db(_db(tmp_path, "cov", """
+        CREATE TABLE customers (cust_id INTEGER PRIMARY KEY, name TEXT);
+        CREATE TABLE times (time_id INTEGER PRIMARY KEY, calendar_month_id INTEGER);
+    """ + _rows("customers", 1000, lambda i: f"{i},'c{i}'") + _rows("times", 300, lambda i: f"{i},{i%60}")))
+    assert infer_fks_by_value(p, set()) == []
+
 def test_infer_by_value_needs_enough_distinct_values(tmp_path):
     p = profile_db(_db(tmp_path, "few", """
         CREATE TABLE Wrestlers (id INTEGER PRIMARY KEY, name TEXT);

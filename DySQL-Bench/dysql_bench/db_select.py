@@ -124,10 +124,13 @@ def infer_fks(p):
     return out
 
 
-def infer_fks_by_value(p, covered, min_hit=0.99, min_distinct=20):
+def infer_fks_by_value(p, covered, min_hit=0.99, min_distinct=20, min_coverage=0.1):
     """Role-named FKs (winner_id, loser_id, *_order_id) that no name rule catches: an id-like column whose
     sampled non-empty values (almost) all fall inside exactly one other table's key. `covered` holds
-    (table, col_lower) pairs already explained by declared or name-inferred FKs."""
+    (table, col_lower) pairs already explained by declared or name-inferred FKs.
+    The child's distinct values must also cover >= min_coverage of the referenced keys: a big dense integer key
+    (customers.cust_id 1..55,500) 'contains' any small set of small ids by coincidence (times.calendar_month_id),
+    while a real role FK (winner_id -> Wrestlers) covers most of them."""
     keys = {t["name"]: row_key(t) for t in p["tables"] if row_key(t)}
     rows = {t["name"]: t["rows"] for t in p["tables"]}
     c = _open(p["path"])
@@ -142,7 +145,7 @@ def infer_fks_by_value(p, covered, min_hit=0.99, min_distinct=20):
                 continue
             hits = []
             for ref, k in keys.items():
-                if ref == t["name"] or rows[ref] < distinct:
+                if ref == t["name"] or rows[ref] < distinct or distinct < min_coverage * rows[ref]:
                     continue
                 n, h = c.execute(
                     f"SELECT count(*), coalesce(sum({_q(col)} IN (SELECT {_q(k)} FROM {_q(ref)})), 0) FROM "
