@@ -18,7 +18,11 @@
   - Spider 1.0：`chinook_1`、`store_1`（Chinook）、`sakila_1`（Sakila/Pagila）、`soccer_1`（EU_soccer 去掉 Match）
   - BIRD：6 个原库，加 `movie_3`（Sakila）、`european_football_2`（EU_soccer）
   - Spider2-lite：7 个原库，加 `sqlite-sakila`、`northwind`（retail_world 是 Northwind 子集）
-- 清单之外，再用 schema 重叠度兜底：把每个库表示成归一化的 `表.列` 集合，计算包含度 = 交集 ÷ 较小一方的大小，≥ 0.6 视为同源。用包含度而不用 Jaccard，是因为子集/超集副本（northwind ⊃ retail_world、soccer_1 ⊂ EU_soccer）的 Jaccard 只有 0.3–0.4。
+- 其他可能要报告的评测集用到的库（2026-09-25 决定）：
+  - **Spider 1.0 的 dev（20 个）和 test（40 个）库。** CoSQL、SParC 与 Spider 用完全相同的库划分（train/dev/test = 140/20/40，两篇论文原文如此），评测就在这 60 个库上。研究计划第 2 步要和 MTSQL-R1 对比，它报告的就是 CoSQL/SParC。Spider 的 train 库本来就是 CoSQL/SParC 的训练库，可以用。
+  - **Ergast F1 数据**：BIRD `formula_1`、Spider1 `formula_1`、Spider2 `f1`。BIRD-Interact full 版的 `sports_events` 是同一份数据，只是列被改名并打包成 JSON（样例行里车手 id、赛道 id 与 BIRD formula_1 一一对应），schema 比对查不出来，所以按名字排除。BIRD-Interact 其余 39 个库，与候选库的样例值比对没有发现同源（只比对了每张表公开的 3 行样例）。
+  - **保留：** BIRD dev 和 Spider2-lite。BIRD 没有多轮版本，Spider2 我们不打算报告；DySQL 本身也用了 Spider2-lite 的库。
+- 清单之外，再用 schema 重叠度兜底：把每个库表示成归一化的 `表.列` 集合，计算包含度 = 交集 ÷ 较小一方的大小，与任何一个被排除的库（DySQL、上面的清单、Spider dev/test）≥ 0.6 即视为同源并排除。例如 BIRD `world` 与 Spider dev 的 `world_1` 是同一份数据（包含度 1.0），因此被排除。用包含度而不用 Jaccard，是因为子集/超集副本（northwind ⊃ retail_world、soccer_1 ⊂ EU_soccer）的 Jaccard 只有 0.3–0.4。
 
 另外，跨来源的重复库要去重，避免同一份数据被过度采样，例如：Spider1 `formula_1` / BIRD `formula_1` / Spider2 `f1`，Spider1 `baseball_1` / Spider2 `Baseball`，Spider1 `bike_1` / BIRD `bike_share_1`。
 
@@ -41,7 +45,7 @@
 - 每库任务上限（例如 ≤ 80），避免复制 DySQL 里两个库占 39% 的偏斜。
 - 按领域分层：体育、零售/订单、内容媒体、人事/教育、医疗/科学。
 
-## 自动筛选结果（2026-09-25 更新）
+## 自动筛选结果（2026-09-25 更新：排除 Spider dev/test 与 F1 系列）
 
 实现：`DySQL-Bench/dysql_bench/db_select.py`（测试 `tests/test_db_select.py`），运行脚本 `DySQL-Bench/scripts/select_dbs.py`。全量结果写到 `DySQL-Bench/results/db_select/db_select_all.csv`（不进 git），通过且去重后的候选写到 `docs/data_gen/candidate_dbs.csv`。
 
@@ -51,25 +55,26 @@
 - **事务表：** 有出向 FK（声明或推断），且行数 ≥ 50。
 - **"可定位"：** 至少一张事务表有行定位键。
 - **拼凑库：** FK 图最大连通分量覆盖的表 < 60% 时判为拼凑库，排除。
+- **评测集排除：** `select_dbs.py --holdout spider1=<dev.json/test.json>` 读取评测问题文件里的全部 `db_id`；F1 系列写在脚本的 `LEAK` 清单里。被排除的库的 schema 也加入比对参照。
 - **去重：** schema 包含度 ≥ 0.6 视为同一个库，按 BIRD > Spider2 > Spider1 > SynSQL 的优先级只保留一份。计算前先去掉一个库里半数以上表共用的表名前缀（如 `olist_`），否则同一份 Olist 数据的三个副本因表名不同而认不出来。
 
 | 来源 | 库总数 | 通过 | 重复 | 保留 | 主要淘汰原因（一个库可有多个） |
 |---|---|---|---|---|---|
-| BIRD（train 69 + dev 11） | 80 | 39 | 0 | 39 | 行数 17，文件 > 300 MB 15，表数 10，事务表无键 9，泄漏 9，FK 8 |
-| Spider2-lite（SQLite） | 30 | 8 | 2 | 6 | 拼凑库 10，泄漏 9，事务表无键 4，表数 3，无事务表 3 |
-| Spider 1.0 | 206 | 10 | 2 | 8 | 行数不足 183，无事务表 182 |
+| BIRD（train 69 + dev 11） | 80 | 37 | 0 | 37 | 行数 17，文件 > 300 MB 15，泄漏/评测集 11，表数 10，事务表无键 9，FK 8 |
+| Spider2-lite（SQLite） | 30 | 8 | 2 | 6 | 泄漏/评测集 10，拼凑库 10，事务表无键 4，表数 3，无事务表 3 |
+| Spider 1.0 | 206 | 5 | 0 | 5 | 行数不足 183，无事务表 182，泄漏/评测集 70（含 dev/test 60 个） |
 | SynSQL-2.5M | 16,583 | 0 | 0 | 0 | 全部因行数不足/无事务表淘汰（表内只有 0–2 行） |
-| **合计** | | | | **53** | 其中 37 个有人物实体表；16 个没有（如 genes、toxicology、world、Airlines、flight_2） |
+| **合计** | | | | **48** | 其中 34 个有人物实体表；14 个没有（如 genes、toxicology、Airlines、flight_4） |
 
 保留的库：
-- **BIRD：** address, beer_factory, books, car_retails, chicago_crime, college_completion, computer_student, disney, food_inspection_2, genes, legislator, menu, mental_health_survey, movie, movielens, olympics, professional_basketball, public_review_platform, regional_sales, restaurant, retail_complains, shakespeare, shipping, social_media, student_loan, superstore, synthea, university, video_games, world, california_schools, card_games, debit_card_specializing, financial, formula_1, student_club, superhero, thrombosis_prediction, toxicology
+- **BIRD：** address, beer_factory, books, car_retails, chicago_crime, college_completion, computer_student, disney, food_inspection_2, genes, legislator, mental_health_survey, menu, movie, movielens, olympics, professional_basketball, public_review_platform, regional_sales, restaurant, retail_complains, shakespeare, shipping, social_media, student_loan, superstore, synthea, university, video_games, california_schools, card_games, debit_card_specializing, financial, student_club, superhero, thrombosis_prediction, toxicology（后 8 个来自 BIRD dev）
 - **Spider2-lite：** AdventureWorks、Airlines、Brazilian_E_Commerce（E_commerce、electronic_sales 是同一份 Olist 数据，已去重）、IPL、WWE、school_scheduling。除 school_scheduling 外，其余 5 个的 FK 全靠推断，要人工抽查
-- **Spider 1.0：** aan_1, car_1, college_2, college_3, csu_1, flight_2, flight_4, hr_1。formula_1、world_1 与 BIRD 同源，已去重
+- **Spider 1.0（均为 train 库）：** college_2, college_3, csu_1, flight_4, hr_1。aan_1（test）、car_1、flight_2（dev）按评测集排除
 
 待决定：
 1. **`simpson_episodes` 算不算泄漏。** 它与 law_episode 是同一套 schema 模板（包含度 0.88），但数据是另一部剧。目前按泄漏排除（训练它等于提前见过 law_episode 的 schema）。
 2. **超过 300 MB 的库。** 上限已从 100 MB 放宽到 300 MB（2026-09-25）。仍有 2 个库只因文件大小被淘汰：BIRD 的 codebase_community（459 MB）和 music_platform_2（1.5 GB）。要用的话需要先抽样缩小。
-3. **没有人物实体表的 16 个库**（软条件）：留着的话 persona 要编，任务会更像 cars/cookbook。
+3. **没有人物实体表的 14 个库**（软条件）：留着的话 persona 要编，任务会更像 cars/cookbook。
 
 ## 数据来源
 
