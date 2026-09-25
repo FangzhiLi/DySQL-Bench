@@ -16,6 +16,20 @@ def _open(path):
     return sqlite3.connect(f"file:{path}?mode=ro", uri=True)
 
 
+def _composite_key(c, t, cols):
+    """First pair of id-like columns that is unique and non-null together (tables without any single key)."""
+    ids = [x for x in cols if ID_LIKE.search(x) and not GUID.search(x)][:6]
+    for i in range(len(ids)):
+        for j in range(i + 1, len(ids)):
+            a, b = ids[i], ids[j]
+            nulls = c.execute(f"SELECT count(*) FROM {_q(t)} WHERE {_q(a)} IS NULL OR {_q(b)} IS NULL").fetchone()[0]
+            dup = c.execute(f"SELECT count(*) FROM (SELECT 1 FROM {_q(t)} GROUP BY {_q(a)}, {_q(b)} "
+                            f"HAVING count(*) > 1)").fetchone()[0]
+            if not nulls and not dup:
+                return [a, b]
+    return []
+
+
 def profile_db(path):
     c = _open(path)
     names = [r[0] for r in c.execute("select name from sqlite_master where type='table' "
@@ -34,7 +48,8 @@ def profile_db(path):
         unique = [x for x in cols if ID_LIKE.search(x) and c.execute(
             f"select count(distinct {_q(x)}) = count(*) and count({_q(x)}) = count(*) from {_q(t)}").fetchone()[0]] \
             if not pk and scan else []
-        tables.append({"name": t, "cols": cols, "pk": pk, "unique_keys": unique,
+        composite = _composite_key(c, t, cols) if not pk and not unique and scan else []
+        tables.append({"name": t, "cols": cols, "pk": pk, "unique_keys": unique, "composite_key": composite,
                        "fks": list(fks.values()), "rows": rows})
     c.close()
     return {"db": os.path.splitext(os.path.basename(path))[0], "path": path,
@@ -43,6 +58,10 @@ def profile_db(path):
 def _norm(name):
     s = re.sub(r"[^a-z0-9]", "", name.lower())
     return s[:-1] if s.endswith("s") else s
+
+def is_keyed(t):
+    return bool(t["pk"] or t["unique_keys"] or t["composite_key"])
+
 
 def row_key(t):
     """Column that identifies a row: single-column PK, else a unique id-like column (prefer one naming the table)."""

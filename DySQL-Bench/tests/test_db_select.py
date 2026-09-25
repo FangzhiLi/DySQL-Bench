@@ -1,7 +1,7 @@
 # tests/test_db_select.py
 from dysql_bench.db_select import (profile_db, row_key, infer_fks, is_person_table, transaction_tables,
                                    schema_items, containment, is_fragmented, evaluate, dedup, declared_fks,
-                                   validate_fks, infer_fks_by_value)
+                                   validate_fks, infer_fks_by_value, is_keyed)
 from tests._sqlite_fixtures import make_db as _db, rows as _rows, SHOP, WWE
 
 def test_profile_db_reads_tables_rows_pk_fk(tmp_path):
@@ -227,3 +227,25 @@ def test_infer_by_value_needs_enough_distinct_values(tmp_path):
         CREATE TABLE Matches (id INTEGER PRIMARY KEY, winner_id INTEGER, note TEXT);
     """ + _rows("Wrestlers", 40, lambda i: f"{i},'w{i}'") + _rows("Matches", 200, lambda i: f"{i},{i%3},'x'")))
     assert infer_fks_by_value(p, set()) == []
+
+# --- Task 4: composite keys ---
+
+def test_profile_finds_two_column_composite_key(tmp_path):
+    p = profile_db(_db(tmp_path, "ck", """
+        CREATE TABLE movie_cast (movie_id INTEGER, person_id INTEGER, role TEXT);
+        INSERT INTO movie_cast VALUES (1,1,'a'),(1,2,'b'),(2,1,'c');"""))
+    t = p["tables"][0]
+    assert t["unique_keys"] == [] and t["composite_key"] == ["movie_id", "person_id"] and is_keyed(t)
+
+def test_composite_key_rejects_duplicates_and_nulls(tmp_path):
+    p = profile_db(_db(tmp_path, "nock", """
+        CREATE TABLE a (x_id INTEGER, y_id INTEGER, v TEXT);
+        INSERT INTO a VALUES (1,1,'a'),(1,1,'b');
+        CREATE TABLE b (x_id INTEGER, y_id INTEGER, v TEXT);
+        INSERT INTO b VALUES (1,NULL,'a'),(1,2,'b');"""))
+    assert [t["composite_key"] for t in p["tables"]] == [[], []]
+    assert not is_keyed(p["tables"][0])
+
+def test_single_pk_table_has_no_composite_key(tmp_path):
+    p = profile_db(_db(tmp_path, "shop", SHOP))
+    assert all(t["composite_key"] == [] for t in p["tables"])
