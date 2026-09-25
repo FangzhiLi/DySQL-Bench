@@ -1,0 +1,56 @@
+source,db,topic,note,entity_anchors_ok
+bird,address,美国邮编、州、国会选区与区号,,
+bird,airline,美国航班准点与航空公司,实体锚点为执行者建议，待用户确认,Air Carriers
+bird,beer_factory,根啤品牌、销售交易与评价,,
+bird,book_publishing_company,图书出版公司（作者、出版社、门店、销售）,,
+bird,books,网上书店订单（图书、客户、配送）,,
+bird,car_retails,模型车零售（办公室、员工、订单、付款）,customers 是公司（带联系人姓名）；44/122 个联系人姓名与 Northwind/retail_world 相同,
+bird,chicago_crime,芝加哥犯罪记录,FBI_Code、IUCR 是代码字典；实体锚点为执行者建议，待用户确认,District; Ward
+bird,citeseer,CiteSeer 论文引用网络,实体锚点为执行者建议，待用户确认,paper
+bird,college_completion,美国大学毕业率,实体锚点为执行者建议，待用户确认,institution_details
+bird,computer_student,计算机系课程、教师与学生,,
+bird,disney,迪士尼电影、角色、票房,,
+bird,food_inspection,旧金山餐厅卫生检查,有 owner_name，可当作店主；实体锚点为执行者建议，待用户确认,businesses
+bird,food_inspection_2,芝加哥食品安全检查,,
+bird,genes,基因分类与相互作用,每行代表一个基因（GeneID），锚点偏弱；实体锚点为执行者建议，待用户确认,Classification
+bird,legislator,美国国会议员,,
+bird,mental_health_survey,科技行业心理健康调查,无合适实体锚点：答卷人只有 UserID，没有对应的表；实体锚点为执行者建议，待用户确认,
+bird,menu,纽约公共图书馆历史菜单,实体锚点为执行者建议，待用户确认,Menu; Dish
+bird,movie,电影与演员角色,,
+bird,movielens,MovieLens 电影评分,,
+bird,movies_4,TMDB 电影（演职员、公司、类型）,,
+bird,olympics,奥运会运动员与奖牌,,
+bird,professional_basketball,NBA 球员、球队、奖项、选秀,,
+bird,public_review_platform,Yelp 商户点评,,
+bird,regional_sales,区域销售订单,Customers 是 50 家公司；人名在 Sales Team 表,
+bird,restaurant,湾区餐厅信息,geographic 是城市字典；实体锚点为执行者建议，待用户确认,generalinfo
+bird,retail_complains,银行客户投诉与呼叫中心,,
+bird,shakespeare,莎士比亚作品、角色与段落,实体锚点为执行者建议，待用户确认,works; characters
+bird,shipping,货运物流（卡车、司机、运单）,规模小：driver 11 人、customer 100,
+bird,shooting,达拉斯警察枪击事件,实体锚点为执行者建议，待用户确认,incidents
+bird,social_media,推特推文与用户,,
+bird,student_loan,学生贷款与个人状况,名字是 student1…student1000（编号）,
+bird,synthea,Synthea 合成病人医疗记录,,
+bird,university,世界大学排名,country、ranking_criteria 是字典；实体锚点为执行者建议，待用户确认,university
+bird,video_games,电子游戏、平台、发行商与区域销量,platform、genre 是字典；实体锚点为执行者建议，待用户确认,game; publisher
+bird,california_schools,加州学校、SAT 成绩与免费餐,实体锚点为执行者建议，待用户确认,schools
+bird,card_games,万智牌卡牌与规则,实体锚点为执行者建议，待用户确认,cards; sets
+bird,debit_card_specializing,捷克加油站借记卡交易,,
+bird,financial,捷克银行账户、贷款与交易,,
+bird,student_club,学生社团活动、预算与支出,规模小：member 33 人,
+bird,superhero,超级英雄属性与超能力,虚构角色；full_name 有 247/750 为空或 '-',
+bird,toxicology,分子毒理（原子、化学键、分子）,实体锚点为执行者建议，待用户确认,molecule
+spider2,AdventureWorks,AdventureWorks 自行车制造企业销售,NULL 存成空串；只有 salesperson 一张无名字的人物表,
+spider2,Airlines,俄罗斯航空订票（航班、座位、机票、登机牌）,tickets 有 passenger_name，但 ticket_no 不像 ID 列，没连上；实体锚点为执行者建议，待用户确认,flights
+spider2,Brazilian_E_Commerce,巴西 Olist 电商订单,customer_id 每单一个，真正的人是 customer_unique_id（32 位哈希）,
+spider2,IPL,IPL 板球（比赛、逐球数据、得分、出局）,,
+spider2,WWE,WWE 摔跤赛事、选手与冠军腰带,,
+spider2,delivery_center,巴西外卖配送中心（订单、骑手、门店）,,
+spider2,imdb_movies,IMDB 电影评分与导演、演员,names 实际是人物表（演员、导演）；ratings 每行代表一部电影；实体锚点为执行者建议，待用户确认,names; ratings
+spider2,school_scheduling,学校排课（教师、课程、教室、学生）,规模小：全库 811 行,
+spider1,bike_1,旧金山共享单车（站点、骑行、天气）,实体锚点为执行者建议，待用户确认,station
+spider1,college_2,大学教务（院系、课程、教师、选课、先修课）,学生名是单个姓氏，有重名,
+spider1,csu_1,加州州立大学（校区、学费、学位、招生）,实体锚点为执行者建议，待用户确认,Campuses
+spider1,flight_4,航线、机场与航空公司,实体锚点为执行者建议，待用户确认,airlines; airports
+spider1,hr_1,人力资源（员工、部门、职位、地区）,,
+spider1,wine_1,葡萄酒、葡萄与产区,无合适实体锚点：只有产区、葡萄品种这类字典表；实体锚点为执行者建议，待用户确认,
