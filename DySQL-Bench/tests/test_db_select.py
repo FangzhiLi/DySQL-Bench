@@ -18,14 +18,14 @@ def test_infer_fk_from_matching_pk_name(tmp_path):
         CREATE TABLE customers (customer_id INTEGER PRIMARY KEY, name TEXT);
         CREATE TABLE orders (order_id INTEGER PRIMARY KEY, customer_id INTEGER, amount REAL);"""))
     assert infer_fks(p) == [{"table": "orders", "cols": ["customer_id"],
-                             "ref_table": "customers", "ref_cols": ["customer_id"]}]
+                             "ref_table": "customers", "ref_cols": ["customer_id"], "source": "name"}]
 
 def test_infer_fk_from_table_name_plus_id(tmp_path):
     p = profile_db(_db(tmp_path, "nofk2", """
         CREATE TABLE customer (id INTEGER PRIMARY KEY, name TEXT);
         CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER);"""))
     assert infer_fks(p) == [{"table": "orders", "cols": ["customer_id"],
-                             "ref_table": "customer", "ref_cols": ["id"]}]
+                             "ref_table": "customer", "ref_cols": ["id"], "source": "name"}]
 
 def test_infer_fk_skips_declared_and_own_pk(tmp_path):
     p = profile_db(_db(tmp_path, "shop", SHOP))
@@ -76,7 +76,7 @@ def test_infer_fk_uses_unique_key_when_ref_has_no_pk(tmp_path):
         INSERT INTO olist_customers VALUES ('c1','a'),('c2','b');
         INSERT INTO olist_orders VALUES ('o1','c1'),('o2','c1');"""))
     assert infer_fks(p) == [{"table": "olist_orders", "cols": ["customer_id"],
-                             "ref_table": "olist_customers", "ref_cols": ["customer_id"]}]
+                             "ref_table": "olist_customers", "ref_cols": ["customer_id"], "source": "name"}]
 
 def test_fragmented_when_fk_graph_splits(tmp_path):
     p = profile_db(_db(tmp_path, "mix", """
@@ -162,3 +162,43 @@ def test_fk_hit_rate_fills_omitted_ref_column_with_pk(tmp_path):
         INSERT INTO orders VALUES (1,1),(2,2);"""))
     f = validate_fks(p, declared_fks(p))[0]
     assert f["ref_cols"] == ["customer_id"] and f["hit"] == 0.5
+
+# --- Task 2: name-based inference ---
+
+def test_infer_fk_ignores_guid_columns(tmp_path):
+    # AdventureWorks: a table whose only unique id-like column is rowguid makes every other rowguid 'reference' it
+    p = profile_db(_db(tmp_path, "guid", """
+        CREATE TABLE product (productid INTEGER PRIMARY KEY, rowguid TEXT);
+        CREATE TABLE salesorderdetail (salesorderdetailid INTEGER PRIMARY KEY, productid INTEGER, rowguid TEXT);
+        CREATE TABLE productmodelculture (productmodelid INTEGER, cultureid TEXT, rowguid TEXT);
+        INSERT INTO product VALUES (1,'g1'),(2,'g2');
+        INSERT INTO salesorderdetail VALUES (1,1,'g3'),(2,2,'g4');
+        INSERT INTO productmodelculture VALUES (1,'en','g5'),(1,'en','g6');"""))
+    assert [(f["table"], f["cols"][0], f["ref_table"]) for f in infer_fks(p)] == \
+        [("salesorderdetail", "productid", "product")]
+
+def test_infer_fk_skips_generic_id_columns(tmp_path):
+    # both ids run 1..N, so the smaller one is 'contained' in the larger by coincidence (EU_soccer Match/Player_Attributes)
+    p = profile_db(_db(tmp_path, "gen", """
+        CREATE TABLE Match (id INTEGER PRIMARY KEY, season TEXT);
+        CREATE TABLE Player_Attributes (id INTEGER PRIMARY KEY, rating INTEGER);
+    """ + _rows("Match", 5, lambda i: f"{i},'s'") + _rows("Player_Attributes", 10, lambda i: f"{i},1")))
+    assert infer_fks(p) == []
+
+def test_infer_fk_from_composite_pk_member(tmp_path):
+    # BowlingLeague: the archive's BowlerID is part of its PK and still points at Bowlers
+    p = profile_db(_db(tmp_path, "bowl", """
+        CREATE TABLE Bowlers (BowlerID INTEGER PRIMARY KEY, BowlerLastName TEXT);
+        CREATE TABLE Bowler_Scores_Archive (MatchID INTEGER, GameNumber INTEGER, BowlerID INTEGER, RawScore INTEGER,
+                                            PRIMARY KEY (MatchID, GameNumber, BowlerID));"""))
+    assert [(f["table"], f["cols"][0], f["ref_table"]) for f in infer_fks(p)] == \
+        [("Bowler_Scores_Archive", "BowlerID", "Bowlers")]
+
+def test_infer_fk_one_to_one_extension_needs_larger_parent(tmp_path):
+    # complex_oracle: supplementary_demographics.cust_id is its own PK and references customers (55,500 > 4,500 rows)
+    p = profile_db(_db(tmp_path, "ext", """
+        CREATE TABLE customers (cust_id INTEGER PRIMARY KEY, cust_first_name TEXT);
+        CREATE TABLE supplementary_demographics (cust_id INTEGER PRIMARY KEY, occupation TEXT);
+    """ + _rows("customers", 3, lambda i: f"{i},'c{i}'") + _rows("supplementary_demographics", 2, lambda i: f"{i},'o'")))
+    assert [(f["table"], f["cols"][0], f["ref_table"]) for f in infer_fks(p)] == \
+        [("supplementary_demographics", "cust_id", "customers")]

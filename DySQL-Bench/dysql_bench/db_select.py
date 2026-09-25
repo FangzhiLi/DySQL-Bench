@@ -1,14 +1,10 @@
 """Filter candidate SQLite DBs for DySQL-style task generation.
 Criteria are documented in docs/2026-09-24-data-gen-db-selection.md."""
 import os, re, sqlite3
+from dysql_bench.db_anchor import PERSON, NAME_COLS, GUID
 
-PERSON = re.compile(r"customer|client|employee|staff|member|player|user|student|patient|person|people|"
-                    r"author|driver|agent|bowler|entertainer|actor|athlete|teacher|faculty|professor|"
-                    r"instructor|doctor|physician|nurse|cyclist|voter|owner|guest|visitor|passenger|"
-                    r"seller|buyer|investor|pilot|legislator|contact|coach|manager|artist|singer|"
-                    r"wrestler|reviewer|donor|officer|swimmer|gymnast|scientist|musician|editor|journalist|candidate")
-NAME_COLS = {"firstname", "lastname", "fname", "lname", "fullname"}
 ID_LIKE = re.compile(r"(id|_key|_code)$", re.I)
+GENERIC_KEYS = {"id", "rowid", "pk", "key", "code"}  # never FK evidence: Match.id vs Player_Attributes.id both run 1..N
 UNIQUE_SCAN_MAX_ROWS = 3_000_000  # skip COUNT(DISTINCT) on huge tables; they fail the size filter anyway
 
 
@@ -55,6 +51,11 @@ def row_key(t):
     stem = _norm(re.split(r"[^A-Za-z0-9]", t["name"])[-1])
     return next((k for k in t["unique_keys"] if stem and stem in _norm(k)), (t["unique_keys"] or [None])[0])
 
+
+def _fk_candidate(col):
+    return bool(ID_LIKE.search(col)) and not GUID.search(col) and _norm(col) not in GENERIC_KEYS
+
+
 def declared_fks(p):
     """Flatten the per-table PRAGMA foreign keys into the common fk dict format."""
     return [{"table": t["name"], "cols": f["cols"], "ref_table": f["ref_table"], "ref_cols": f["ref_cols"],
@@ -100,22 +101,28 @@ def validate_fks(p, fks):
 
 
 def infer_fks(p):
-    """Join keys implied by column names, for DBs that declare few FKs (e.g. Kaggle CSV imports)."""
-    single_pk = {t["name"]: row_key(t) for t in p["tables"] if row_key(t)}
+    """Join keys implied by column names, for DBs that declare few FKs (e.g. Kaggle CSV imports).
+    A column that is its table's own row key may only reference a strictly larger table (1:1 extension,
+    e.g. supplementary_demographics.cust_id -> customers); composite-PK members are ordinary candidates."""
+    keys = {t["name"]: row_key(t) for t in p["tables"] if row_key(t)}
+    rows = {t["name"]: t["rows"] for t in p["tables"]}
     out = []
     for t in p["tables"]:
         declared = {c.lower() for f in t["fks"] for c in f["cols"]}
+        own = keys.get(t["name"])
         for col in t["cols"]:
             lc = col.lower()
-            if lc in declared or row_key(t) == col or not ID_LIKE.search(col):
+            if lc in declared or not _fk_candidate(col):
                 continue
-            cands = [r for r, pk in single_pk.items() if r != t["name"] and pk.lower() == lc]
+            cands = [r for r, k in keys.items() if r != t["name"] and k.lower() == lc]
             if not cands:
-                cands = [r for r in single_pk if r != t["name"] and
+                cands = [r for r in keys if r != t["name"] and
                          re.sub(r"_?id$", "", lc) in {r.lower(), _norm(r)}]
+            if col == own:
+                cands = [r for r in cands if rows[r] > t["rows"]]
             if len(cands) == 1:
                 out.append({"table": t["name"], "cols": [col], "ref_table": cands[0],
-                            "ref_cols": [single_pk[cands[0]]]})
+                            "ref_cols": [keys[cands[0]]], "source": "name"})
     return out
 
 def is_person_table(name, cols):
