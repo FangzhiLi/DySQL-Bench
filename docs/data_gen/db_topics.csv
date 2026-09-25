@@ -1,0 +1,317 @@
+source,db,topic
+bird,address,美国邮编、州、国会选区与区号
+bird,airline,美国航班准点与航空公司
+bird,app_store,Google Play 应用与用户评论
+bird,authors,学术论文、作者、会议与期刊
+bird,beer_factory,根啤品牌、销售交易与评价
+bird,bike_share_1,旧金山共享单车（站点、骑行、天气）
+bird,book_publishing_company,图书出版公司（作者、出版社、门店、销售）
+bird,books,网上书店订单（图书、客户、配送）
+bird,california_schools,加州学校、SAT 成绩与免费餐
+bird,car_retails,模型车零售（办公室、员工、订单、付款）
+bird,card_games,万智牌卡牌与规则
+bird,cars,汽车油耗、价格与产地（Auto MPG）
+bird,chicago_crime,芝加哥犯罪记录
+bird,citeseer,CiteSeer 论文引用网络
+bird,codebase_comments,GitHub 代码库方法与注释
+bird,codebase_community,Stack Exchange 统计问答社区
+bird,coinmarketcap,加密货币行情
+bird,college_completion,美国大学毕业率
+bird,computer_student,计算机系课程、教师与学生
+bird,cookbook,菜谱、食材与营养
+bird,craftbeer,精酿啤酒与酒厂
+bird,cs_semester,计算机系学期课程、教授、助研
+bird,debit_card_specializing,捷克加油站借记卡交易
+bird,disney,迪士尼电影、角色、票房
+bird,donor,DonorsChoose 教育众筹捐赠
+bird,european_football_1,欧洲足球联赛比赛结果
+bird,european_football_2,欧洲足球（球员、球队属性、比赛）
+bird,financial,捷克银行账户、贷款与交易
+bird,food_inspection,旧金山餐厅卫生检查
+bird,food_inspection_2,芝加哥食品安全检查
+bird,formula_1,F1 赛车（车手、车队、比赛、圈速）
+bird,genes,基因分类与相互作用
+bird,hockey,NHL 冰球历史统计（球员、球队、奖项）
+bird,human_resources,员工、职位与办公地点
+bird,ice_hockey_draft,冰球选秀球员与赛季数据
+bird,image_and_language,图像目标与关系标注（Visual Genome）
+bird,language_corpus,维基百科多语言语料词频
+bird,law_episode,《法律与秩序》剧集、演职员、奖项
+bird,legislator,美国国会议员
+bird,mental_health_survey,科技行业心理健康调查
+bird,menu,纽约公共图书馆历史菜单
+bird,mondial_geo,世界地理（国家、城市、河流、山脉、经济）
+bird,movie,电影与演员角色
+bird,movie_3,Sakila DVD 租赁
+bird,movie_platform,Mubi 电影平台评分与片单
+bird,movielens,MovieLens 电影评分
+bird,movies_4,TMDB 电影（演职员、公司、类型）
+bird,music_platform_2,播客与评论
+bird,music_tracker,音乐种子下载与标签
+bird,olympics,奥运会运动员与奖牌
+bird,professional_basketball,NBA 球员、球队、奖项、选秀
+bird,public_review_platform,Yelp 商户点评
+bird,regional_sales,区域销售订单
+bird,restaurant,湾区餐厅信息
+bird,retail_complains,银行客户投诉与呼叫中心
+bird,retail_world,Northwind 式贸易公司（订单、供应商、运输）
+bird,retails,TPC-H 零售订单
+bird,sales,销售订单（客户、员工、产品）
+bird,sales_in_weather,沃尔玛销量与天气
+bird,shakespeare,莎士比亚作品、角色与段落
+bird,shipping,货运物流（卡车、司机、运单）
+bird,shooting,达拉斯警察枪击事件
+bird,simpson_episodes,《辛普森一家》剧集、演职员、奖项
+bird,soccer_2016,IPL 板球比赛（球员、逐球数据）
+bird,social_media,推特推文与用户
+bird,software_company,软件公司客户营销与人口统计
+bird,student_club,学生社团活动、预算与支出
+bird,student_loan,学生贷款与个人状况
+bird,superhero,超级英雄属性与超能力
+bird,superstore,Superstore 零售订单
+bird,synthea,Synthea 合成病人医疗记录
+bird,talkingdata,TalkingData 移动用户行为
+bird,thrombosis_prediction,血栓病人检查与化验
+bird,toxicology,分子毒理（原子、化学键、分子）
+bird,trains,火车与车厢（ILP 经典数据）
+bird,university,世界大学排名
+bird,video_games,电子游戏、平台、发行商与区域销量
+bird,works_cycles,AdventureWorks 自行车制造企业
+bird,world,世界国家、城市与语言
+bird,world_development_indicators,世界银行发展指标
+spider2,AdventureWorks,AdventureWorks 自行车制造企业销售
+spider2,Airlines,俄罗斯航空订票（航班、座位、机票、登机牌）
+spider2,Baseball,美国职业棒球统计（Lahman）
+spider2,BowlingLeague,保龄球联赛（队伍、比赛、成绩）
+spider2,Brazilian_E_Commerce,巴西 Olist 电商订单
+spider2,California_Traffic_Collision,加州交通事故（事故、当事方、伤者）
+spider2,Db-IMDB,印度 IMDB 电影（演员、导演、类型）
+spider2,EU_soccer,欧洲足球比赛、球员、球队属性
+spider2,E_commerce,巴西 Olist 电商订单 + 营销线索
+spider2,EntertainmentAgency,演艺经纪（艺人、演出预约、客户、经纪人）
+spider2,IPL,IPL 板球（比赛、逐球数据、得分、出局）
+spider2,Pagila,Pagila DVD 租赁（Sakila 的 Postgres 版）
+spider2,WWE,WWE 摔跤赛事、选手与冠军腰带
+spider2,bank_sales_trading,Data With Danny 案例：银行交易、周销售、比特币交易
+spider2,chinook,Chinook 数字音乐商店
+spider2,city_legislation,混合库：美国议员任期、城市、招聘岗位、外星人数据
+spider2,complex_oracle,Oracle SH 销售数仓（销售、促销、成本、渠道）
+spider2,delivery_center,巴西外卖配送中心（订单、骑手、门店）
+spider2,education_business,混合库：硬件销售、网络订单、大学招生
+spider2,electronic_sales,巴西 Olist 电商（电子产品）
+spider2,f1,F1 赛车（含冲刺赛）
+spider2,imdb_movies,IMDB 电影评分与导演、演员
+spider2,log,网站用户行为日志（访问、表单、操作）
+spider2,modern_data,混合库：披萨外卖、公司融资、树木普查、收入统计
+spider2,music,Chinook 数字音乐商店（驼峰命名版）
+spider2,northwind,Northwind 贸易公司
+spider2,oracle_sql,混合库：Oracle 样例（啤酒厂、产品销售、网络设备）
+spider2,school_scheduling,学校排课（教师、课程、教室、学生）
+spider2,sqlite-sakila,Sakila DVD 租赁
+spider2,stacking,机器学习模型堆叠实验结果
+spider1,aan_1,ACL 论文引用网络（论文、作者、机构、引用）
+spider1,academic,学术检索（论文、作者、会议、期刊、领域、关键词）
+spider1,activity_1,大学课外活动（学生/教师参与活动）
+spider1,address_1,学生住址与城市距离
+spider1,advertising_agencies,广告代理公司（客户、员工、会议、发票、付款）
+spider1,aircraft,飞行员、飞机与机场比赛
+spider1,allergy_1,学生过敏信息
+spider1,apartment_rentals,公寓租赁（楼栋、房间、设施、住客、预订）
+spider1,architecture,建筑师设计的桥梁与磨坊
+spider1,art_1,艺术家、绘画与雕塑
+spider1,assets_maintenance,资产维护（维修合同、工程师、零件、故障日志）
+spider1,bakery_1,面包店销售（顾客、商品、收据）
+spider1,baseball_1,美国职业棒球统计（球员、击球、守备、奖项、薪资）
+spider1,battle_death,历史战役、战舰与伤亡
+spider1,bbc_channels,BBC 频道、节目与导演
+spider1,behavior_monitoring,学校学生行为监控（违纪事件、留校、评语）
+spider1,bike_1,旧金山共享单车（站点、骑行、天气）
+spider1,bike_racing,自行车赛车手与自行车
+spider1,boat_1,水手租船预约
+spider1,body_builder,健美运动员成绩
+spider1,book_1,书店订单（客户、图书、作者）
+spider1,book_2,图书出版
+spider1,book_press,出版社、作者与图书
+spider1,book_review,图书与书评
+spider1,browser_web,浏览器与网页加速器兼容
+spider1,candidate_poll,候选人民调
+spider1,car_1,汽车型号、厂商与性能数据
+spider1,car_racing,赛车车队与车手
+spider1,car_road_race,公路赛车比赛与车手
+spider1,chinook_1,Chinook 数字音乐商店（曲目、专辑、发票、客户）
+spider1,cinema,电影院排片
+spider1,city_record,城市比赛主办与气温记录
+spider1,climbing,登山者与山峰
+spider1,club_1,学生社团成员
+spider1,club_leader,俱乐部与领导者
+spider1,coffee_shop,咖啡店会员与欢乐时光活动
+spider1,college_1,大学（课程、教授、学生、选课）
+spider1,college_2,大学教务（院系、课程、教师、选课、先修课）
+spider1,college_3,大学（学生、教师、院系、辅修、成绩）
+spider1,company_1,公司员工、部门、项目与家属
+spider1,company_employee,公司与员工雇佣
+spider1,company_office,写字楼与公司办公地点
+spider1,concert_singer,演唱会、歌手与场馆
+spider1,conference,学术会议、机构与参会人员
+spider1,country_language,国家与官方语言
+spider1,county_public_safety,县级公共安全（警力、犯罪率）
+spider1,course_teach,课程与授课教师安排
+spider1,cre_Doc_Control_Systems,文档管控系统（文档、草稿、流转、邮寄）
+spider1,cre_Doc_Template_Mgt,文档模板管理
+spider1,cre_Doc_Tracking_DB,文档追踪与销毁
+spider1,cre_Doc_Workflow,文档业务流程
+spider1,cre_Doc_and_collections,文档集合与子集
+spider1,cre_Docs_and_Epenses,文档与费用报销（项目、预算、账户）
+spider1,cre_Drama_Workshop_Groups,戏剧工作坊（演员、客户、门店、预订）
+spider1,cre_Students_Information_Systems,学生信息系统（成绩单、行为、事件）
+spider1,cre_Theme_park,主题公园旅游（景点、酒店、游客）
+spider1,csu_1,加州州立大学（校区、学费、学位、招生）
+spider1,culture_company,文化公司、读书会与电影
+spider1,customer_complaints,客户投诉
+spider1,customer_deliveries,客户订单配送（路线、卡车、送货）
+spider1,customers_and_addresses,客户、地址与订单
+spider1,customers_and_invoices,客户订单、发票与金融交易
+spider1,customers_and_orders,客户与订单
+spider1,customers_and_products_contacts,客户、联系人与订单
+spider1,customers_campaigns_ecommerce,电商邮件营销活动
+spider1,customers_card_transactions,客户银行卡交易
+spider1,debate,辩论赛与辩手
+spider1,decoration_competition,装饰比赛（学院、成员、轮次）
+spider1,department_management,政府部门与部门负责人
+spider1,department_store,百货商店（供应商、员工、客户、订单）
+spider1,device,设备与商店库存
+spider1,district_spokesman,地区与发言人
+spider1,document_management,文档管理（用户、文档结构、图片）
+spider1,dog_kennels,宠物狗寄养（犬种、主人、治疗）
+spider1,dorm_1,学生宿舍与设施
+spider1,driving_school,驾校（学员、教练、课程、付款）
+spider1,e_commerce,电商订单、付款与发货
+spider1,e_government,电子政务（个人、组织、服务、表格）
+spider1,e_learning,在线学习（课程、学生、测试）
+spider1,election,选举（县、政党、代表）
+spider1,election_representative,选举与议员代表
+spider1,employee_hire_evaluation,员工招聘与考核
+spider1,entertainment_awards,娱乐奖项（节日、作品、提名）
+spider1,entrepreneur,创业者与投资
+spider1,epinions_1,Epinions 商品评论与用户信任
+spider1,farm,农场与农业比赛
+spider1,film_rank,电影与市场票房估计
+spider1,flight_1,航班、飞机、员工与资质证书
+spider1,flight_2,航空公司、机场与航班
+spider1,flight_4,航线、机场与航空公司
+spider1,flight_company,航班、机场与运营公司
+spider1,formula_1,F1 赛车（车手、车队、比赛、积分、圈速）
+spider1,game_1,学生玩电子游戏与体育
+spider1,game_injury,比赛与伤病事故
+spider1,gas_company,加油站与石油公司
+spider1,geo,美国地理（州、城市、河流、山、湖）
+spider1,government_shift,政府服务与客户交互
+spider1,gymnast,体操运动员成绩
+spider1,headphone_store,耳机与门店库存
+spider1,hospital_1,医院（医生、护士、病人、预约、处方、手术）
+spider1,hr_1,人力资源（员工、部门、职位、地区）
+spider1,icfp_1,ICFP 会议论文与作者
+spider1,imdb,IMDB 电影（演员、导演、制片、类型）
+spider1,inn_1,旅馆房间预订
+spider1,institution_sports,院校体育冠军
+spider1,insurance_and_eClaims,保险理赔处理
+spider1,insurance_fnol,保险首次报案与理赔
+spider1,insurance_policies,保单、理赔与结算
+spider1,journal_committee,期刊编委会
+spider1,loan_1,银行贷款与客户
+spider1,local_govt_and_lot,地方政府物业与居民服务
+spider1,local_govt_in_alabama,阿拉巴马地方政府活动与参与者
+spider1,local_govt_mdm,地方政府主数据（税、罚款、选民）
+spider1,machine_repair,机器维修与技术员
+spider1,manufactory_1,制造商与产品
+spider1,manufacturer,家具制造商
+spider1,match_season,足球赛季、球队与球员
+spider1,medicine_enzyme_interaction,药物与酶相互作用
+spider1,mountain_photos,山峰摄影与镜头
+spider1,movie_1,电影评分（影评人、评分）
+spider1,movie_2,电影与影院
+spider1,museum_visit,博物馆参观
+spider1,music_1,音乐（歌曲、艺人、文件、流派）
+spider1,music_2,乐队、专辑、歌曲与演奏
+spider1,music_4,音乐榜单与音乐节
+spider1,musical,音乐剧与演员
+spider1,network_1,高中生社交网络（好友、喜欢）
+spider1,network_2,社交网络好友关系
+spider1,news_report,新闻报道与记者
+spider1,online_exams,在线考试（题目、答案、成绩）
+spider1,orchestra,管弦乐团、指挥与演出
+spider1,party_host,派对与主持人
+spider1,party_people,政党、地区与党员活动
+spider1,performance_attendance,演出与成员出席
+spider1,perpetrator,犯罪嫌疑人与受害情况
+spider1,pets_1,学生养宠物
+spider1,phone_1,手机、芯片与屏幕
+spider1,phone_market,手机与市场
+spider1,pilot_1,飞行员技能与机库
+spider1,pilot_record,飞行员飞行记录
+spider1,planet_1,星际快递（《飞出个未来》，员工、包裹）
+spider1,poker_player,扑克牌手
+spider1,product_catalog,产品目录与属性
+spider1,products_for_hire,产品租赁预订
+spider1,products_gen_characteristics,产品特性（颜色、类别）
+spider1,program_share,电视节目与收视份额
+spider1,protein_institute,蛋白质研究机构与建筑
+spider1,race_track,赛道与比赛
+spider1,railway,铁路、列车与管理员
+spider1,real_estate_properties,房地产物业特征
+spider1,real_estate_rentals,房地产租赁（房源、用户、搜索）
+spider1,region_building,地区与建筑
+spider1,restaurant_1,学生光顾餐厅
+spider1,restaurant_bills,餐厅账单（顾客、分店、订单）
+spider1,restaurants,餐厅地理位置与评分
+spider1,riding_club,马术俱乐部、教练与比赛
+spider1,roller_coaster,过山车与国家
+spider1,sakila_1,Sakila DVD 租赁（影片、演员、租借、付款）
+spider1,scholar,学术论文检索（作者、期刊、数据集、引用）
+spider1,school_bus,校车与司机
+spider1,school_finance,学校预算与捐赠
+spider1,school_player,学校与球员
+spider1,scientist_1,科学家与项目分配
+spider1,ship_1,船只与船长
+spider1,ship_mission,船只与任务
+spider1,shop_membership,商店会员与消费
+spider1,sing_contest,歌唱比赛
+spider1,singer,歌手与歌曲
+spider1,small_bank_1,小银行账户（储蓄、支票）
+spider1,soccer_1,欧洲足球（球员、球队属性、联赛）
+spider1,soccer_2,大学足球选拔
+spider1,soccer_3,足球俱乐部与球员
+spider1,solvency_ii,保险偿付能力（资产、协议、事件）
+spider1,sports_competition,体育俱乐部比赛排名
+spider1,station_weather,火车站与每周天气
+spider1,store_1,Chinook 音乐商店（小写版）
+spider1,store_product,商店、产品与地区
+spider1,storm_record,风暴与受灾地区
+spider1,student_1,学生与教师名单
+spider1,student_assessment,学生课程注册、出勤与考核
+spider1,student_transcripts_tracking,学生成绩单追踪
+spider1,swimming,游泳运动员与比赛记录
+spider1,theme_gallery,艺术家与展览
+spider1,tracking_grants_for_research,科研基金与项目追踪
+spider1,tracking_orders,订单与发货追踪
+spider1,tracking_share_transactions,股票交易追踪（投资人、交易）
+spider1,tracking_software_problems,软件问题追踪
+spider1,train_station,火车站与列车
+spider1,tv_shows,城市广播电视频道
+spider1,tvshow,电视频道、剧集与动画
+spider1,twitter_1,推特用户与推文
+spider1,university_basketball,大学篮球比赛
+spider1,university_rank,大学与专业排名
+spider1,vehicle_driver,车辆与司机
+spider1,vehicle_rent,汽车租赁
+spider1,video_game,电子游戏、平台与玩家
+spider1,voter_1,选秀节目投票
+spider1,voter_2,学生会投票记录
+spider1,warehouse_1,仓库与箱子
+spider1,wedding,婚礼、教堂与人
+spider1,wine_1,葡萄酒、葡萄与产区
+spider1,workshop_paper,研讨会论文投稿与录用
+spider1,world_1,世界国家、城市与语言
+spider1,wrestler,摔跤手与淘汰赛
+spider1,wta_1,WTA 网球（球员、比赛、排名）
+spider1,yelp,Yelp 商户点评（商家、用户、评论、签到）
