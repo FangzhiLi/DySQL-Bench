@@ -1,11 +1,12 @@
 """Filter candidate SQLite DBs for DySQL-style task generation.
 Criteria are documented in docs/2026-09-24-data-gen-db-selection.md."""
 import os, re, sqlite3
-from dysql_bench.db_anchor import PERSON, NAME_COLS, GUID
+from dysql_bench.db_anchor import GUID, update_targets, anchors, entity_rank
 
 ID_LIKE = re.compile(r"(id|_key|_code)$", re.I)
 GENERIC_KEYS = {"id", "rowid", "pk", "key", "code"}  # never FK evidence: Match.id vs Player_Attributes.id both run 1..N
 UNIQUE_SCAN_MAX_ROWS = 3_000_000  # skip COUNT(DISTINCT) on huge tables; they fail the size filter anyway
+SAMPLE_ROWS = 5000  # rows sampled per column when inferring FKs by value
 
 
 def _q(name):
@@ -69,12 +70,14 @@ def profile_db(path):
     return {"db": os.path.splitext(os.path.basename(path))[0], "path": path,
             "size_mb": os.path.getsize(path) / 2**20, "tables": tables}
 
-def _norm(name):
-    s = re.sub(r"[^a-z0-9]", "", name.lower())
-    return s[:-1] if s.endswith("s") else s
 
 def is_keyed(t):
     return bool(t["pk"] or t["unique_keys"] or t["composite_key"])
+
+
+def _norm(name):
+    s = re.sub(r"[^a-z0-9]", "", name.lower())
+    return s[:-1] if s.endswith("s") else s
 
 
 def row_key(t):
@@ -93,6 +96,65 @@ def declared_fks(p):
     """Flatten the per-table PRAGMA foreign keys into the common fk dict format."""
     return [{"table": t["name"], "cols": f["cols"], "ref_table": f["ref_table"], "ref_cols": f["ref_cols"],
              "source": "declared"} for t in p["tables"] for f in t["fks"]]
+
+
+def infer_fks(p):
+    """Join keys implied by column names, for DBs that declare few FKs (e.g. Kaggle CSV imports).
+    A column that is its table's own row key may only reference a strictly larger table (1:1 extension,
+    e.g. supplementary_demographics.cust_id -> customers); composite-PK members are ordinary candidates."""
+    keys = {t["name"]: row_key(t) for t in p["tables"] if row_key(t)}
+    rows = {t["name"]: t["rows"] for t in p["tables"]}
+    out = []
+    for t in p["tables"]:
+        declared = {c.lower() for f in t["fks"] for c in f["cols"]}
+        own = keys.get(t["name"])
+        for col in t["cols"]:
+            lc = col.lower()
+            if lc in declared or not _fk_candidate(col):
+                continue
+            cands = [r for r, k in keys.items() if r != t["name"] and k.lower() == lc]
+            if not cands:
+                cands = [r for r in keys if r != t["name"] and
+                         re.sub(r"_?id$", "", lc) in {r.lower(), _norm(r)}]
+            if col == own:
+                cands = [r for r in cands if rows[r] > t["rows"]]
+            if len(cands) == 1:
+                out.append({"table": t["name"], "cols": [col], "ref_table": cands[0],
+                            "ref_cols": [keys[cands[0]]], "source": "name"})
+    return out
+
+
+def infer_fks_by_value(p, covered, min_hit=0.99, min_distinct=20):
+    """Role-named FKs (winner_id, loser_id, *_order_id) that no name rule catches: an id-like column whose
+    sampled non-empty values (almost) all fall inside exactly one other table's key. `covered` holds
+    (table, col_lower) pairs already explained by declared or name-inferred FKs."""
+    keys = {t["name"]: row_key(t) for t in p["tables"] if row_key(t)}
+    rows = {t["name"]: t["rows"] for t in p["tables"]}
+    c = _open(p["path"])
+    out = []
+    for t in p["tables"]:
+        own = keys.get(t["name"])
+        for col in t["cols"]:
+            if (t["name"], col.lower()) in covered or col == own or not _fk_candidate(col):
+                continue
+            distinct = c.execute(f"SELECT count(DISTINCT {_q(col)}) FROM {_q(t['name'])}").fetchone()[0]
+            if distinct < min_distinct:
+                continue
+            hits = []
+            for ref, k in keys.items():
+                if ref == t["name"] or rows[ref] < distinct:
+                    continue
+                n, h = c.execute(
+                    f"SELECT count(*), coalesce(sum({_q(col)} IN (SELECT {_q(k)} FROM {_q(ref)})), 0) FROM "
+                    f"(SELECT {_q(col)} FROM {_q(t['name'])} WHERE {_q(col)} IS NOT NULL AND {_q(col)} != '' "
+                    f"LIMIT {SAMPLE_ROWS})").fetchone()
+                if n and h / n >= min_hit:
+                    hits.append(ref)
+            if len(hits) == 1:
+                out.append({"table": t["name"], "cols": [col], "ref_table": hits[0],
+                            "ref_cols": [keys[hits[0]]], "source": "value"})
+    c.close()
+    return out
 
 
 def _resolve_ref_cols(ref, ref_cols):
@@ -133,74 +195,13 @@ def validate_fks(p, fks):
     return out
 
 
-def infer_fks(p):
-    """Join keys implied by column names, for DBs that declare few FKs (e.g. Kaggle CSV imports).
-    A column that is its table's own row key may only reference a strictly larger table (1:1 extension,
-    e.g. supplementary_demographics.cust_id -> customers); composite-PK members are ordinary candidates."""
-    keys = {t["name"]: row_key(t) for t in p["tables"] if row_key(t)}
-    rows = {t["name"]: t["rows"] for t in p["tables"]}
-    out = []
-    for t in p["tables"]:
-        declared = {c.lower() for f in t["fks"] for c in f["cols"]}
-        own = keys.get(t["name"])
-        for col in t["cols"]:
-            lc = col.lower()
-            if lc in declared or not _fk_candidate(col):
-                continue
-            cands = [r for r, k in keys.items() if r != t["name"] and k.lower() == lc]
-            if not cands:
-                cands = [r for r in keys if r != t["name"] and
-                         re.sub(r"_?id$", "", lc) in {r.lower(), _norm(r)}]
-            if col == own:
-                cands = [r for r in cands if rows[r] > t["rows"]]
-            if len(cands) == 1:
-                out.append({"table": t["name"], "cols": [col], "ref_table": cands[0],
-                            "ref_cols": [keys[cands[0]]], "source": "name"})
-    return out
+def all_fks(p, extra=()):
+    """Declared + name-inferred + value-inferred + manually supplied FKs, each with a data hit rate."""
+    base = declared_fks(p) + infer_fks(p)
+    covered = {(f["table"], c.lower()) for f in base for c in f["cols"]}
+    fks = base + infer_fks_by_value(p, covered) + [{**f, "source": "extra"} for f in extra]
+    return validate_fks(p, fks)
 
-
-SAMPLE_ROWS = 5000  # rows sampled per column when inferring FKs by value
-
-
-def infer_fks_by_value(p, covered, min_hit=0.99, min_distinct=20):
-    """Role-named FKs (winner_id, loser_id, *_order_id) that no name rule catches: an id-like column whose
-    sampled non-empty values (almost) all fall inside exactly one other table's key. `covered` holds
-    (table, col_lower) pairs already explained by declared or name-inferred FKs."""
-    keys = {t["name"]: row_key(t) for t in p["tables"] if row_key(t)}
-    rows = {t["name"]: t["rows"] for t in p["tables"]}
-    c = _open(p["path"])
-    out = []
-    for t in p["tables"]:
-        own = keys.get(t["name"])
-        for col in t["cols"]:
-            if (t["name"], col.lower()) in covered or col == own or not _fk_candidate(col):
-                continue
-            distinct = c.execute(f"SELECT count(DISTINCT {_q(col)}) FROM {_q(t['name'])}").fetchone()[0]
-            if distinct < min_distinct:
-                continue
-            hits = []
-            for ref, k in keys.items():
-                if ref == t["name"] or rows[ref] < distinct:
-                    continue
-                n, h = c.execute(
-                    f"SELECT count(*), coalesce(sum({_q(col)} IN (SELECT {_q(k)} FROM {_q(ref)})), 0) FROM "
-                    f"(SELECT {_q(col)} FROM {_q(t['name'])} WHERE {_q(col)} IS NOT NULL AND {_q(col)} != '' "
-                    f"LIMIT {SAMPLE_ROWS})").fetchone()
-                if n and h / n >= min_hit:
-                    hits.append(ref)
-            if len(hits) == 1:
-                out.append({"table": t["name"], "cols": [col], "ref_table": hits[0],
-                            "ref_cols": [keys[hits[0]]], "source": "value"})
-    c.close()
-    return out
-
-def is_person_table(name, cols):
-    return bool(PERSON.search(name.lower())) or any(_norm(c) in NAME_COLS for c in cols)
-
-def transaction_tables(p, min_rows, extra_fks=()):
-    """Tables with an outgoing FK and enough rows to be write targets."""
-    has_fk = {t["name"] for t in p["tables"] if t["fks"]} | {f["table"] for f in extra_fks}
-    return [t["name"] for t in p["tables"] if t["name"] in has_fk and t["rows"] >= min_rows]
 
 def schema_items(p):
     """Normalized table.column items; a prefix shared by >= half the tables (e.g. `olist_`) is dropped."""
@@ -211,12 +212,14 @@ def schema_items(p):
         return n[len(strip) + 1:] if strip and n.lower().startswith(strip + "_") else n
     return {f"{_norm(tname(t['name']))}.{_norm(c)}" for t in p["tables"] for c in t["cols"]}
 
+
 def containment(a, b):
     """Share of the smaller schema's table.column items found in the other (catches subset/superset copies)."""
     a, b = set(a), set(b)
     return len(a & b) / min(len(a), len(b)) if a and b else 0.0
 
-def is_fragmented(p, inferred, min_share):
+
+def is_fragmented(p, fks, min_share):
     """True when the largest FK-connected component covers < min_share of tables (grab-bag DBs)."""
     names = [t["name"] for t in p["tables"]]
     if not names:
@@ -227,31 +230,36 @@ def is_fragmented(p, inferred, min_share):
         while parent[x] != x:
             parent[x] = parent[parent[x]]; x = parent[x]
         return x
-    edges = [(t["name"], f["ref_table"]) for t in p["tables"] for f in t["fks"]]
-    edges += [(f["table"], f["ref_table"]) for f in inferred]
-    for a, b in edges:
-        b = lower.get(b.lower())
-        if b:
+    for f in fks:
+        a, b = lower.get(f["table"].lower()), lower.get(f["ref_table"].lower())
+        if a and b:
             parent[find(a)] = find(b)
     sizes = {}
     for n in names:
         sizes[find(n)] = sizes.get(find(n), 0) + 1
     return max(sizes.values()) / len(names) < min_share
 
-def evaluate(p, cfg):
+
+def _fmt_fk(f):
+    return f"{f['table']}.{','.join(f['cols'])}->{f['ref_table']}"
+
+
+def evaluate(p, cfg, extra_fks=()):
     T = p["tables"]
-    inferred = infer_fks(p)
+    fks = all_fks(p, extra_fks)
+    usable = [f for f in fks if f["hit"] is None or f["hit"] >= cfg["fk_min_hit"]]
+    keys = {t["name"]: row_key(t) for t in T if row_key(t)}
+    targets = update_targets(p, keys, cfg["long_text_avg_len"])
+    anc = anchors(p, usable, keys, targets, cfg["anchor_min_rows"])
+    person = sorted([a for a in anc if a["kind"] != "entity"], key=lambda a: (a["kind"] != "person_named", -a["rows"]))
+    entity = sorted([a for a in anc if a["kind"] == "entity"], key=entity_rank)
     n_cols = sum(len(t["cols"]) for t in T)
     rows = sum(t["rows"] for t in T)
-    n_decl = sum(len(t["fks"]) for t in T)
-    txn = transaction_tables(p, cfg["txn_min_rows"], inferred)
-    keyed = {t["name"]: bool(t["pk"] or t["unique_keys"]) for t in T}
-    names = [t["name"] for t in T]
     items = schema_items(p)
     leak_j = {k: containment(items, v) for k, v in cfg["leak_ref"].items()}
     leak_match = max(leak_j, key=leak_j.get) if leak_j else None
-    persons = [t["name"] for t in T if is_person_table(t["name"], t["cols"])]
-    fragmented = is_fragmented(p, inferred, cfg["min_component_share"])
+    fragmented = is_fragmented(p, usable, cfg["min_component_share"])
+    keyed = {t["name"]: is_keyed(t) for t in T}
     fail = []
     if p["db"] in cfg["leak_names"] or (leak_match and leak_j[leak_match] >= cfg["overlap"]):
         fail.append("leak")
@@ -261,18 +269,33 @@ def evaluate(p, cfg):
     lo, hi = cfg["rows"]
     if not lo <= rows <= hi: fail.append("rows")
     if p["size_mb"] > cfg["max_mb"]: fail.append("size")
-    if n_decl + len(inferred) < cfg["min_fks"]: fail.append("fks")
-    if not txn: fail.append("txn_table")
-    elif not any(keyed[t] for t in txn): fail.append("txn_locatable")
+    if len(usable) < cfg["min_fks"]: fail.append("fks")
+    if not targets: fail.append("no_update_target")
+    if not anc: fail.append("no_anchor")
     if fragmented: fail.append("fragmented")
-    if cfg.get("require_person") and not persons: fail.append("no_person")
     return {"db": p["db"], "n_tables": len(T), "n_cols": n_cols, "total_rows": rows,
-            "size_mb": round(p["size_mb"], 1), "n_fks_declared": n_decl, "n_fks_inferred": len(inferred),
-            "has_person": bool(persons), "person_tables": persons, "txn_tables": txn,
-            "txn_no_key": [t for t in txn if not keyed[t]], "fragmented": fragmented,
+            "size_mb": round(p["size_mb"], 1),
+            "n_fks_declared": sum(f["source"] == "declared" for f in fks),
+            "n_fks_inferred": sum(f["source"] != "declared" for f in fks),
+            "n_fks_valid": sum(f["hit"] is not None and f["hit"] >= cfg["fk_min_hit"] for f in fks),
+            "invalid_fks": [f"{_fmt_fk(f)} {f['hit']}" for f in fks if f["hit"] is not None and f["hit"] < cfg["fk_min_hit"]],
+            "unverified_fks": [_fmt_fk(f) for f in fks if f["hit"] is None],
+            "has_person_named": any(a["kind"] == "person_named" for a in anc),
+            "anchor_kinds": sorted({a["kind"] for a in anc}),
+            "person_anchors": [f"{a['table']}[{','.join(a['names'])}]" for a in person],
+            "entity_anchors": [f"{a['table']}[{','.join(a['names'])}]" for a in entity],
+            "anchors": anc,
+            "update_targets": list(targets), "targets_no_key": [t for t in targets if not keyed[t]],
+            "composite_key_tables": [t["name"] for t in T if t["composite_key"]],
+            "long_text_cols": [f"{t['name']}.{c}" for t in T for c, s in t["stats"].items()
+                               if s["avg_len"] > cfg["long_text_avg_len"]],
+            "empty_string_cols": [f"{t['name']}.{c}" for t in T for c, s in t["stats"].items()
+                                  if t["rows"] and s["blank"] >= 0.1 * t["rows"]],
+            "fragmented": fragmented,
             "leak_match": leak_match if leak_match and leak_j[leak_match] >= cfg["overlap"] else None,
             "max_leak_overlap": round(leak_j[leak_match], 2) if leak_match else 0.0,
-            "table_names": names, "schema": sorted(items), "fail_reasons": fail, "pass": not fail}
+            "table_names": [t["name"] for t in T], "schema": sorted(items), "fail_reasons": fail, "pass": not fail}
+
 
 def dedup(rows, order, threshold):
     """Mark passing DBs whose schema overlaps an already-kept DB from a preferred source."""

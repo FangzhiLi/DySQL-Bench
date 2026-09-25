@@ -1,7 +1,6 @@
 # tests/test_db_select.py
-from dysql_bench.db_select import (profile_db, row_key, infer_fks, is_person_table, transaction_tables,
-                                   schema_items, containment, is_fragmented, evaluate, dedup, declared_fks,
-                                   validate_fks, infer_fks_by_value, is_keyed)
+from dysql_bench.db_select import (profile_db, row_key, infer_fks, infer_fks_by_value, declared_fks, validate_fks,
+                                   all_fks, is_keyed, schema_items, containment, is_fragmented, evaluate, dedup)
 from tests._sqlite_fixtures import make_db as _db, rows as _rows, SHOP, WWE
 
 def test_profile_db_reads_tables_rows_pk_fk(tmp_path):
@@ -30,18 +29,6 @@ def test_infer_fk_from_table_name_plus_id(tmp_path):
 def test_infer_fk_skips_declared_and_own_pk(tmp_path):
     p = profile_db(_db(tmp_path, "shop", SHOP))
     assert infer_fks(p) == []
-
-def test_person_table_by_name_or_name_columns():
-    assert is_person_table("Customers", ["id"])
-    assert is_person_table("tbl_bowlers", ["id"])
-    assert is_person_table("people_info", ["id"])
-    assert is_person_table("x", ["id", "FirstName", "LastName"])
-    assert not is_person_table("products", ["id", "name"])
-
-def test_transaction_tables_need_outgoing_fk_and_rows(tmp_path):
-    p = profile_db(_db(tmp_path, "shop", SHOP))
-    assert transaction_tables(p, min_rows=50) == ["orders"]
-    assert transaction_tables(p, min_rows=500) == []
 
 def test_schema_items_normalize_case_underscore_plural(tmp_path):
     p = profile_db(_db(tmp_path, "n", "CREATE TABLE Invoice_Lines (Invoice_Id INT, Qty INT);"))
@@ -84,31 +71,26 @@ def test_fragmented_when_fk_graph_splits(tmp_path):
         CREATE TABLE x (x_id INTEGER PRIMARY KEY); CREATE TABLE y (y_id INTEGER PRIMARY KEY, x_id INTEGER);"""))
     assert is_fragmented(p, infer_fks(p), min_share=0.6)
     q = profile_db(_db(tmp_path, "shop", SHOP))
-    assert not is_fragmented(q, [], min_share=0.6)
+    assert not is_fragmented(q, all_fks(q), min_share=0.6)
 
-CFG = dict(tables=(3, 20), max_cols=250, rows=(200, 3_000_000), max_mb=100, min_fks=2,
-           txn_min_rows=50, min_component_share=0.6, leak_names=set(), overlap=0.6, leak_ref={})
+CFG = dict(tables=(3, 20), max_cols=250, rows=(200, 3_000_000), max_mb=100, min_fks=2, fk_min_hit=0.3,
+           anchor_min_rows=5, long_text_avg_len=200, min_component_share=0.6,
+           leak_names=set(), overlap=0.6, leak_ref={})
 
 def test_evaluate_passes_shop(tmp_path):
     r = evaluate(profile_db(_db(tmp_path, "shop", SHOP)), CFG)
     assert r["pass"], r["fail_reasons"]
-    assert r["has_person"] and r["txn_tables"] == ["orders"] and r["n_fks_declared"] == 2
-
-def test_evaluate_requires_person_table_only_when_configured(tmp_path):
-    depot = SHOP.replace("customers", "depots").replace("customer_id", "depot_id") \
-                .replace("first_name", "label").replace("last_name", "code")
-    p = profile_db(_db(tmp_path, "depot", depot))
-    assert evaluate(p, CFG)["pass"]
-    r = evaluate(p, {**CFG, "require_person": True})
-    assert r["fail_reasons"] == ["no_person"]
-    assert evaluate(profile_db(_db(tmp_path, "shop", SHOP)), {**CFG, "require_person": True})["pass"]
+    assert r["n_fks_declared"] == 2 and r["n_fks_valid"] == 2 and r["invalid_fks"] == [] == r["unverified_fks"]
+    assert r["has_person_named"] and r["anchor_kinds"] == ["entity", "person_named"]
+    assert r["person_anchors"] == ["customers[first_name,last_name]"] and r["entity_anchors"] == ["products[name]"]
+    assert r["update_targets"] == ["customers", "products", "orders"]
 
 def test_evaluate_reports_every_failed_rule(tmp_path):
     p = profile_db(_db(tmp_path, "tiny", """
         CREATE TABLE a (id INTEGER PRIMARY KEY); INSERT INTO a VALUES (1);"""))
     r = evaluate(p, CFG)
     assert not r["pass"]
-    assert {"tables", "rows", "fks", "txn_table"} <= set(r["fail_reasons"])
+    assert {"tables", "rows", "fks", "no_update_target", "no_anchor"} <= set(r["fail_reasons"])
 
 def test_evaluate_flags_leak_by_name_and_by_schema_overlap(tmp_path):
     p = profile_db(_db(tmp_path, "shop", SHOP))
@@ -274,3 +256,57 @@ def test_col_stats_on_quoted_names(tmp_path):
 def test_col_stats_skipped_for_empty_table(tmp_path):
     p = profile_db(_db(tmp_path, "e", "CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT);"))
     assert p["tables"][0]["stats"] == {}
+
+# --- Task 8: evaluate ---
+
+def test_all_fks_merges_sources_and_validates(tmp_path):
+    p = profile_db(_db(tmp_path, "wwe", WWE))
+    fks = all_fks(p, extra=[{"table": "Matches", "cols": ["champion"], "ref_table": "Wrestlers", "ref_cols": ["id"]}])
+    assert sorted((f["cols"][0], f["source"], f["hit"]) for f in fks) == \
+        [("card_id", "name", 1.0), ("champion", "extra", 1.0), ("loser_id", "value", 1.0), ("winner_id", "value", 1.0)]
+
+def test_evaluate_drops_invalid_fks_and_reports_them(tmp_path):
+    p = profile_db(_db(tmp_path, "bad", """
+        CREATE TABLE customers (customer_id INTEGER PRIMARY KEY, first_name TEXT);
+        CREATE TABLE products (product_id INTEGER PRIMARY KEY, name TEXT);
+        CREATE TABLE orders (order_id INTEGER PRIMARY KEY, customer_id INTEGER REFERENCES customers(customer_id),
+                             product_id INTEGER REFERENCES products(product_id), qty INTEGER);
+    """ + _rows("customers", 60, lambda i: f"{i},'c{i}'") + _rows("products", 60, lambda i: f"{i},'p{i}'")
+          + _rows("orders", 100, lambda i: f"{i},{i%60 + 1000},{i%60},1")))
+    r = evaluate(p, CFG)
+    assert r["invalid_fks"] == ["orders.customer_id->customers 0.0"] and r["n_fks_valid"] == 1
+    assert "fks" in r["fail_reasons"] and "customers[first_name]" in r["person_anchors"]
+
+def test_evaluate_keeps_unverified_fk_on_empty_table(tmp_path):
+    p = profile_db(_db(tmp_path, "arch", SHOP + """
+        CREATE TABLE returns (return_id INTEGER PRIMARY KEY, order_id INTEGER REFERENCES orders(order_id), reason TEXT);"""))
+    r = evaluate(p, CFG)
+    assert r["unverified_fks"] == ["returns.order_id->orders"] and r["n_fks_valid"] == 2 and r["pass"]
+
+def test_evaluate_id_only_person_with_link_tables_passes(tmp_path):
+    # computer_student-like: no names, advisedBy/taughtBy are pure link tables; the rule lets it through and the
+    # anchor list shows a human what kind of tasks it can carry
+    p = profile_db(_db(tmp_path, "cs", """
+        CREATE TABLE person (p_id INTEGER PRIMARY KEY, professor INTEGER, student INTEGER);
+        CREATE TABLE course (course_id INTEGER PRIMARY KEY, courseLevel TEXT);
+        CREATE TABLE advisedBy (p_id INTEGER REFERENCES person(p_id), p_id_dummy INTEGER REFERENCES person(p_id),
+                                PRIMARY KEY (p_id, p_id_dummy));
+        CREATE TABLE taughtBy (course_id INTEGER REFERENCES course(course_id), p_id INTEGER REFERENCES person(p_id),
+                               PRIMARY KEY (course_id, p_id));
+    """ + _rows("person", 60, lambda i: f"{i},{i%2},{(i+1)%2}") + _rows("course", 60, lambda i: f"{i},'L{i%3}'")
+          + _rows("advisedBy", 60, lambda i: f"{i},{(i+1)%60}") + _rows("taughtBy", 60, lambda i: f"{i},{i}")))
+    r = evaluate(p, CFG)
+    assert r["pass"], r["fail_reasons"]
+    assert r["anchor_kinds"] == ["entity", "person_id_only"] and not r["has_person_named"]
+    assert r["person_anchors"] == ["person[]"]
+
+def test_evaluate_quality_flags(tmp_path):
+    p = profile_db(_db(tmp_path, "q", """
+        CREATE TABLE customers (customer_id INTEGER PRIMARY KEY, first_name TEXT, note TEXT);
+        CREATE TABLE products (product_id INTEGER PRIMARY KEY, name TEXT);
+        CREATE TABLE orders (order_id INTEGER PRIMARY KEY, customer_id INTEGER REFERENCES customers(customer_id),
+                             product_id INTEGER REFERENCES products(product_id), html TEXT);
+    """ + _rows("customers", 60, lambda i: f"{i},'c{i}',''") + _rows("products", 60, lambda i: f"{i},'p{i}'")
+          + _rows("orders", 100, lambda i: f"{i},{i%60},{i%60},'{'x' * 500}'")))
+    r = evaluate(p, CFG)
+    assert r["long_text_cols"] == ["orders.html"] and r["empty_string_cols"] == ["customers.note"]

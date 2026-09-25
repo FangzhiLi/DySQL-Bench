@@ -25,12 +25,14 @@ LEAK = {"spider1": {"chinook_1", "store_1", "sakila_1", "soccer_1", "formula_1"}
                  "retail_world", "cars", "human_resources", "formula_1"},
         "spider2": {"sqlite-sakila", "northwind", "EU_soccer", "complex_oracle", "BowlingLeague",
                     "EntertainmentAgency", "Pagila", "chinook", "music", "f1"}}
-CFG = dict(tables=(3, 20), max_cols=250, rows=(200, 3_000_000), max_mb=300, min_fks=2,
-           txn_min_rows=50, min_component_share=0.6, overlap=0.6, require_person=True)
+CFG = dict(tables=(3, 20), max_cols=250, rows=(200, 3_000_000), max_mb=300, min_fks=2, fk_min_hit=0.3,
+           anchor_min_rows=5, long_text_avg_len=200, min_component_share=0.6, overlap=0.6)
 DEDUP_ORDER = ["bird", "spider2", "spider1", "synsql"]
 COLS = ["source", "db", "pass", "dup_of", "fail_reasons", "n_tables", "n_cols", "total_rows", "size_mb",
-        "n_fks_declared", "n_fks_inferred", "has_person", "person_tables", "txn_tables", "txn_no_key",
-        "fragmented", "leak_match", "max_leak_overlap", "table_names"]
+        "n_fks_declared", "n_fks_inferred", "n_fks_valid", "invalid_fks", "unverified_fks", "has_person_named",
+        "anchor_kinds", "person_anchors", "entity_anchors", "update_targets", "targets_no_key",
+        "composite_key_tables", "long_text_cols", "empty_string_cols", "fragmented", "leak_match",
+        "max_leak_overlap", "table_names"]
 
 def _profile(a):
     source, path = a
@@ -75,7 +77,7 @@ def main():
         with open(path, "w", newline="") as f:
             w = csv.DictWriter(f, COLS, extrasaction="ignore"); w.writeheader()
             for r in rs:
-                w.writerow({k: "; ".join(v) if isinstance(v, list) else v for k, v in r.items()})
+                w.writerow({k: "; ".join(v) if isinstance(v, list) else v for k, v in r.items() if k in COLS})
     write(a.out, rows)
     keep = [r for r in rows if r["pass"] and not r["dup_of"]]
     if a.candidates:
