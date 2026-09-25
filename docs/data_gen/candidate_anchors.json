@@ -85,7 +85,9 @@
    "key": "zip_code",
    "kind": "entity",
    "rows": 41563,
-   "names": [],
+   "names": [
+    "alias.alias"
+   ],
    "down": [
     "alias",
     "area_code",
@@ -112,7 +114,9 @@
    "key": "zip_code",
    "kind": "entity",
    "rows": 41701,
-   "names": [],
+   "names": [
+    "alias"
+   ],
    "down": [
     "zip_data",
     "area_code",
@@ -141,7 +145,9 @@
    "key": "Code",
    "kind": "entity",
    "rows": 1656,
-   "names": [],
+   "names": [
+    "Description"
+   ],
    "down": [
     "Airlines"
    ],
@@ -159,7 +165,9 @@
    "key": "Code",
    "kind": "entity",
    "rows": 6510,
-   "names": [],
+   "names": [
+    "Description"
+   ],
    "down": [
     "Airlines"
    ],
@@ -208,7 +216,8 @@
    "rows": 24,
    "names": [
     "BrandName",
-    "BreweryName"
+    "BreweryName",
+    "Description"
    ],
    "down": [
     "rootbeer",
@@ -282,7 +291,9 @@
    "key": "job_id",
    "kind": "entity",
    "rows": 14,
-   "names": [],
+   "names": [
+    "job_desc"
+   ],
    "down": [
     "employee"
    ],
@@ -544,7 +555,9 @@
    "key": "status_id",
    "kind": "entity",
    "rows": 6,
-   "names": [],
+   "names": [
+    "address_status.address_status"
+   ],
    "down": [
     "order_history",
     "address_status"
@@ -738,7 +751,9 @@
    "key": "productLine",
    "kind": "entity",
    "rows": 7,
-   "names": [],
+   "names": [
+    "productLine"
+   ],
    "down": [
     "products",
     "orderdetails"
@@ -835,7 +850,8 @@
    "kind": "entity",
    "rows": 26,
    "names": [
-    "title"
+    "title",
+    "description"
    ],
    "down": [
     "Crime"
@@ -860,7 +876,10 @@
    "key": "iucr_no",
    "kind": "entity",
    "rows": 401,
-   "names": [],
+   "names": [
+    "primary_description",
+    "secondary_description"
+   ],
    "down": [
     "Crime"
    ],
@@ -974,7 +993,8 @@
    "rows": 278,
    "names": [],
    "down": [
-    "taughtBy"
+    "taughtBy",
+    "advisedBy"
    ],
    "up": [
     "course"
@@ -1123,7 +1143,9 @@
    "key": "point_id",
    "kind": "entity",
    "rows": 46,
-   "names": [],
+   "names": [
+    "Description"
+   ],
    "down": [
     "violation"
    ],
@@ -1222,7 +1244,9 @@
    "key": "SurveyID",
    "kind": "entity",
    "rows": 5,
-   "names": [],
+   "names": [
+    "Description"
+   ],
    "down": [
     "Answer"
    ],
@@ -1243,7 +1267,8 @@
    "kind": "entity",
    "rows": 426713,
    "names": [
-    "name"
+    "name",
+    "description"
    ],
    "down": [
     "MenuItem"
@@ -1263,7 +1288,8 @@
    "kind": "entity",
    "rows": 17527,
    "names": [
-    "name"
+    "name",
+    "physical_description"
    ],
    "down": [
     "MenuPage",
@@ -2048,7 +2074,9 @@
    "key": "StateCode",
    "kind": "entity",
    "rows": 48,
-   "names": [],
+   "names": [
+    "Region"
+   ],
    "down": [
     "Store Locations",
     "Sales Orders"
@@ -2072,7 +2100,9 @@
    "key": "SalesTeamID",
    "kind": "entity",
    "rows": 28,
-   "names": [],
+   "names": [
+    "Sales Team"
+   ],
    "down": [
     "Sales Orders"
    ],
@@ -2161,7 +2191,9 @@
    "key": "StateCode",
    "kind": "entity",
    "rows": 48,
-   "names": [],
+   "names": [
+    "State"
+   ],
    "down": [
     "district",
     "client",
@@ -2229,7 +2261,9 @@
    "key": "id",
    "kind": "entity",
    "rows": 945,
-   "names": [],
+   "names": [
+    "Description"
+   ],
    "down": [
     "paragraphs"
    ],
@@ -2250,7 +2284,8 @@
    "kind": "entity",
    "rows": 1266,
    "names": [
-    "CharName"
+    "CharName",
+    "Description"
    ],
    "down": [
     "paragraphs"
@@ -2512,7 +2547,9 @@
    "key": "ID",
    "kind": "entity",
    "rows": 20524,
-   "names": [],
+   "names": [
+    "DESCRIPTION"
+   ],
    "down": [
     "allergies",
     "careplans",
@@ -2763,6 +2800,7 @@
    "kind": "entity",
    "rows": 17686,
    "names": [
+    "School",
     "EdOpsName",
     "EILName"
    ],
@@ -2889,7 +2927,9 @@
    "key": "ProductID",
    "kind": "entity",
    "rows": 591,
-   "names": [],
+   "names": [
+    "Description"
+   ],
    "down": [
     "transactions_1k"
    ],
@@ -3159,7 +3199,9 @@
    "key": "id",
    "kind": "entity",
    "rows": 35,
-   "names": [],
+   "names": [
+    "colour"
+   ],
    "down": [
     "superhero",
     "hero_attribute",
@@ -3223,7 +3265,9 @@
    "key": "id",
    "kind": "entity",
    "rows": 61,
-   "names": [],
+   "names": [
+    "race"
+   ],
    "down": [
     "superhero",
     "hero_attribute",
@@ -4293,7 +4337,9 @@
    "key": "MajorID",
    "kind": "entity",
    "rows": 7,
-   "names": [],
+   "names": [
+    "Major"
+   ],
    "down": [
     "Students",
     "Student_Schedules"
@@ -4547,7 +4593,9 @@
    "key": "Id",
    "kind": "entity",
    "rows": 23,
-   "names": [],
+   "names": [
+    "Campus"
+   ],
    "down": [
     "csu_fees",
     "degrees",
@@ -4731,7 +4779,9 @@
    "key": "ID",
    "kind": "entity",
    "rows": 20,
-   "names": [],
+   "names": [
+    "Grape"
+   ],
    "down": [
     "wine"
    ],

@@ -109,3 +109,28 @@ def test_entity_label_from_one_to_one_table(tmp_path):
           + _rows("production", 100, lambda i: f"{i%60},{70 + i//60},1")))
     a = _anchors(p, validate_fks(p, declared_fks(p)))
     assert set(a) == {"price"} and a["price"]["names"] == ["data.car_name"] and a["price"]["down"] == ["data", "production"]
+
+# --- Final review fixes ---
+
+def test_entity_label_prefers_the_column_named_after_the_table_then_description(tmp_path):
+    # california_schools: schools.School is the name, EdOpsName a category; csu_1: Campuses.Campus;
+    # airline: "Air Carriers" only has Description
+    p = profile_db(_db(tmp_path, "labels", """
+        CREATE TABLE schools (CDSCode TEXT PRIMARY KEY, School TEXT, EdOpsName TEXT);
+        CREATE TABLE satscores (cds TEXT PRIMARY KEY REFERENCES schools(CDSCode), NumTstTakr INTEGER);
+        CREATE TABLE Campuses (Id INTEGER PRIMARY KEY, Campus TEXT, Location TEXT);
+        CREATE TABLE enrollments (Campus INTEGER REFERENCES Campuses(Id), Year INTEGER, TotalEnrollment INTEGER,
+                                  PRIMARY KEY (Campus, Year));
+        CREATE TABLE "Air Carriers" (Code INTEGER PRIMARY KEY, Description TEXT);
+        CREATE TABLE Airlines (FL_ID INTEGER PRIMARY KEY, OP_CARRIER_AIRLINE_ID INTEGER REFERENCES "Air Carriers"(Code),
+                               DEP_DELAY INTEGER);
+    """ + _rows("schools", 20, lambda i: f"'s{i}','School {i}','Traditional'")
+          + _rows("satscores", 20, lambda i: f"'s{i}',{i}")
+          + _rows("Campuses", 20, lambda i: f"{i},'Campus {i}','City'")
+          + _rows("enrollments", 40, lambda i: f"{i%20},{2000 + i//20},{i}")
+          + _rows('"Air Carriers"', 20, lambda i: f"{i},'Carrier {i}'")
+          + _rows("Airlines", 40, lambda i: f"{i},{i%20},{i}")))
+    a = _anchors(p, validate_fks(p, declared_fks(p)))
+    assert a["schools"]["names"] == ["School", "EdOpsName"]
+    assert a["Campuses"]["names"] == ["Campus"]
+    assert a["Air Carriers"]["names"] == ["Description"]

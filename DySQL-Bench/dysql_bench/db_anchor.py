@@ -14,6 +14,8 @@ NAME_COLS = {"firstname", "lastname", "fname", "lname", "fullname", "first", "la
              "surname", "givenname", "familyname", "forename"}
 GUID = re.compile(r"guid|uuid", re.I)
 LABEL = re.compile(r"(name|title|label)$", re.I)
+DESC = re.compile(r"(^|_)desc(ription)?$", re.I)
+NUMERIC_TYPE = re.compile(r"int|real|floa|doub|num|dec", re.I)  # SQLite numeric affinities: not a name
 
 
 def _norm(name):
@@ -68,18 +70,30 @@ def name_cols(cols):
     return [c for c in cols if _norm(c) in NAME_COLS or _norm(c).endswith("name")]
 
 
+def _labels(t):
+    """Text columns that name a row, best first: one named after the table (schools.School, Campuses.Campus),
+    then name/title/label columns, then a description (Air Carriers.Description)."""
+    tn = re.sub(r"[^a-z0-9]", "", t["name"].lower())
+    forms = {tn, tn[:-1] if tn.endswith("s") else tn, tn[:-2] if tn.endswith("es") else tn}
+    text = [c for c, ty in zip(t["cols"], t["types"]) if not NUMERIC_TYPE.search(ty or "")]
+    exact = [c for c in text if re.sub(r"[^a-z0-9]", "", c.lower()) in forms]
+    named = [c for c in text if LABEL.search(c) and c not in exact]
+    desc = [c for c in text if DESC.search(c) and c not in exact and c not in named]
+    return exact + named + desc
+
+
 def label_cols(p, table, fks):
-    """How an entity is referred to: its own name/title columns, else those of a 1:1 table whose single-column
+    """How an entity is referred to: its own name-like columns, else those of a 1:1 table whose single-column
     PK references it (cars: price has no name, data.car_name does)."""
     tables = {t["name"]: t for t in p["tables"]}
-    own = [c for c in tables[table]["cols"] if LABEL.search(c)]
+    own = _labels(tables[table])
     if own:
         return own
     out = []
     for f in fks:
         child = tables.get(f["table"])
         if f["ref_table"] == table and child and child["pk"] == f["cols"]:
-            out += [f"{child['name']}.{c}" for c in child["cols"] if LABEL.search(c)]
+            out += [f"{child['name']}.{c}" for c in _labels(child)]
     return out
 
 

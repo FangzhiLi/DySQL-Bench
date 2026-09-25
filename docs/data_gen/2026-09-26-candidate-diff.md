@@ -23,20 +23,20 @@
 
 | 来源 | 库 | 锚点类型 | 人物锚点 | 实体锚点（前 3） |
 |---|---|---|---|---|
-| BIRD | airline | 只有实体 | — | Airports[], Air Carriers[] |
+| BIRD | airline | 只有实体 | — | Airports[Description], Air Carriers[Description] |
 | BIRD | book_publishing_company | 有名字的人物 | employee[fname,lname], authors[au_lname,au_fname] | publishers[pub_name], titles[title], stores[stor_name] 等 4 个 |
-| BIRD | california_schools | 只有实体 | — | schools[EdOpsName,EILName] |
+| BIRD | california_schools | 只有实体 | — | schools[School,EdOpsName,EILName] |
 | BIRD | card_games | 只有实体 | — | cards[asciiName,faceName,flavorName,name], sets[mcmName,name], legalities[] |
-| BIRD | chicago_crime | 只有实体 | — | Community_Area[community_area_name], Ward[alderman_first_name,alderman_last_name], FBI_Code[title] 等 5 个 |
+| BIRD | chicago_crime | 只有实体 | — | Community_Area[community_area_name], IUCR[primary_description,secondary_description], Ward[alderman_first_name,alderman_last_name] 等 5 个 |
 | BIRD | citeseer | 只有实体 | — | paper[class_label] |
 | BIRD | college_completion | 只有实体 | — | institution_details[chronname] |
 | BIRD | food_inspection | 只有实体 | — | businesses[name,owner_name] |
 | BIRD | genes | 只有实体 | — | Classification[] |
-| BIRD | mental_health_survey | 只有实体 | — | Question[], Survey[] |
-| BIRD | menu | 只有实体 | — | Menu[name], Dish[name], MenuPage[] |
+| BIRD | mental_health_survey | 只有实体 | — | Survey[Description], Question[] |
+| BIRD | menu | 只有实体 | — | Menu[name,physical_description], Dish[name,description], MenuPage[] |
 | BIRD | movies_4 | 有名字的人物 | person[person_name] | movie[title], keyword[keyword_name], production_company[company_name] 等 7 个 |
 | BIRD | restaurant | 只有实体 | — | generalinfo[label], geographic[] |
-| BIRD | shakespeare | 只有实体 | — | works[Title,LongTitle], characters[CharName], chapters[] |
+| BIRD | shakespeare | 只有实体 | — | works[Title,LongTitle], characters[CharName,Description], chapters[Description] |
 | BIRD | shooting | 只有实体 | — | incidents[] |
 | BIRD | toxicology | 只有实体 | — | molecule[label], bond[], atom[] |
 | BIRD | university | 只有实体 | — | country[country_name], university[university_name], ranking_criteria[criteria_name] |
@@ -46,7 +46,7 @@
 | Spider2-lite | imdb_movies | 只有实体 | — | names[name], ratings[] |
 | Spider 1.0 | bike_1 | 只有实体 | — | station[name] |
 | Spider 1.0 | flight_4 | 只有实体 | — | airports[name], airlines[name] |
-| Spider 1.0 | wine_1 | 只有实体 | — | appellations[], grapes[] |
+| Spider 1.0 | wine_1 | 只有实体 | — | grapes[Grape], appellations[] |
 
 ## 预期核对
 

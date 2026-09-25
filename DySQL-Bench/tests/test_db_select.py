@@ -319,3 +319,17 @@ def test_evaluate_quality_flags(tmp_path):
           + _rows("orders", 100, lambda i: f"{i},{i%60},{i%60},'{'x' * 500}'")))
     r = evaluate(p, CFG)
     assert r["long_text_cols"] == ["orders.html"] and r["empty_string_cols"] == ["customers.note"]
+
+# --- Final review fixes ---
+
+def test_invalid_declared_fk_does_not_block_inference(tmp_path):
+    # computer_student: advisedBy declares FOREIGN KEY (p_id, p_id_dummy) REFERENCES person (p_id, p_id), which
+    # matches nothing; the column-level FK advisedBy.p_id -> person must still be found by name
+    p = profile_db(_db(tmp_path, "cs", """
+        CREATE TABLE person (p_id INTEGER PRIMARY KEY, professor INTEGER);
+        CREATE TABLE advisedBy (p_id INTEGER, p_id_dummy INTEGER, PRIMARY KEY (p_id, p_id_dummy),
+                                FOREIGN KEY (p_id, p_id_dummy) REFERENCES person (p_id, p_id));
+    """ + _rows("person", 60, lambda i: f"{i},{i%2}") + _rows("advisedBy", 60, lambda i: f"{i},{(i+1)%60}")))
+    got = {(f["table"], tuple(f["cols"]), f["source"], f["hit"]) for f in all_fks(p)}
+    assert ("advisedBy", ("p_id", "p_id_dummy"), "declared", 0.0) in got
+    assert ("advisedBy", ("p_id",), "name", 1.0) in got

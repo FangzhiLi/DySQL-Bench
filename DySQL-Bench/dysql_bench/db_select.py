@@ -64,8 +64,8 @@ def profile_db(path):
             if not pk and scan else []
         composite = _composite_key(c, t, cols) if not pk and not unique and scan else []
         stats = _col_stats(c, t, cols) if scan else {}
-        tables.append({"name": t, "cols": cols, "pk": pk, "unique_keys": unique, "composite_key": composite,
-                       "fks": list(fks.values()), "rows": rows, "stats": stats})
+        tables.append({"name": t, "cols": cols, "types": [i[2] for i in info], "pk": pk, "unique_keys": unique,
+                       "composite_key": composite, "fks": list(fks.values()), "rows": rows, "stats": stats})
     c.close()
     return {"db": os.path.splitext(os.path.basename(path))[0], "path": path,
             "size_mb": os.path.getsize(path) / 2**20, "tables": tables}
@@ -98,19 +98,21 @@ def declared_fks(p):
              "source": "declared"} for t in p["tables"] for f in t["fks"]]
 
 
-def infer_fks(p):
+def infer_fks(p, covered=None):
     """Join keys implied by column names, for DBs that declare few FKs (e.g. Kaggle CSV imports).
     A column that is its table's own row key may only reference a strictly larger table (1:1 extension,
-    e.g. supplementary_demographics.cust_id -> customers); composite-PK members are ordinary candidates."""
+    e.g. supplementary_demographics.cust_id -> customers); composite-PK members are ordinary candidates.
+    `covered` holds (table, col_lower) pairs to skip; by default the columns of every declared FK."""
     keys = {t["name"]: row_key(t) for t in p["tables"] if row_key(t)}
     rows = {t["name"]: t["rows"] for t in p["tables"]}
     out = []
     for t in p["tables"]:
-        declared = {c.lower() for f in t["fks"] for c in f["cols"]}
+        skip = ({c.lower() for f in t["fks"] for c in f["cols"]} if covered is None
+                else {c for tb, c in covered if tb == t["name"]})
         own = keys.get(t["name"])
         for col in t["cols"]:
             lc = col.lower()
-            if lc in declared or not _fk_candidate(col):
+            if lc in skip or not _fk_candidate(col):
                 continue
             cands = [r for r, k in keys.items() if r != t["name"] and k.lower() == lc]
             if not cands:
@@ -198,12 +200,19 @@ def validate_fks(p, fks):
     return out
 
 
-def all_fks(p, extra=()):
-    """Declared + name-inferred + value-inferred + manually supplied FKs, each with a data hit rate."""
-    base = declared_fks(p) + infer_fks(p)
-    covered = {(f["table"], c.lower()) for f in base for c in f["cols"]}
-    fks = base + infer_fks_by_value(p, covered) + [{**f, "source": "extra"} for f in extra]
-    return validate_fks(p, fks)
+def all_fks(p, extra=(), min_hit=0.3):
+    """Declared + name-inferred + value-inferred + manually supplied FKs, each with a data hit rate.
+    Only usable declared FKs (hit >= min_hit, or unverified) keep inference off their columns: a broken
+    declaration (computer_student: advisedBy -> person(p_id, p_id)) must not hide the real column-level FK."""
+    declared = validate_fks(p, declared_fks(p))
+    covered = {(f["table"], c.lower()) for f in declared if f["hit"] is None or f["hit"] >= min_hit
+               for c in f["cols"]}
+    by_name = infer_fks(p, covered)
+    covered |= {(f["table"], c.lower()) for f in by_name for c in f["cols"]}
+    same = {(f["table"], tuple(c.lower() for c in f["cols"]), f["ref_table"].lower()) for f in declared}
+    inferred = [f for f in by_name + infer_fks_by_value(p, covered)
+                if (f["table"], tuple(c.lower() for c in f["cols"]), f["ref_table"].lower()) not in same]
+    return declared + validate_fks(p, inferred + [{**f, "source": "extra"} for f in extra])
 
 
 def schema_items(p):
@@ -249,7 +258,7 @@ def _fmt_fk(f):
 
 def evaluate(p, cfg, extra_fks=()):
     T = p["tables"]
-    fks = all_fks(p, extra_fks)
+    fks = all_fks(p, extra_fks, cfg["fk_min_hit"])
     usable = [f for f in fks if f["hit"] is None or f["hit"] >= cfg["fk_min_hit"]]
     keys = {t["name"]: row_key(t) for t in T if row_key(t)}
     targets = update_targets(p, keys, cfg["long_text_avg_len"])
