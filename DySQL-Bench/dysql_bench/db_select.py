@@ -135,6 +135,7 @@ def evaluate(p, cfg):
     if not txn: fail.append("txn_table")
     elif not any(keyed[t] for t in txn): fail.append("txn_locatable")
     if fragmented: fail.append("fragmented")
+    if cfg.get("require_person") and not persons: fail.append("no_person")
     return {"db": p["db"], "n_tables": len(T), "n_cols": n_cols, "total_rows": rows,
             "size_mb": round(p["size_mb"], 1), "n_fks_declared": n_decl, "n_fks_inferred": len(inferred),
             "has_person": bool(persons), "person_tables": persons, "txn_tables": txn,

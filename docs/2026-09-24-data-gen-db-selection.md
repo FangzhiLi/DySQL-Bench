@@ -29,7 +29,7 @@
 ### B. 结构要求
 
 - **事务/事实表：** 至少一张，有 FK 指向主实体表，行数 ≥ 50。这是写操作的落点。
-- **人物实体表（软条件）：** customer / employee / member / player / user / student / patient 等，用来给任务提供 persona。DySQL 的 cars、cookbook 没有这种表，persona 是编的，所以不设为硬条件，但要优先选有的库。
+- **人物实体表（硬条件，2026-09-25 起）：** customer / employee / member / player / user / student / patient 等，用来给任务提供 persona。DySQL 的 cars、cookbook 没有这种表，persona 是编的；我们不收这类库，被这条淘汰的库列在文末备注里。
 - **写目标表可定位：** 有 PK，或有可用的唯一自然键；否则 gold SQL 无法确定地命中一行。可以有意保留少量无 PK 的事实表（eval 里 complex_oracle 的 sales/costs 就是这样），但要标记出来。
 - **库级 FK ≥ 2：** 才能出"先插父再插子 / 先删子再删父"这类多步任务。
   - 对 Spider2-lite 要放宽：它的库大多从 Kaggle CSV 导入，基本不声明 FK。可以接受按列名推断的 join key（如两表都有 `customer_id`），但要人工抽查。
@@ -45,7 +45,7 @@
 - 每库任务上限（例如 ≤ 80），避免复制 DySQL 里两个库占 39% 的偏斜。
 - 按领域分层：体育、零售/订单、内容媒体、人事/教育、医疗/科学。
 
-## 自动筛选结果（2026-09-25 更新：排除 Spider dev/test 与 F1 系列）
+## 自动筛选结果（2026-09-25 更新：排除 Spider dev/test、F1 系列、无人物表的库）
 
 实现：`DySQL-Bench/dysql_bench/db_select.py`（测试 `tests/test_db_select.py`），运行脚本 `DySQL-Bench/scripts/select_dbs.py`。全量结果写到 `DySQL-Bench/results/db_select/db_select_all.csv`（不进 git），通过且去重后的候选写到 `docs/data_gen/candidate_dbs.csv`。
 
@@ -60,21 +60,27 @@
 
 | 来源 | 库总数 | 通过 | 重复 | 保留 | 主要淘汰原因（一个库可有多个） |
 |---|---|---|---|---|---|
-| BIRD（train 69 + dev 11） | 80 | 37 | 0 | 37 | 行数 17，文件 > 300 MB 15，泄漏/评测集 11，表数 10，事务表无键 9，FK 8 |
-| Spider2-lite（SQLite） | 30 | 8 | 2 | 6 | 泄漏/评测集 10，拼凑库 10，事务表无键 4，表数 3，无事务表 3 |
-| Spider 1.0 | 206 | 5 | 0 | 5 | 行数不足 183，无事务表 182，泄漏/评测集 70（含 dev/test 60 个） |
+| BIRD（train 69 + dev 11） | 80 | 25 | 0 | 25 | 无人物表 32，行数 17，文件 > 300 MB 15，泄漏/评测集 11，表数 10，事务表无键 9 |
+| Spider2-lite（SQLite） | 30 | 7 | 2 | 5 | 泄漏/评测集 10，拼凑库 10，无人物表 4，事务表无键 4，表数 3 |
+| Spider 1.0 | 206 | 4 | 0 | 4 | 行数不足 183，无事务表 182，无人物表 72，泄漏/评测集 70（含 dev/test 60 个） |
 | SynSQL-2.5M | 16,583 | 0 | 0 | 0 | 全部因行数不足/无事务表淘汰（表内只有 0–2 行） |
-| **合计** | | | | **48** | 其中 34 个有人物实体表；14 个没有（如 genes、toxicology、Airlines、flight_4） |
+| **合计** | | | | **34** | 全部有人物实体表 |
 
 保留的库：
-- **BIRD：** address, beer_factory, books, car_retails, chicago_crime, college_completion, computer_student, disney, food_inspection_2, genes, legislator, mental_health_survey, menu, movie, movielens, olympics, professional_basketball, public_review_platform, regional_sales, restaurant, retail_complains, shakespeare, shipping, social_media, student_loan, superstore, synthea, university, video_games, california_schools, card_games, debit_card_specializing, financial, student_club, superhero, thrombosis_prediction, toxicology（后 8 个来自 BIRD dev）
-- **Spider2-lite：** AdventureWorks、Airlines、Brazilian_E_Commerce（E_commerce、electronic_sales 是同一份 Olist 数据，已去重）、IPL、WWE、school_scheduling。除 school_scheduling 外，其余 5 个的 FK 全靠推断，要人工抽查
-- **Spider 1.0（均为 train 库）：** college_2, college_3, csu_1, flight_4, hr_1。aan_1（test）、car_1、flight_2（dev）按评测集排除
+- **BIRD（25）：** address, beer_factory, books, car_retails, computer_student, disney, food_inspection_2, legislator, movie, movielens, olympics, professional_basketball, public_review_platform, regional_sales, retail_complains, shipping, social_media, student_loan, superstore, synthea, debit_card_specializing, financial, student_club, superhero, thrombosis_prediction。其中 debit_card_specializing、financial、student_club、superhero、thrombosis_prediction 来自 BIRD dev
+- **Spider2-lite（5）：** AdventureWorks、Brazilian_E_Commerce（E_commerce、electronic_sales 是同一份 Olist 数据，已去重）、IPL、WWE、school_scheduling。除 school_scheduling 外，其余 4 个的 FK 全靠推断，生成任务前要人工抽查
+- **Spider 1.0（4，均为 train 库）：** college_2, college_3, csu_1, hr_1。aan_1（test）、car_1、flight_2（dev）按评测集排除
 
-待决定：
-1. **`simpson_episodes` 算不算泄漏。** 它与 law_episode 是同一套 schema 模板（包含度 0.88），但数据是另一部剧。目前按泄漏排除（训练它等于提前见过 law_episode 的 schema）。
-2. **超过 300 MB 的库。** 上限已从 100 MB 放宽到 300 MB（2026-09-25）。仍有 2 个库只因文件大小被淘汰：BIRD 的 codebase_community（459 MB）和 music_platform_2（1.5 GB）。要用的话需要先抽样缩小。
-3. **没有人物实体表的 14 个库**（软条件）：留着的话 persona 要编，任务会更像 cars/cookbook。
+## 已决定事项与备注（2026-09-25）
+
+1. **`simpson_episodes`（BIRD train）排除。** 它与 law_episode 是同一套 schema 模板（包含度 0.88），数据是另一部剧；训练它等于提前见过 DySQL 里 law_episode 的 schema。
+2. **备注：超过 300 MB、暂不使用的库。** 只因文件大小被淘汰，数据本身合格，以后需要时可抽样缩小再用：
+   - BIRD train：codebase_community（459 MB）、music_platform_2（1.5 GB）
+3. **备注：没有人物实体表、暂不使用的 14 个库。** 其他条件都通过，只因没有人物表被排除；以后若愿意为它们编 persona（像 DySQL 的 cars/cookbook），可以加回来（`CFG["require_person"] = False`）：
+   - BIRD train（9）：chicago_crime、college_completion、genes、mental_health_survey、menu、restaurant、shakespeare、university、video_games
+   - BIRD dev（3）：california_schools、card_games、toxicology
+   - Spider2-lite（1）：Airlines
+   - Spider 1.0 train（1）：flight_4
 
 ## 数据来源
 

@@ -110,6 +110,15 @@ def test_evaluate_passes_shop(tmp_path):
     assert r["pass"], r["fail_reasons"]
     assert r["has_person"] and r["txn_tables"] == ["orders"] and r["n_fks_declared"] == 2
 
+def test_evaluate_requires_person_table_only_when_configured(tmp_path):
+    depot = SHOP.replace("customers", "depots").replace("customer_id", "depot_id") \
+                .replace("first_name", "label").replace("last_name", "code")
+    p = profile_db(_db(tmp_path, "depot", depot))
+    assert evaluate(p, CFG)["pass"]
+    r = evaluate(p, {**CFG, "require_person": True})
+    assert r["fail_reasons"] == ["no_person"]
+    assert evaluate(profile_db(_db(tmp_path, "shop", SHOP)), {**CFG, "require_person": True})["pass"]
+
 def test_evaluate_reports_every_failed_rule(tmp_path):
     p = profile_db(_db(tmp_path, "tiny", """
         CREATE TABLE a (id INTEGER PRIMARY KEY); INSERT INTO a VALUES (1);"""))
