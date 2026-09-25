@@ -74,5 +74,5 @@
 ## 数据来源
 
 - 库级统计 dump、主题标签：`docs/benchmark_db_catalog.xlsx`（未进 git，由 scratchpad 脚本生成）
-- 原始库文件目前在 `/tmp/claude-1000/...` 的 scratchpad 里（BIRD train/dev、Spider 1.0、Spider2-lite 本地 SQLite、SynSQL），不是持久位置
+- 原始库文件和问题文件：`~/Documents/Isa/text2sql_bench/`（BIRD train/dev、Spider 1.0、Spider2-lite 本地 SQLite + jsonl、SynSQL；目录说明见其中的 README.md）
 - DySQL 13 个库明细：`docs/dysql_db_info.md`

@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """Apply the data-gen DB filters (docs/2026-09-24-data-gen-db-selection.md) to candidate SQLite DBs.
-Usage: conda run -n dysql python scripts/select_dbs.py \
-         --source bird='/data/bird/*/*/*.sqlite' --source spider1='...' ... \
-         --out results/db_select_all.csv --candidates ../docs/data_gen/candidate_dbs.csv
+Usage (data layout: ~/Documents/Isa/text2sql_bench/README.md):
+  T=~/Documents/Isa/text2sql_bench
+  conda run -n dysql python scripts/select_dbs.py \
+    --source "bird=$T/bird/train/train_databases/*/*.sqlite" --source "bird=$T/bird/dev/dev_databases/*/*.sqlite" \
+    --source "spider2=$T/spider2_lite/sqlite/*.sqlite" --source "spider1=$T/spider1/test_database/*/*.sqlite" \
+    --source "synsql=$T/synsql/databases/*/*.sqlite" \
+    --out results/db_select/db_select_all.csv --candidates ../docs/data_gen/candidate_dbs.csv
 Source names used for leak lists and dedup order: bird, spider2, spider1, synsql."""
 import argparse, csv, glob, os, sys
 from collections import Counter
