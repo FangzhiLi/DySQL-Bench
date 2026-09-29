@@ -13,6 +13,10 @@ def get_env(
     task_index: Optional[int] = None,
     thread_id: int = None
 ) -> Env:
+    if env_name.startswith("gen:"):
+        from dysql_bench.envs.gen import GenEnv
+        return GenEnv(env_name[4:], user_strategy=user_strategy, user_model=user_model, user_model_api=user_model_api,
+                      task_split=task_split, task_index=task_index, thread_id=thread_id)
     if env_name == "retail":
         from dysql_bench.envs.retail import MockRetailDomainSQLEnv
         return MockRetailDomainSQLEnv(

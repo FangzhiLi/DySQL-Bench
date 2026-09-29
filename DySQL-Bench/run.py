@@ -10,7 +10,8 @@ def parse_args() -> RunConfig:
     parser = argparse.ArgumentParser()
     parser.add_argument("--num-trials", type=int, default=1)
     parser.add_argument(
-        "--env", type=str, choices=["retail", "airline", "eu_soccer", "music", "bowling", "entertainment", "pagila", "chinook", "car", "cookbook", "disney", "human_resources", "ice_hockey", "law_episode", "retail_world", "social_media"], default="retail"
+        "--env", type=str, default="retail",
+        help="one of the 13 DySQL envs, or gen:<db> for a generated task set (data/taskgen/manifest.json)"
     )
     parser.add_argument(
         "--model",
