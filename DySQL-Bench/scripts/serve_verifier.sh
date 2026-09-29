@@ -2,7 +2,7 @@
 # scripts/serve_verifier.sh -- vLLM server for the task-verification model (spec §3). Same image and flags as serve_agent.sh.
 #   MODEL        default nvidia/Qwen3.8-27B-NVFP4      SERVED_NAME default qwen3.8-27b-nvfp4 (must match .env TASKGEN_VERIFY_MODEL)
 #   PORT         default 8003                          CONTAINER   default dysql-verifier
-#   MAX_LEN      default 32768                         MAX_SEQS    default 16
+#   MAX_LEN      default 32768                         MAX_SEQS    default 32
 #   GPU_UTIL     default 0.30 (NVFP4 weights ~15 GB; raise if the profiler refuses)
 #   IMAGE        default vllm/vllm-openai:v0.30.0-aarch64 (cu130 build; the eval image cu130-nightly, vLLM 0.19, cannot load
 #                NVIDIA's NVFP4 checkpoint: its quantized lm_head needs a newer vLLM)
@@ -10,7 +10,7 @@
 set -euo pipefail
 MODEL="${MODEL:-nvidia/Qwen3.8-27B-NVFP4}"; SERVED_NAME="${SERVED_NAME:-qwen3.8-27b-nvfp4}"
 PORT="${PORT:-8003}"; CONTAINER="${CONTAINER:-dysql-verifier}"
-IMAGE="${IMAGE:-vllm/vllm-openai:v0.30.0-aarch64}"; MAX_LEN="${MAX_LEN:-32768}"; MAX_SEQS="${MAX_SEQS:-16}"; GPU_UTIL="${GPU_UTIL:-0.30}"
+IMAGE="${IMAGE:-vllm/vllm-openai:v0.30.0-aarch64}"; MAX_LEN="${MAX_LEN:-32768}"; MAX_SEQS="${MAX_SEQS:-32}"; GPU_UTIL="${GPU_UTIL:-0.30}"
 CMD=(docker run -d --name "$CONTAINER" --restart unless-stopped
   --gpus all --ipc host --shm-size 64gb -p "$PORT:$PORT"
   -v "$HOME/.cache/huggingface:/root/.cache/huggingface"

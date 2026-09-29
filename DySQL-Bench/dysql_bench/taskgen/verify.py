@@ -2,7 +2,8 @@
 """LLM verification by majority vote. The prompt is DySQL's verify_qa_voting_request.py with two added principles
 (parameter completeness, solvability without seeing the SQL) and the DDL of the database in the user message."""
 import json, os, re
-from dysql_bench.taskgen import io, llm
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dysql_bench.taskgen import io
 
 VERIFY_TEMPERATURE, VERIFY_MAX_TOKENS = 1.2, 16384
 WIKI = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "verify_wiki.md"), encoding="utf-8").read()
@@ -69,31 +70,42 @@ def _finish(rec, model):
     return rec
 
 
+def _vote_safe(client, msgs):
+    try:
+        return _vote(client, msgs)
+    except Exception as e:  # an API failure is a lost vote, recorded as unparsed (counts as no)
+        return {"verdict": "unparsed", "content": f"{type(e).__name__}: {e}", "reasoning_chars": 0, "usage": None}
+
+
 def run(cands, client, out_path, votes=3, workers=4, ddl_text=""):
+    """Every vote goes to one thread pool; a new candidate's record is appended as soon as its last vote returns,
+    so an interrupted run keeps all finished candidates. Top-ups of existing records are rewritten at the end."""
     existing = {r["id"]: r for r in io.read_jsonl(out_path)}
     todo = [(c, votes - len(existing.get(c["id"], {}).get("votes", []))) for c in cands]
     todo = [(c, n) for c, n in todo if n > 0]
-    jobs = [(c, i) for c, n in todo for i in range(n)]
-    results = llm.pmap(lambda j: _vote(client, build_messages(j[0], ddl_text)), jobs, workers)
-    new_votes = {}
-    for (c, _), r in zip(jobs, results):
-        if isinstance(r, Exception):
-            r = {"verdict": "unparsed", "content": f"{type(r).__name__}: {r}", "reasoning_chars": 0, "usage": None}
-        new_votes.setdefault(c["id"], []).append(r)
     model = getattr(client, "model", None)
-    updated, appended = {}, []
-    for c, _ in todo:
-        rec = existing.get(c["id"]) or {"id": c["id"], "votes": []}
-        rec = _finish({**rec, "votes": rec["votes"] + new_votes.get(c["id"], [])}, model)
-        if c["id"] in existing:
-            updated[c["id"]] = rec
-        else:
-            appended.append(rec)
+    pending = {c["id"]: n for c, n in todo}
+    new_votes, updated, passed = {}, {}, 0
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
+        futs = {ex.submit(_vote_safe, client, build_messages(c, ddl_text)): c["id"] for c, n in todo for _ in range(n)}
+        for f in as_completed(futs):
+            cid = futs[f]
+            new_votes.setdefault(cid, []).append(f.result())
+            pending[cid] -= 1
+            if pending[cid]:
+                continue
+            rec = existing.get(cid) or {"id": cid, "votes": []}
+            rec = _finish({**rec, "votes": rec["votes"] + new_votes.pop(cid)}, model)
+            passed += rec["pass"]
+            if cid in existing:
+                updated[cid] = rec
+            else:
+                io.append_jsonl(out_path, [rec])
     if updated:  # rewrite the file with the topped-up records in place
         rows = [updated.get(r["id"], r) for r in io.read_jsonl(out_path)]
         tmp = out_path + ".tmp"
-        if os.path.exists(tmp): os.remove(tmp)
-        io.append_jsonl(tmp, rows); os.replace(tmp, out_path)
-    io.append_jsonl(out_path, appended)
-    return {"verified": len(todo), "passed": sum(r["pass"] for r in list(updated.values()) + appended),
-            "skipped": len(cands) - len(todo)}
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        io.append_jsonl(tmp, rows)
+        os.replace(tmp, out_path)
+    return {"verified": len(todo), "passed": passed, "skipped": len(cands) - len(todo)}

@@ -52,3 +52,28 @@ def test_unparsed_counts_as_no(tmp_path):
     verify.run([CAND], FakeClient([YES, "garbage", "garbage"]), out, votes=3)
     r = io.read_jsonl(out)[0]
     assert r["yes"] == 1 and r["no"] == 2 and not r["pass"]
+
+
+class Crash(BaseException):
+    """Stands in for a kill: not an Exception, so pmap-style wrappers do not swallow it."""
+
+
+def test_finished_candidates_are_written_before_a_crash(tmp_path):
+    out = str(tmp_path / "v.jsonl")
+    c2 = {**CAND, "id": "c2"}
+
+    class Dies(FakeClient):
+        def chat(self, messages, **kw):
+            if self.calls == 3:
+                raise Crash()
+            return super().chat(messages, **kw)
+
+    try:
+        verify.run([CAND, c2], Dies([YES, YES, NO]), out, votes=3, workers=1)
+    except Crash:
+        pass
+    rows = io.read_jsonl(out)
+    assert [r["id"] for r in rows] == ["c1"] and rows[0]["yes"] == 2       # c1's three votes survived the crash
+    c = FakeClient([NO, NO, NO])
+    s = verify.run([CAND, c2], c, out, votes=3, workers=1)
+    assert s["skipped"] == 1 and c.calls == 3 and [r["id"] for r in io.read_jsonl(out)] == ["c1", "c2"]
