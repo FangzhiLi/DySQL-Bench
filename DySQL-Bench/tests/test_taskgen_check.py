@@ -1,0 +1,100 @@
+# tests/test_taskgen_check.py
+import sqlite3
+import pytest
+from tests._sqlite_fixtures import make_db, SHOP, rows
+from tests.test_taskgen_trees import SHOP2, FKS, CUSTOMER
+from dysql_bench.taskgen import check
+
+STAFF_ANCHOR = {"table": "staff", "key": "staff_id", "kind": "person_named", "rows": 5, "names": ["name"],
+                "down": [], "up": [], "update_targets": ["staff"]}
+
+
+@pytest.fixture
+def db(tmp_path):
+    path = make_db(tmp_path, "shop2", SHOP2)
+    return {"source": "test", "db": "shop2", "path": path, "anchors": [CUSTOMER, STAFF_ANCHOR], "fks": FKS}
+
+
+def cand(instruction, sqls, task_type="1_self", key_value=5):
+    return {"id": "t", "anchor_table": "customers", "anchor_key": "customer_id", "key_value": key_value,
+            "plan": {"task_type": task_type}, "instruction": instruction, "actions": [{"sql": s} for s in sqls]}
+
+
+AUTH = "SELECT * FROM customers WHERE first_name = 'a5' AND last_name = 'b5'"
+
+
+def test_good_task_passes_with_labels_template_and_difficulty(db):
+    r = check.run_check(db, cand("I am a5 b5 (customer 5). Set the qty of my order 5 to 3.",
+                                 [AUTH, "UPDATE orders SET qty = 3 WHERE order_id = 5 AND customer_id = 5"]))
+    assert r["ok"] and r["reasons"] == []
+    assert r["writes"] == [{"op": "UPDATE", "table": "orders", "rows": 1, "label": "own"}]
+    assert r["task_type"] == "1_self" and r["template"] == "1_self|UPDATE orders"
+    assert r["difficulty"] == {"score": 0, "level": "easy", "features": {"multi_write": False, "multi_table": False,
+                                                                          "subquery": False, "archive": False, "public_or_other": False}}
+
+
+def test_literal_missing_fails_but_anchor_values_are_allowed(db):
+    r = check.run_check(db, cand("I am a5 b5. Set the qty of my order 5 to 3.",
+                                 [AUTH, "UPDATE orders SET qty = 4 WHERE order_id = 5 AND customer_id = 5"]))
+    assert not r["ok"] and r["reasons"] == ["literal_missing: '4' in UPDATE orders"]
+    r = check.run_check(db, cand("I am a5 b5. Set the qty of order 5 to 3.",   # customer_id 5 not in the text: it's the anchor key
+                                 ["UPDATE orders SET qty = 3 WHERE order_id = 5 AND customer_id = 5"]))
+    assert r["ok"]
+
+
+def test_literal_quotes_unicode_numbers(db):
+    ins = "I'm a5 b5. Rename product 5 to O'Brien Café and set its price to 3.50."
+    r = check.run_check(db, cand(ins, ["UPDATE products SET name = 'O''Brien Café', price = 3.5 WHERE product_id = 5"]))
+    assert r["ok"], r["reasons"]
+
+
+def test_noop_bulk_error_and_no_write(db):
+    assert check.run_check(db, cand("set qty to 1 on order 999", ["UPDATE orders SET qty = 1 WHERE order_id = 999"]))["reasons"] == ["noop_write: UPDATE orders"]
+    assert check.run_check(db, cand("qty 1", ["UPDATE orders SET qty = 1"]))["reasons"][0].startswith("bulk: 100 rows in UPDATE orders")
+    assert check.run_check(db, cand("x", ["UPDATE nope SET a = 1"]))["reasons"][0].startswith("sql_error:")
+    assert check.run_check(db, cand("x", [AUTH]))["reasons"] == ["no_write"]
+    assert check.run_check(db, {**cand("x", [AUTH]), "instruction": None})["reasons"] == ["no_instruction"]
+
+
+def test_out_of_scope_table(db):
+    r = check.run_check(db, cand("I am a5 b5. Rename staff 2 to Zed.", ["UPDATE staff SET name = 'Zed' WHERE staff_id = 2"]))
+    assert r["reasons"] == ["out_of_scope: staff"]
+
+
+def test_multi_statement_action_is_split(db):
+    r = check.run_check(db, cand("I am a5 b5. Set qty of order 5 to 3 and delete order 65.",
+                                 ["UPDATE orders SET qty = 3 WHERE order_id = 5; DELETE FROM orders WHERE order_id = 65;"]))
+    assert r["ok"] and [w["op"] for w in r["writes"]] == ["UPDATE", "DELETE"] and r["template"] == "1_self|DELETE orders+UPDATE orders"
+    assert r["difficulty"]["features"]["multi_write"] and r["difficulty"]["level"] == "medium"
+
+
+def test_types_public_other_and_proxy(db):
+    r = check.run_check(db, cand("I am a5 b5. Set price of product 5 to 2.0 and qty of order 5 to 3.",
+                                 ["UPDATE products SET price = 2.0 WHERE product_id = 5", "UPDATE orders SET qty = 3 WHERE order_id = 5"]))
+    assert r["task_type"] == "2_self_and_public" and r["difficulty"]["features"]["public_or_other"] and r["difficulty"]["level"] == "hard"
+    r = check.run_check(db, cand("I am a5 b5. Set qty of order 9 to 3.", ["UPDATE orders SET qty = 3 WHERE order_id = 9"]))
+    assert r["task_type"] == "4_other_person" and r["writes"][0]["label"] == "other"
+    r = check.run_check(db, cand("I am Pat, an analyst. Set qty of order 5 to 3.", ["UPDATE orders SET qty = 3 WHERE order_id = 5"], task_type="5_proxy"))
+    assert r["task_type"] == "5_proxy" and r["writes"][0]["label"] == "person_obj"
+
+
+def test_subquery_and_archive_features(db):
+    r = check.run_check(db, cand("I am a5 b5. Set qty of my order 5 to 3.",
+                                 ["UPDATE orders SET qty = 3 WHERE order_id = 5 AND customer_id = (SELECT customer_id FROM customers WHERE first_name = 'a5' AND last_name = 'b5')"]))
+    assert r["ok"] and r["difficulty"]["features"]["subquery"]
+    r = check.run_check(db, cand("I am a5 b5. Archive order item 5 as a note copy then delete it.",
+                                 ["INSERT INTO order_items (order_id, note) SELECT order_id, note FROM order_items WHERE item_id = 5",
+                                  "DELETE FROM order_items WHERE item_id = 5"]))
+    assert r["ok"] and r["difficulty"]["features"]["archive"]
+
+
+def test_source_db_is_untouched(db):
+    check.run_check(db, cand("I am a5 b5. Set qty of my order 5 to 3.", ["UPDATE orders SET qty = 3 WHERE order_id = 5"]))
+    c = sqlite3.connect(db["path"])
+    assert c.execute("SELECT qty FROM orders WHERE order_id = 5").fetchone()[0] == 1
+
+
+def test_zero_row_insert_select_counts_as_no_write(db):
+    r = check.run_check(db, cand("I am a5 b5. Copy order 999 notes.",
+                                 ["INSERT INTO order_items (order_id, note) SELECT order_id, note FROM order_items WHERE item_id = 999"]))
+    assert r["reasons"] == ["no_write"]
