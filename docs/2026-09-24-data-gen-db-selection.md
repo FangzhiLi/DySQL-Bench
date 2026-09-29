@@ -160,7 +160,7 @@ DySQL 的任务都是"围绕某个锚点行，修改它范围内的数据"。锚
      - `down`：子表，写入目标。
      - `up`：父表，背景信息和公共数据，对应 DySQL 数据池里的产品详情、负责员工。
      - `update_targets`：范围内能 UPDATE 的表。
-   - 2026-09-28 起 JSON 的顶层是 `{"source:db": {source, db, path, anchors, fks}}`。`fks` 是单列有效外键的列对 `(table, col, ref_table, ref_col, hit, source)`，建树按它 join。
+   - 2026-09-28 起 JSON 的顶层是 `{"source:db": {source, db, path, anchors, fks}}`。`fks` 是单列有效外键的列对 `(table, col, ref_table, ref_col, hit, source)`，建树按它 join；`fks_composite` 是多列有效外键 `(table, cols, ref_table, ref_cols, hit, source)`，只参与 scope 计算（professional_basketball 的 teams、college_2 的 section 经它们进入 scope），建树不 join。
    - 建树脚本另开计划。
 
 6. **待用户确认：只有实体锚点的 22 个库的锚点选择。**

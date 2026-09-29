@@ -300,6 +300,9 @@ def evaluate(p, cfg, extra_fks=()):
             "fks_usable": [{"table": f["table"], "col": f["cols"][0], "ref_table": f["ref_table"],
                             "ref_col": f["ref_cols"][0], "hit": f["hit"], "source": f["source"]}
                            for f in usable if len(f["cols"]) == 1 and f["ref_cols"] and f["ref_cols"][0]],
+            "fks_composite": [{"table": f["table"], "cols": f["cols"], "ref_table": f["ref_table"],
+                               "ref_cols": f["ref_cols"], "hit": f["hit"], "source": f["source"]}
+                              for f in usable if len(f["cols"]) > 1],
             "update_targets": list(targets), "targets_no_key": [t for t in targets if not keyed[t]],
             "composite_key_tables": [t["name"] for t in T if t["composite_key"]],
             "long_text_cols": [f"{t['name']}.{c}" for t in T for c, s in t["stats"].items()

@@ -232,7 +232,8 @@
     "hit": 1.0,
     "source": "name"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:airline": {
   "source": "bird",
@@ -305,7 +306,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:beer_factory": {
   "source": "bird",
@@ -475,7 +477,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:book_publishing_company": {
   "source": "bird",
@@ -708,7 +711,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:books": {
   "source": "bird",
@@ -1080,7 +1084,8 @@
     "hit": 1.0,
     "source": "name"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:car_retails": {
   "source": "bird",
@@ -1285,7 +1290,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:chicago_crime": {
   "source": "bird",
@@ -1477,7 +1483,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:citeseer": {
   "source": "bird",
@@ -1527,7 +1534,8 @@
     "hit": 0.999,
     "source": "value"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:college_completion": {
   "source": "bird",
@@ -1589,7 +1597,8 @@
     "hit": 0.981,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:computer_student": {
   "source": "bird",
@@ -1657,7 +1666,8 @@
     "hit": 1.0,
     "source": "name"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:disney": {
   "source": "bird",
@@ -1726,7 +1736,8 @@
     "hit": 0.685,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:food_inspection": {
   "source": "bird",
@@ -1771,7 +1782,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:food_inspection_2": {
   "source": "bird",
@@ -1920,7 +1932,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:genes": {
   "source": "bird",
@@ -1970,7 +1983,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:legislator": {
   "source": "bird",
@@ -2043,7 +2057,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:mental_health_survey": {
   "source": "bird",
@@ -2106,7 +2121,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:menu": {
   "source": "bird",
@@ -2203,7 +2219,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:movie": {
   "source": "bird",
@@ -2268,7 +2285,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:movielens": {
   "source": "bird",
@@ -2405,7 +2423,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:movies_4": {
   "source": "bird",
@@ -2740,7 +2759,8 @@
     "hit": 0.973,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:olympics": {
   "source": "bird",
@@ -2997,7 +3017,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:professional_basketball": {
   "source": "bird",
@@ -3087,6 +3108,92 @@
     "ref_col": "playerID",
     "hit": 0.998,
     "source": "name"
+   }
+  ],
+  "fks_composite": [
+   {
+    "table": "coaches",
+    "cols": [
+     "tmID",
+     "year"
+    ],
+    "ref_table": "teams",
+    "ref_cols": [
+     "tmID",
+     "year"
+    ],
+    "hit": 1.0,
+    "source": "declared"
+   },
+   {
+    "table": "draft",
+    "cols": [
+     "tmID",
+     "draftYear"
+    ],
+    "ref_table": "teams",
+    "ref_cols": [
+     "tmID",
+     "year"
+    ],
+    "hit": 1.0,
+    "source": "declared"
+   },
+   {
+    "table": "awards_coaches",
+    "cols": [
+     "coachID",
+     "year"
+    ],
+    "ref_table": "coaches",
+    "ref_cols": [
+     "coachID",
+     "year"
+    ],
+    "hit": 1.0,
+    "source": "declared"
+   },
+   {
+    "table": "players_teams",
+    "cols": [
+     "tmID",
+     "year"
+    ],
+    "ref_table": "teams",
+    "ref_cols": [
+     "tmID",
+     "year"
+    ],
+    "hit": 1.0,
+    "source": "declared"
+   },
+   {
+    "table": "series_post",
+    "cols": [
+     "tmIDLoser",
+     "year"
+    ],
+    "ref_table": "teams",
+    "ref_cols": [
+     "tmID",
+     "year"
+    ],
+    "hit": 1.0,
+    "source": "declared"
+   },
+   {
+    "table": "series_post",
+    "cols": [
+     "tmIDWinner",
+     "year"
+    ],
+    "ref_table": "teams",
+    "ref_cols": [
+     "tmID",
+     "year"
+    ],
+    "hit": 1.0,
+    "source": "declared"
    }
   ]
  },
@@ -3379,7 +3486,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:regional_sales": {
   "source": "bird",
@@ -3552,7 +3660,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:restaurant": {
   "source": "bird",
@@ -3622,7 +3731,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:retail_complains": {
   "source": "bird",
@@ -3739,7 +3849,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:shakespeare": {
   "source": "bird",
@@ -3838,7 +3949,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:shipping": {
   "source": "bird",
@@ -3974,7 +4086,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:shooting": {
   "source": "bird",
@@ -4016,7 +4129,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:social_media": {
   "source": "bird",
@@ -4077,7 +4191,8 @@
     "hit": 0.996,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:student_loan": {
   "source": "bird",
@@ -4186,7 +4301,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:synthea": {
   "source": "bird",
@@ -4389,7 +4505,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:university": {
   "source": "bird",
@@ -4508,7 +4625,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:video_games": {
   "source": "bird",
@@ -4717,7 +4835,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:california_schools": {
   "source": "bird",
@@ -4763,7 +4882,8 @@
     "hit": 0.907,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:card_games": {
   "source": "bird",
@@ -4873,7 +4993,8 @@
     "hit": 1.0,
     "source": "value"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:debit_card_specializing": {
   "source": "bird",
@@ -4986,7 +5107,8 @@
     "hit": 1.0,
     "source": "name"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:financial": {
   "source": "bird",
@@ -5154,7 +5276,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:student_club": {
   "source": "bird",
@@ -5356,7 +5479,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:superhero": {
   "source": "bird",
@@ -5625,7 +5749,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "bird:toxicology": {
   "source": "bird",
@@ -5735,7 +5860,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "spider2:AdventureWorks": {
   "source": "spider2",
@@ -6038,7 +6164,8 @@
     "hit": 1.0,
     "source": "value"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "spider2:Airlines": {
   "source": "spider2",
@@ -6120,7 +6247,8 @@
     "hit": 1.0,
     "source": "name"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "spider2:Brazilian_E_Commerce": {
   "source": "spider2",
@@ -6235,7 +6363,8 @@
     "hit": 1.0,
     "source": "name"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "spider2:IPL": {
   "source": "spider2",
@@ -6409,7 +6538,8 @@
     "hit": 0.99,
     "source": "extra"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "spider2:WWE": {
   "source": "spider2",
@@ -6710,7 +6840,8 @@
     "hit": 1.0,
     "source": "value"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "spider2:delivery_center": {
   "source": "spider2",
@@ -6885,7 +7016,8 @@
     "hit": 1.0,
     "source": "value"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "spider2:imdb_movies": {
   "source": "spider2",
@@ -6976,7 +7108,8 @@
     "hit": 1.0,
     "source": "name"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "spider2:school_scheduling": {
   "source": "spider2",
@@ -7397,7 +7530,8 @@
     "hit": 1.0,
     "source": "name"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "spider1:bike_1": {
   "source": "spider1",
@@ -7449,7 +7583,8 @@
     "hit": 1.0,
     "source": "value"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "spider1:college_2": {
   "source": "spider1",
@@ -7654,6 +7789,58 @@
     "hit": 1.0,
     "source": "declared"
    }
+  ],
+  "fks_composite": [
+   {
+    "table": "section",
+    "cols": [
+     "building",
+     "room_number"
+    ],
+    "ref_table": "classroom",
+    "ref_cols": [
+     "building",
+     "room_number"
+    ],
+    "hit": 1.0,
+    "source": "declared"
+   },
+   {
+    "table": "teaches",
+    "cols": [
+     "course_id",
+     "sec_id",
+     "semester",
+     "year"
+    ],
+    "ref_table": "section",
+    "ref_cols": [
+     "course_id",
+     "sec_id",
+     "semester",
+     "year"
+    ],
+    "hit": 1.0,
+    "source": "declared"
+   },
+   {
+    "table": "takes",
+    "cols": [
+     "course_id",
+     "sec_id",
+     "semester",
+     "year"
+    ],
+    "ref_table": "section",
+    "ref_cols": [
+     "course_id",
+     "sec_id",
+     "semester",
+     "year"
+    ],
+    "hit": 1.0,
+    "source": "declared"
+   }
   ]
  },
  "spider1:csu_1": {
@@ -7728,7 +7915,8 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "spider1:flight_4": {
   "source": "spider1",
@@ -7801,7 +7989,8 @@
     "hit": 0.991,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "spider1:hr_1": {
   "source": "spider1",
@@ -7989,7 +8178,8 @@
     "hit": 1.0,
     "source": "name"
    }
-  ]
+  ],
+  "fks_composite": []
  },
  "spider1:wine_1": {
   "source": "spider1",
@@ -8052,6 +8242,7 @@
     "hit": 1.0,
     "source": "declared"
    }
-  ]
+  ],
+  "fks_composite": []
  }
 }

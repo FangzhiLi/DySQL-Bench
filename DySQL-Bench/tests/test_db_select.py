@@ -333,3 +333,20 @@ def test_invalid_declared_fk_does_not_block_inference(tmp_path):
     got = {(f["table"], tuple(f["cols"]), f["source"], f["hit"]) for f in all_fks(p)}
     assert ("advisedBy", ("p_id", "p_id_dummy"), "declared", 0.0) in got
     assert ("advisedBy", ("p_id",), "name", 1.0) in got
+
+
+# --- task-gen plan Task 2 ruling: composite FKs go to their own list in the anchors JSON ---
+
+def test_evaluate_lists_usable_composite_fks_separately(tmp_path):
+    p = profile_db(_db(tmp_path, "league", """
+CREATE TABLE teams (tmID TEXT, year INTEGER, name TEXT, PRIMARY KEY (tmID, year));
+CREATE TABLE players (playerID INTEGER PRIMARY KEY, name TEXT);
+CREATE TABLE players_teams (id INTEGER PRIMARY KEY, playerID INTEGER REFERENCES players(playerID), tmID TEXT, year INTEGER,
+                            FOREIGN KEY (tmID, year) REFERENCES teams (tmID, year));
+""" + "".join(f"INSERT INTO teams VALUES ('T{i % 5}', {2000 + i // 5}, 'n{i}');" for i in range(50))
+    + "".join(f"INSERT INTO players VALUES ({i}, 'p{i}');" for i in range(60))
+    + "".join(f"INSERT INTO players_teams VALUES ({i}, {i % 60}, 'T{i % 5}', {2000 + (i % 50) // 5});" for i in range(200))))
+    r = evaluate(p, CFG)
+    assert [(f["table"], f["cols"], f["ref_table"], f["ref_cols"]) for f in r["fks_composite"]] == \
+           [("players_teams", ["tmID", "year"], "teams", ["tmID", "year"])]
+    assert all(f["table"] != "players_teams" or f["col"] == "playerID" for f in r["fks_usable"])

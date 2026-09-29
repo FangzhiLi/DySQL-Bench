@@ -103,7 +103,8 @@ def main():
     if a.anchors_json:
         with open(a.anchors_json, "w", encoding="utf-8") as f:
             json.dump({f"{r['source']}:{r['db']}": {"source": r["source"], "db": r["db"], "path": r["path"],
-                                                     "anchors": r["anchors"], "fks": r["fks_usable"]}
+                                                     "anchors": r["anchors"], "fks": r["fks_usable"],
+                                                     "fks_composite": r["fks_composite"]}
                        for r in keep}, f, ensure_ascii=False, indent=1)
     print(f"{'source':8s} {'total':>6s} {'pass':>5s} {'dup':>4s} {'keep':>5s}  top fail reasons")
     for s in dict.fromkeys(r["source"] for r in rows):

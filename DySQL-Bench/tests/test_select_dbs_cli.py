@@ -26,3 +26,4 @@ def test_cli_applies_fk_extra_and_writes_split_path_and_anchor_json(tmp_path):
     assert ("Matches", "champion", "Wrestlers", "id") in edges     # from --fk-extra
     assert ("Matches", "winner_id", "Wrestlers", "id") in edges    # inferred by value
     assert all(f["hit"] is None or f["hit"] >= 0.3 for f in rec["fks"])
+    assert rec["fks_composite"] == []
