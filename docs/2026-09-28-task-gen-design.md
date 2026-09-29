@@ -26,10 +26,10 @@ DySQL 放出的代码（`data_pipeline_shell/`）只有出题 prompt、LLM 投�
 
 ## 3. 模型与接口
 
-- **出题：** GLM-5.3，智谱 OpenAI 兼容接口。
-- **校验：** 本地 vLLM 部署 Qwen3.8-27B-FP8（31 GB，需下载），开 thinking，3 票，Yes ≥ 2 通过。选它的理由：GB10 上能跑的最强模型，和出题模型不同家族，本地不花钱。DeepSeek-R1 671B 在 GB10 上部署不了。
-  - 备选一：DeepSeek 官方 API，当 GPU 要留给训练或 27B 的判断和人工核对差距大时用。
-  - 备选二：Qwen3.6-35B-A3B 初筛 3 票，27B 只复核 2:1 的分歧样本和 10% 随机审计。当 27B 全量要跑三天以上时用。试点先量吞吐再决定。
+- **出题：** GLM-5.3，Z.ai Coding Plan 的 OpenAI 兼容 endpoint（`https://api.z.ai/api/coding/paas/v4`，2026-09-28 测通）。默认开 thinking，答案在 `content`，推理在 `reasoning_content`，客户端只解析 `content`。订阅制不按 token 计费，但有速率限制：并发保守，429 退避重试，并发数试点时探。
+- **校验：** 本地 vLLM，候选两个：Qwen3.8-27B-FP8（31 GB，需下载，GB10 上能跑的最强模型）和 Qwen3.6-35B-A3B（MoE，激活 3B，快 5–10 倍）。都开 thinking，多数决通过。和出题模型不同家族，本地不花钱。DeepSeek-R1 671B 在 GB10 上部署不了；Qwen3-32B-AWQ 这类旧稠密模型投 5 票的用时和 27B 投 3 票差不多，质量更低，不考虑。
+  - **试点对照：** 100 条候选两个模型各投 5 票，都和人工核对的 20 条比，同时算 3 票与 5 票的结论差异率和单票一致率。三种结果：一致率差不多就全量用 35B-A3B；35B-A3B 明显差就两层（35B-A3B 初筛，27B 复核 2:1 分歧样本和 10% 随机审计）；都不够好切 DeepSeek 官方 API。
+  - 全量票数按试点定：3 票和 5 票结论差异 < 5% 就用 3 票。票数是配置项 `TASKGEN_VERIFY_VOTES`。若单票噪声大，多出的票改用第二个 prompt（只问参数是否给全、不看库能不能做），不同角度的票比同一 prompt 重复投更有用。
 - **接口：** 沿用 repo 里的做法，用 `requests` 直接调 `/chat/completions`，带重试和线程池并发，记录 token 用量。出题和校验各一组环境变量：`TASKGEN_GEN_BASE_URL / API_KEY / MODEL`、`TASKGEN_VERIFY_BASE_URL / API_KEY / MODEL`，放在仓库根目录 `.env`（已在 `.gitignore`）。
 - **注意：** 校验模型是 Qwen 家族、策略模型也是 Qwen，不是问题。校验判断的是题目本身，不给策略模型的输出打分。
 
@@ -93,7 +93,7 @@ DySQL 放出的代码（`data_pipeline_shell/`）只有出题 prompt、LLM 投�
 
 | 模块 | 输入 | 输出 | 要点 |
 |---|---|---|---|
-| `trees` | sqlite + 锚点记录 | 每个锚点行一棵树 JSONL | 锚点行；down 各表 ≤ 15 行（不足全取）；up 取被引用的父行加少量随机行。只保留 down 有数据的锚点行；person_named 没子表时以自己为写入目标 |
+| `trees` | sqlite + 锚点记录 + 外键边 | 每个锚点行一棵树 JSONL | 锚点行；down 各表 ≤ 15 行（不足全取），2 跳的表经中间表 join；up 取被引用的父行加少量随机行。只保留 down 有数据的锚点行；person_named 没子表时以自己为写入目标。读入后沿外键边重算 down / up，与 JSON 记录不一致就报错 |
 | `schema` | sqlite + BIRD 列说明 | DDL 文本、列说明、库的一句话英文描述 | 库描述用 LLM 生成一次，存 `docs/data_gen/db_descriptions.json`，人工过一遍。Spider 的库没有列说明，只给 DDL |
 | `prompt` | 树 + 类型 + 形状 + few-shot | SYSTEM / USER 消息 | SYSTEM 移植 DySQL 的，加任务类型段、形状段、第 5 类角色说明；USER 的数据块按锚点 / down / up 自动命名；few-shot 按类型选 |
 | `llm` | 消息 | 文本 + 用量 | requests，重试，线程池 |
@@ -105,6 +105,14 @@ DySQL 放出的代码（`data_pipeline_shell/`）只有出题 prompt、LLM 投�
 | `envs/gen` | manifest | `GenEnv` | `get_env("gen:<db>")`；DDL 从 sqlite 现生成；agent_policy 用 13 个 env 共用的那段模板加 DDL；DB 副本机制和现有 env 相同 |
 
 `tasks.jsonl` 每行：`user_id`、`instruction`、`actions`（和 `Task` 一致），加 `meta`：`db`、`source`、`anchor_table`、`anchor_key`、`task_type`（算出的）、`difficulty`（分和档）、`template`、`shape_requested`、`gen_model`、`verify_votes`（每票结论）。
+
+### 锚点文件要补外键边
+
+`candidate_anchors.json` 是树的骨架（根表、键、姓名列、down / up 表、可更新表），不是逐行的数据树，而且没有外键的列对。建树要按列 join，`down` 里 2 跳的表（books 的 customer → cust_order → order_line）要经中间表连。所以 `select_dbs.py` 给每个库加 `fks` 字段：有效外键的 (子表, 子列, 父表, 父列, 命中率)，来源就是 `db_select.all_fks`。JSON 自包含，建树只读 JSON 和 sqlite。
+
+### 运行方式
+
+每个步骤是独立子命令，读上一步的 JSONL、写自己的 JSONL，按 id 断点续跑。试点严格串行，校验结果回流到 prompt 后再进下一轮。全量按库分批、两个阶段流水：进程 A 出题加执行检查（网络 IO，几十路并发），进程 B 循环校验所有已通过检查但未投票的记录（GPU）。库按与试点库的相似度排序，前几个库校验通过率明显下跌就停下改 prompt。dedup 和 convert 要看一个库的全部候选，等该库校验完整再跑。
 
 ## 7. 执行检查
 
@@ -147,11 +155,13 @@ DySQL 没有这一步，是主要质量闸门，不花钱，放在 LLM 校验前
 
 ## 11. 成本
 
-每条候选出题约 5k token，校验 3 票约 9k。校验在本地不花钱。出题 1.3 万条候选约 6500 万 token，按 GLM-5.3 定价在百元人民币量级。智谱账户现在没有余额，需要充值。
+每条候选出题约 5k token，校验 3 票约 9k。校验在本地不花钱。出题走 Coding Plan 订阅，不按 token 计费，瓶颈是速率限制而不是钱。
 
 ## 12. 已定事项清单
 
-- 出题 GLM-5.3，校验本地 Qwen3.8-27B-FP8，接口都是 OpenAI 兼容，配置在 `.env`。
+- 出题 GLM-5.3（Z.ai Coding Plan endpoint），校验本地 Qwen3.8-27B-FP8 或 Qwen3.6-35B-A3B，试点对照后定；接口都是 OpenAI 兼容，配置在 `.env`。
+- `candidate_anchors.json` 加外键边；建树重算 scope 并与之核对。
+- 出题和校验按库流水，试点串行。
 - 通用 `GenEnv`，`get_env("gen:<db>")`，不给每个库建目录。
 - 第一阶段 23 个有名字的人物库；只有 ID 的 10 个库和实体库不在第一阶段。
 - 不定总数，按多样性封顶：每人 ≤ 2、每模板 ≤ 15、每库 ≤ 600。
