@@ -55,3 +55,17 @@ def test_generate_records_llm_exception(tmp_path):
     stats = generate.run(DB, ANCHOR, [TREE], OTHERS, Boom([]), out, random.Random(0))
     r = io.read_jsonl(out)[0]
     assert stats["errors"] == 1 and r["instruction"] is None and "HTTP 500" in r["error"]
+
+
+def test_retry_errors_replaces_api_failures_but_keeps_parse_failures(tmp_path):
+    class Boom(FakeClient):
+        def chat(self, messages, **kw): raise RuntimeError("HTTP 429")
+    out = str(tmp_path / "c.jsonl")
+    generate.run(DB, ANCHOR, [TREE], OTHERS, Boom([]), out, random.Random(0))
+    generate.run(DB, ANCHOR, [{**TREE, "key_value": 6}], OTHERS, FakeClient(["<answer>{oops</answer>"]), out, random.Random(0))
+    s = generate.run(DB, ANCHOR, [TREE, {**TREE, "key_value": 6}], OTHERS, FakeClient([GOOD]), out, random.Random(0), retry_errors=True)
+    recs = io.read_jsonl(out)
+    assert s["written"] == 1 and len(recs) == 2                           # the 429 record was replaced, not duplicated
+    by_id = {r["id"]: r for r in recs}
+    assert by_id["test:shop:customers:5:0"]["instruction"].startswith("I am a5 b5")
+    assert "ParseError" in by_id["test:shop:customers:6:0"]["error"]      # a model answer we could not parse is not retried

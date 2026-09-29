@@ -1,7 +1,7 @@
 # dysql_bench/taskgen/generate.py
 """Call the generation model once per (tree, plan) and write candidate tasks. Parse failures and API failures are
 recorded as candidates with instruction=None so the batch never stops and the failure rate is visible."""
-import json, re
+import json, os, re
 from dysql_bench.taskgen import io, llm, prompt
 
 GEN_TEMPERATURE, GEN_TOP_P, GEN_MAX_TOKENS = 1.0, 0.95, 16384
@@ -62,8 +62,24 @@ def make_candidate(db_rec, anchor, tree, plan, idx, resp, parsed, error):
             "raw": (resp or {}).get("content"), "error": error}
 
 
+def _drop_api_failures(out_path):
+    """Remove records whose model call failed (HTTP/network), so they are generated again. Parse failures stay:
+    the model answered, and asking again would just resample."""
+    rows = io.read_jsonl(out_path)
+    keep = [r for r in rows if not (r.get("instruction") is None and (r.get("error") or "").startswith(("LLMError", "RuntimeError", "ConnectionError")))]
+    if len(keep) != len(rows):
+        tmp = out_path + ".tmp"
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        io.append_jsonl(tmp, keep)
+        os.replace(tmp, out_path)
+    return {r["id"] for r in rows} - {r["id"] for r in keep}
+
+
 def run(db_rec, anchor, trees_list, others, client, out_path, rng, workers=8, per_tree=1, cfg=prompt.CFG,
-        db_description="", schema_text=""):
+        db_description="", schema_text="", retry_errors=False):
+    if retry_errors:
+        _drop_api_failures(out_path)
     done = io.done_ids(out_path)
     jobs = []
     for tree in trees_list:

@@ -60,12 +60,19 @@ def cmd_generate(a):
     client = llm.client_from_env("GEN")
     all_trees = io.read_jsonl(f"{out}/trees.jsonl")
     others = json.load(open(f"{out}/others.json"))
+    if a.retry_errors:   # their check results are stale once the candidates are regenerated
+        failed = {c["id"] for c in io.read_jsonl(f"{out}/candidates.jsonl")
+                  if c.get("instruction") is None and (c.get("error") or "").startswith(("LLMError", "RuntimeError", "ConnectionError"))}
+        chk = [r for r in io.read_jsonl(f"{out}/check.jsonl") if r["id"] not in failed]
+        if os.path.exists(f"{out}/check.jsonl"):
+            os.remove(f"{out}/check.jsonl")
+        io.append_jsonl(f"{out}/check.jsonl", chk)
     t0, total = time.time(), {"written": 0, "errors": 0, "skipped": 0}
     for anchor in io.person_anchors(rec):
         ts = [t for t in all_trees if t["anchor_table"] == anchor["table"]]
         s = generate.run(rec, anchor, ts, others.get(anchor["table"], []), client, f"{out}/candidates.jsonl",
                          random.Random(a.seed), workers=a.workers, per_tree=a.per_tree,
-                         db_description=desc, schema_text=schema.schema_block(path))
+                         db_description=desc, schema_text=schema.schema_block(path), retry_errors=a.retry_errors)
         total = {k: total[k] + s[k] for k in total}
     usage = sum((c.get("usage") or {}).get("total_tokens", 0) for c in io.read_jsonl(f"{out}/candidates.jsonl"))
     print(f"{total} in {time.time() - t0:.0f}s; total tokens so far {usage}")
@@ -141,7 +148,7 @@ def main():
         p.add_argument("--out-dir"); p.add_argument("--seed", type=int, default=0)
     p = sub.add_parser("trees"); common(p); p.add_argument("--n", type=int, default=50); p.add_argument("--anchor"); p.set_defaults(f=cmd_trees)
     p = sub.add_parser("describe"); common(p); p.set_defaults(f=cmd_describe)
-    p = sub.add_parser("generate"); common(p); p.add_argument("--workers", type=int, default=8); p.add_argument("--per-tree", type=int, default=1); p.set_defaults(f=cmd_generate)
+    p = sub.add_parser("generate"); common(p); p.add_argument("--workers", type=int, default=8); p.add_argument("--per-tree", type=int, default=1); p.add_argument("--retry-errors", action="store_true", help="regenerate candidates whose API call failed (e.g. 429)"); p.set_defaults(f=cmd_generate)
     p = sub.add_parser("check"); common(p); p.set_defaults(f=cmd_check)
     p = sub.add_parser("verify"); common(p); p.add_argument("--votes", type=int, default=3); p.add_argument("--workers", type=int, default=4); p.add_argument("--all-dbs", action="store_true"); p.set_defaults(f=cmd_verify)
     p = sub.add_parser("dedup"); common(p); p.add_argument("--per-person", type=int, default=2); p.add_argument("--per-template", type=int, default=15); p.add_argument("--per-db", type=int, default=600); p.set_defaults(f=cmd_dedup)
