@@ -78,8 +78,8 @@ def parse_args() -> RunConfig:
         "--task-split",
         type=str,
         default="test",
-        choices=["test"],
-        help="The split of tasks to run",
+        choices=["test", "train"],
+        help="The split of tasks to run (DySQL envs: test; gen:<db> envs ignore it)",
     )
     parser.add_argument("--start-index", type=int, default=0)
     parser.add_argument("--end-index", type=int, default=-1, help="Run all tasks if -1")

@@ -127,3 +127,37 @@ def test_literal_formats_dates_booleans_words_and_strftime():
     assert ok("%Y", "matches played in 1999", set())
     assert not ok("2024-06-20", "book it for June 19, 2024", set())
     assert not ok("52000", "start him at a good salary", set())
+
+
+# --- final review fixes ---
+
+def test_trailing_comment_statement_is_checked(db):
+    r = check.run_check(db, cand("I am a5 b5. Set qty of my order 5 to 3.", ["UPDATE orders SET qty = 3 WHERE order_id = 5 -- my order"]))
+    assert r["ok"] and r["writes"][0]["rows"] == 1
+
+
+def test_transaction_control_is_rejected_without_crashing(db):
+    r = check.run_check(db, cand("I am a5 b5. Set qty of my order 5 to 3.", ["BEGIN; UPDATE orders SET qty = 3 WHERE order_id = 5; COMMIT;"]))
+    assert not r["ok"] and any(x.startswith("txn_control") for x in r["reasons"])
+
+
+def test_run_check_safe_records_a_crash():
+    r = check.run_check_safe({"anchors": []}, {"id": "x", "instruction": "i", "actions": [{"sql": "UPDATE a SET b = 1"}], "anchor_table": "t"})
+    assert r["id"] == "x" and not r["ok"] and r["reasons"][0].startswith("crash:")
+
+
+def test_write_after_leading_comment_or_cte_is_a_write(db):
+    r = check.run_check(db, cand("I am a5 b5. Set qty of my order 5 to 3.", ["/* fix */ UPDATE orders SET qty = 3 WHERE order_id = 5"]))
+    assert r["ok"] and r["writes"][0]["table"] == "orders"
+    r = check.run_check(db, cand("I am a5 b5. Set qty of my order 5 to 3.",
+                                 ["WITH x AS (SELECT 5 AS id) UPDATE orders SET qty = 3 WHERE order_id IN (SELECT id FROM x)"]))
+    assert r["ok"] and r["writes"] == [{"op": "UPDATE", "table": "orders", "rows": 1, "label": "own"}]
+
+
+def test_insert_values_with_subquery_is_not_archive(db):
+    r = check.run_check(db, cand("I am a5 b5. Add a note to order 5 copying item 5's note.",
+                                 ["INSERT INTO order_items (order_id, note) VALUES (5, (SELECT note FROM order_items WHERE item_id = 5))"]))
+    assert r["ok"] and not r["difficulty"]["features"]["archive"]
+    r = check.run_check(db, cand("I am a5 b5. Copy order item 5, keep the original.",
+                                 ["INSERT INTO order_items (order_id, note) SELECT order_id, note FROM order_items WHERE item_id = 5"]))
+    assert not r["difficulty"]["features"]["archive"]     # nothing changed in the source afterwards

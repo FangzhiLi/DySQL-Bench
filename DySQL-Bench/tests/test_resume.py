@@ -83,3 +83,13 @@ def test_agent_failures_recorded_as_error_are_not_rerun():
         assert reclassify_error(rows[1]) == "length_no_content"
         assert reclassify_error(rows[2]) is None
         assert [r.task_id for r in load_prior(p)] == [1, 2]     # only the infra error (3) is dropped for re-run
+
+
+def test_check_config_accepts_generated_envs():
+    from types import SimpleNamespace
+    from dysql_bench.run import check_config
+    check_config(SimpleNamespace(env="gen:beer_factory", agent_strategy="sql", task_split="train", user_strategy="llm"))
+    check_config(SimpleNamespace(env="pagila", agent_strategy="sql", task_split="test", user_strategy="llm"))
+    import pytest
+    with pytest.raises(AssertionError):
+        check_config(SimpleNamespace(env="nope", agent_strategy="sql", task_split="test", user_strategy="llm"))

@@ -72,8 +72,9 @@ def _vote(client, msgs):
 
 
 def _finish(rec, model):
-    rec["yes"] = sum(v["verdict"] == "yes" for v in rec["votes"])
-    rec["no"] = len(rec["votes"]) - rec["yes"]           # unparsed counts as no
+    votes = _real(rec["votes"])
+    rec["yes"] = sum(v["verdict"] == "yes" for v in votes)
+    rec["no"] = len(votes) - rec["yes"]           # unparsed counts as no
     rec["pass"] = rec["yes"] > rec["no"]
     rec["verify_model"] = model
     return rec
@@ -82,15 +83,19 @@ def _finish(rec, model):
 def _vote_safe(client, msgs):
     try:
         return _vote(client, msgs)
-    except Exception as e:  # an API failure is a lost vote, recorded as unparsed (counts as no)
-        return {"verdict": "unparsed", "content": f"{type(e).__name__}: {e}", "reasoning_chars": 0, "usage": None}
+    except Exception as e:  # an API failure is not a vote: kept for the record, ignored by counts, retried on resume
+        return {"verdict": "error", "error": f"{type(e).__name__}: {e}", "content": "", "reasoning_chars": 0, "usage": None}
+
+
+def _real(votes):
+    return [v for v in votes if "error" not in v]
 
 
 def run(cands, client, out_path, votes=3, workers=4, ddl_text=""):
     """Every vote goes to one thread pool; a new candidate's record is appended as soon as its last vote returns,
     so an interrupted run keeps all finished candidates. Top-ups of existing records are rewritten at the end."""
     existing = {r["id"]: r for r in io.read_jsonl(out_path)}
-    todo = [(c, votes - len(existing.get(c["id"], {}).get("votes", []))) for c in cands]
+    todo = [(c, votes - len(_real(existing.get(c["id"], {}).get("votes", [])))) for c in cands]
     todo = [(c, n) for c, n in todo if n > 0]
     model = getattr(client, "model", None)
     pending = {c["id"]: n for c, n in todo}

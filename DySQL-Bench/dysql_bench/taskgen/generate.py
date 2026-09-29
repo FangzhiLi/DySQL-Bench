@@ -2,6 +2,7 @@
 """Call the generation model once per (tree, plan) and write candidate tasks. Parse failures and API failures are
 recorded as candidates with instruction=None so the batch never stops and the failure rate is visible."""
 import json, os, re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dysql_bench.taskgen import io, llm, prompt
 
 GEN_TEMPERATURE, GEN_TOP_P, GEN_MAX_TOKENS = 1.0, 0.95, 16384
@@ -38,10 +39,11 @@ def parse_answer(text):
             last = e; continue
         if not isinstance(obj, dict):
             continue
-        ins = (obj.get("instruction") or "").strip()
-        acts = obj.get("actions")
-        if not ins or not isinstance(acts, list) or not acts:
-            raise ParseError("missing/empty instruction or actions")
+        ins, acts = obj.get("instruction"), obj.get("actions")
+        if not isinstance(ins, str) or not ins.strip() or not isinstance(acts, list) or not acts:
+            last = "missing/empty instruction or actions"   # e.g. a {"sql": ...} quoted in the thought: keep looking
+            continue
+        ins = ins.strip()
         norm = []
         for a in acts:
             sql = a.get("sql") if isinstance(a, dict) else a
@@ -95,18 +97,28 @@ def run(db_rec, anchor, trees_list, others, client, out_path, rng, workers=8, pe
         msgs = prompt.build_messages(db_rec, anchor, tree, plan, db_description, schema_text, cfg)
         return client.chat(msgs, temperature=GEN_TEMPERATURE, max_tokens=GEN_MAX_TOKENS, top_p=GEN_TOP_P)
 
+    def safe(job):
+        try:
+            return one(job)
+        except Exception as e:
+            return e
+
     stats = {"written": 0, "errors": 0, "skipped": len(trees_list) * per_tree - len(jobs)}
-    for job, resp in zip(jobs, llm.pmap(one, jobs, workers)):
-        tree, idx, plan = job
-        parsed, error = None, None
-        if isinstance(resp, Exception):
-            error, resp = f"{type(resp).__name__}: {resp}", None
-        else:
-            try:
-                parsed = parse_answer(resp["content"])
-            except ParseError as e:
-                error = f"ParseError: {e}"
-        stats["errors"] += bool(error)
-        io.append_jsonl(out_path, [make_candidate(db_rec, anchor, tree, plan, idx, resp, parsed, error)])
-        stats["written"] += 1
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:   # each result is appended as soon as it returns
+        futs = {ex.submit(safe, job): job for job in jobs}
+        for f in as_completed(futs):
+            tree, idx, plan = futs[f]
+            resp, parsed, error = f.result(), None, None
+            if isinstance(resp, Exception):
+                error, resp = f"{type(resp).__name__}: {resp}", None
+            else:
+                try:
+                    parsed = parse_answer(resp["content"])
+                except ParseError as e:
+                    error = f"ParseError: {e}"
+                except Exception as e:
+                    error = f"{type(e).__name__}: {e}"
+            stats["errors"] += bool(error)
+            io.append_jsonl(out_path, [make_candidate(db_rec, anchor, tree, plan, idx, resp, parsed, error)])
+            stats["written"] += 1
     return stats

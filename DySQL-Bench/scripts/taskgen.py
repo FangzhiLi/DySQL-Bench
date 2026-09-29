@@ -27,14 +27,14 @@ def rec_and_dir(a):
 
 def cmd_trees(a):
     rec, out = rec_and_dir(a)
-    rng = random.Random(a.seed)
     c = trees.open_ro(io.resolve_db_path(rec["path"]))
     done = {(t["anchor_table"], str(t["key_value"])) for t in io.read_jsonl(f"{out}/trees.jsonl")}
     others = json.load(open(f"{out}/others.json")) if os.path.exists(f"{out}/others.json") else {}
     for anchor in io.person_anchors(rec):
         if a.anchor and anchor["table"] != a.anchor:
             continue
-        trees.check_scope(anchor, rec["fks"])
+        trees.check_scope(anchor, rec["fks"], rec.get("fks_composite", ()))
+        rng = random.Random(f"{a.seed}:{anchor['table']}")   # per anchor, so a rerun reproduces the same sample
         kvs = trees.anchor_key_values(c, anchor, rec["fks"], rng, a.n + 20)
         built = [t for kv in kvs[:a.n] if (anchor["table"], str(kv)) not in done
                  and (t := trees.build_tree(c, anchor, rec["fks"], kv, rng))]
@@ -82,9 +82,12 @@ def cmd_check(a):
     rec, out = rec_and_dir(a)
     done = io.done_ids(f"{out}/check.jsonl")
     todo = [c for c in io.read_jsonl(f"{out}/candidates.jsonl") if c["id"] not in done]
-    res = [check.run_check(rec, c) for c in todo]
-    io.append_jsonl(f"{out}/check.jsonl", res)
-    print(f"checked {len(res)}, passed {sum(r['ok'] for r in res)}")
+    n = ok = 0
+    for c in todo:   # one line per candidate: a crash or a kill keeps everything checked so far
+        r = check.run_check_safe(rec, c)
+        io.append_jsonl(f"{out}/check.jsonl", [r])
+        n += 1; ok += r["ok"]
+    print(f"checked {n}, passed {ok}")
 
 
 def cmd_verify(a):

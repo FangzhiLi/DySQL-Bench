@@ -137,11 +137,21 @@ def write_run_config(ckpt_path, config, server_probe=_probe_server):
         json.dump(payload, f, indent=2)
     return side
 
-def run(config: RunConfig) -> List[EnvRunResult]:
-    assert config.env in ["retail", "eu_soccer", "music", "bowling", "entertainment", "pagila", "chinook", "car", "cookbook", "human_resources", "ice_hockey", "law_episode", "retail_world"], f"Only retail, eu_soccer, music, bowling, entertainment, pagila, chinook, car, cookbook, human_resources, ice_hockey, law_episode, retail_world envs are supported"
+DYSQL_ENVS = ["retail", "eu_soccer", "music", "bowling", "entertainment", "pagila", "chinook", "car", "cookbook",
+              "human_resources", "ice_hockey", "law_episode", "retail_world"]
+
+
+def check_config(config) -> None:
+    """The 13 DySQL envs run their test split; generated task sets (gen:<db>, data/taskgen/manifest.json) any split."""
+    generated = config.env.startswith("gen:")
+    assert generated or config.env in DYSQL_ENVS, f"Only {', '.join(DYSQL_ENVS)} or gen:<db> envs are supported"
     assert config.agent_strategy in ["sql"], "Invalid agent strategy"  # TODO: add other agent strategies in the future
-    assert config.task_split in ["test"], "Invalid task split"   # TODO: add other task splits in the future
+    assert generated or config.task_split in ["test"], "Invalid task split"   # TODO: add other task splits in the future
     assert config.user_strategy in [item.value for item in UserStrategy], "Invalid user strategy"
+
+
+def run(config: RunConfig) -> List[EnvRunResult]:
+    check_config(config)
 
     random.seed(config.seed)
     time_str = datetime.now().strftime("%m%d%H%M%S")

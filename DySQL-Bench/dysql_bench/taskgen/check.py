@@ -11,19 +11,48 @@ WRITE = re.compile(r"(?is)^\s*(insert|update|delete|replace)\b")
 TARGET = re.compile(r'(?is)^\s*(?:insert\s+(?:or\s+\w+\s+)?into|replace\s+into|update(?:\s+or\s+\w+)?|delete\s+from)\s+'
                     r'(?:"([^"]+)"|\[([^\]]+)\]|`([^`]+)`|([\w$]+))')
 SUBQ = re.compile(r"(?is)\(\s*select\b")
-INS_SEL = re.compile(r"(?is)^\s*insert\b.*?\bselect\b")
+TXN = re.compile(r"(?is)^\s*(begin|commit|end|rollback|savepoint|release)\b")
+_NAME = r'(?:"([^"]+)"|\[([^\]]+)\]|`([^`]+)`|([\w$]+))'
+# archive = INSERT whose source is a SELECT (not a subquery inside VALUES) ...
+ARCHIVE_SRC = re.compile(r"(?is)^\s*insert\b(?:(?!\bvalues\b).)*?\bselect\b.*?\bfrom\s+" + _NAME)
 
 
 def split_statements(sql):
-    return [s.strip().rstrip(";").strip() for s in sqlparse.split(sql or "") if s.strip().rstrip(";").strip()]
+    """Statements with comments removed (a trailing '-- note' would swallow the appended RETURNING *)."""
+    out = []
+    for s in sqlparse.split(sql or ""):
+        s = sqlparse.format(s, strip_comments=True).strip().rstrip(";").strip()
+        if s:
+            out.append(s)
+    return out
 
 
 def write_target(stmt):
-    m = TARGET.match(stmt)
+    """(op, table) of an INSERT/UPDATE/DELETE, also after a WITH clause; None for anything else."""
+    if WRITE.match(stmt):
+        m = TARGET.match(stmt)
+    elif re.match(r"(?is)^\s*with\b", stmt) and sqlparse.parse(stmt)[0].get_type() in ("INSERT", "UPDATE", "DELETE", "REPLACE"):
+        m = re.search(TARGET.pattern.replace("^\\s*", "\\b", 1), stmt)
+    else:
+        return None
     if not m:
         return None
-    op = stmt.split(None, 1)[0].upper()
+    op = re.match(r"(?is)\s*(\w+)", m.group(0)).group(1).upper()
     return ("INSERT" if op == "REPLACE" else op), next(g for g in m.groups() if g)
+
+
+def has_archive(stmts):
+    """INSERT ... SELECT ... FROM t followed by an UPDATE or DELETE of t (spec §5)."""
+    for i, st in enumerate(stmts):
+        m = ARCHIVE_SRC.match(st)
+        if not m:
+            continue
+        src = next(g for g in m.groups() if g).lower()
+        for later in stmts[i + 1:]:
+            wt = write_target(later)
+            if wt and wt[0] in ("UPDATE", "DELETE") and wt[1].lower() == src:
+                return True
+    return False
 
 
 def norm_literal(s):
@@ -138,7 +167,7 @@ def task_group(speaker_in_db, labels):
 
 def difficulty(writes, task_type, stmts):
     f = {"multi_write": len(writes) >= 2, "multi_table": len({w["table"] for w in writes}) >= 2,
-         "subquery": any(SUBQ.search(s) for s in stmts), "archive": any(INS_SEL.match(s) for s in stmts),
+         "subquery": any(SUBQ.search(s) for s in stmts), "archive": has_archive(stmts),
          "public_or_other": task_type in ("2_self_and_public", "4_other_person")}
     score = sum(f.values())
     return {"score": score, "level": "easy" if score == 0 else "medium" if score <= 2 else "hard", "features": f}
@@ -187,7 +216,9 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG):
     try:
         for a in cand["actions"]:
             for st in split_statements(a["sql"]):
-                wt = write_target(st) if WRITE.match(st) else None
+                if TXN.match(st):   # would commit or end the check's own transaction
+                    out["reasons"].append(f"txn_control: {st[:40]}"); continue
+                wt = write_target(st)
                 try:
                     if not wt:
                         db.execute(st).fetchall(); continue
@@ -232,3 +263,13 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG):
         out["difficulty"] = difficulty(out["writes"], out["task_type"], stmts)
     out["ok"] = not out["reasons"]
     return out
+
+
+def run_check_safe(db_rec, cand, **kw):
+    """run_check that never raises: an unexpected failure becomes a 'crash:' reason, so one odd candidate cannot
+    stop the check step for a whole database."""
+    try:
+        return run_check(db_rec, cand, **kw)
+    except Exception as e:
+        return {"id": cand.get("id"), "ok": False, "reasons": [f"crash: {type(e).__name__}: {e}"[:300]], "writes": [],
+                "task_type": None, "template": None, "difficulty": None}

@@ -83,3 +83,20 @@ def test_finished_candidates_are_written_before_a_crash(tmp_path):
 def test_short_verdict_line_is_accepted():
     assert verify.parse_verdict("... all fine.\n\nVerification: Yes") == "yes"
     assert verify.parse_verdict("Verification: **No**") == "no"
+
+
+def test_failed_votes_are_not_counted_and_are_retried(tmp_path):
+    class Flaky(FakeClient):
+        def chat(self, messages, **kw):
+            if self.calls == 1:
+                self.calls += 1
+                raise RuntimeError("HTTP 503")
+            return super().chat(messages, **kw)
+    out = str(tmp_path / "v.jsonl")
+    verify.run([CAND], Flaky([YES, YES]), out, votes=3, workers=1)
+    r = io.read_jsonl(out)[0]
+    assert r["yes"] == 2 and r["no"] == 0 and sum("error" in v for v in r["votes"]) == 1
+    c = FakeClient([NO])
+    verify.run([CAND], c, out, votes=3, workers=1)
+    r = io.read_jsonl(out)[0]
+    assert c.calls == 1 and r["yes"] == 2 and r["no"] == 1 and r["pass"]

@@ -4,6 +4,7 @@ from collections import Counter
 
 
 def _majority(votes):
+    votes = [v for v in votes if "error" not in v]
     y = sum(v["verdict"] == "yes" for v in votes)
     return y > len(votes) - y
 

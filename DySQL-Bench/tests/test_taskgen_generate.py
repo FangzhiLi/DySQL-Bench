@@ -69,3 +69,35 @@ def test_retry_errors_replaces_api_failures_but_keeps_parse_failures(tmp_path):
     by_id = {r["id"]: r for r in recs}
     assert by_id["test:shop:customers:5:0"]["instruction"].startswith("I am a5 b5")
     assert "ParseError" in by_id["test:shop:customers:6:0"]["error"]      # a model answer we could not parse is not retried
+
+
+class Crash(BaseException):
+    pass
+
+
+def test_generate_appends_each_result_as_it_finishes(tmp_path):
+    class Dies(FakeClient):
+        def chat(self, messages, **kw):
+            if self.calls == 1:
+                raise Crash()
+            return super().chat(messages, **kw)
+    out = str(tmp_path / "c.jsonl")
+    try:
+        generate.run(DB, ANCHOR, [TREE, {**TREE, "key_value": 6}], OTHERS, Dies([GOOD, GOOD]), out, random.Random(0), workers=1)
+    except Crash:
+        pass
+    assert [r["id"] for r in io.read_jsonl(out)] == ["test:shop:customers:5:0"]
+
+
+def test_parse_answer_rejects_non_string_instruction_and_skips_unrelated_objects():
+    with pytest.raises(generate.ParseError):
+        generate.parse_answer('<answer>{"instruction": ["a"], "actions": [{"sql": "UPDATE a SET b = 1"}]}</answer>')
+    text = 'thinking {"sql": "x"} then {"instruction": "i", "actions": [{"sql": "UPDATE a SET b = 1"}]}'
+    assert generate.parse_answer(text)["instruction"] == "i"
+
+
+def test_unexpected_parse_exception_is_recorded(tmp_path, monkeypatch):
+    monkeypatch.setattr(generate, "parse_answer", lambda t: (_ for _ in ()).throw(AttributeError("boom")))
+    out = str(tmp_path / "c.jsonl")
+    s = generate.run(DB, ANCHOR, [TREE], OTHERS, FakeClient([GOOD]), out, random.Random(0))
+    assert s["errors"] == 1 and "AttributeError" in io.read_jsonl(out)[0]["error"]
