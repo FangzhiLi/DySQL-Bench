@@ -1,36 +1,40 @@
 # dysql_bench/taskgen/verify.py
-"""LLM verification by majority vote. The prompt is DySQL's verify_qa_voting_request.py with two added principles
-(parameter completeness, solvability without seeing the SQL) and the DDL of the database in the user message."""
+"""LLM verification by majority vote. DySQL's verify prompt (verify_qa_voting_request.py) judged the gold SQL as an
+agent transcript against the agent policy, so a 27B verifier failed every pilot task for missing confirmation turns;
+this prompt judges only whether the SQL implements the request, and whether the request is complete and solvable."""
 import json, os, re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dysql_bench.taskgen import io
 
 VERIFY_TEMPERATURE, VERIFY_MAX_TOKENS = 1.2, 16384
-WIKI = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "verify_wiki.md"), encoding="utf-8").read()
 FINAL = "Verification: Is the answer correct (Yes/No)?"
 
-SYSTEM = """Please help me to verify whether the assistant has solved the user's problem based on the provided user and assistant interactions.
-The user has outlined specific requirements, and the assistant's response should address all of these needs.
-The output should indicate whether the assistant has fully addressed the user's request, with a detailed check of the Agent Policy and assistant's sql call validity, correctness of invocation.
+SYSTEM = """You are checking a training task for a database agent. The task has two parts: the user's request (what a
+customer or staff member will ask the agent for) and the ground-truth SQL statements that a correct agent must end up
+executing. The SQL list is the expected final database changes, not a conversation transcript: greetings,
+authentication chat, asking the user for confirmation and answering read-only questions all happen in the dialogue and
+are NOT expected in the SQL list. Do not fail the task for missing conversational steps.
 
-{domain_rules}
-
-You have six principles to do this.
-1. [Verification] The output should thoroughly verify whether the assistant's responses and tool calls have correctly addressed all of the user's requests step by step.
-2. [SQL Call Accuracy] The output should check whether the assistant used the appropriate sql calls, with correct invocation and parameters, to solve the user's task.
-3. [Consistency Check] The output should ensure that the data provided by the user is consistent throughout the interaction, without any discrepancies or hallucinations.
-4. [Correctness] The verification should confirm if all of the user's requirements have been fully addressed and that no crucial aspect of the problem was overlooked.
-5. [Completeness of parameters] Every value the SQL uses (ids, names, amounts, dates, new values) must be stated in the user's requirements, except values that identify the user's own record, which the assistant can look up after authentication.
-6. [Solvability] A person who can only read the user's requirements and query the database, without seeing these SQL calls, must be able to arrive at exactly the same database changes.
+Check these five things.
+1. [Correctness] Executed in order on the database whose schema is given, the SQL performs exactly the changes the
+   request asks for: right tables, right rows, right columns, right new values. Nothing requested is missing.
+2. [No extra changes] The SQL changes nothing the request did not ask for.
+3. [Completeness of parameters] Every value the SQL uses (ids, names, amounts, dates, new values) is stated in the
+   request, except values that identify the requester's own record (or the record the request is about), which the
+   agent can look up once it knows who or what is meant.
+4. [Solvability] A competent agent that can only read the request and query the database, without seeing these SQL
+   statements, would arrive at the same final database state. Ambiguous requests that allow several reasonable
+   end states fail this check.
+5. [Validity] The SQL is valid SQLite for the given schema.
 
 ## Response format
-The response should include reasoning process step by step, and ending with: "Verification: Is the answer correct (Yes/No)?" followed by "Yes" or "No".
+Reason step by step, then end with: "Verification: Is the answer correct (Yes/No)?" followed by "Yes" or "No".
 """
 
-USER = """Here is the user's requirements:
+USER = """Here is the user's request:
 {user_requirements}
 
-Here is the assistant's response (the SQL calls, in order):
+Here are the ground-truth SQL statements, in order:
 {action_outputs}
 
 Here is the database schema (DDL):
@@ -39,16 +43,21 @@ Here is the database schema (DDL):
 
 
 def build_messages(cand, ddl_text):
-    return [{"role": "system", "content": SYSTEM.format(domain_rules=WIKI)},
+    return [{"role": "system", "content": SYSTEM},
             {"role": "user", "content": USER.format(user_requirements=cand["instruction"],
                                                     action_outputs=json.dumps(cand["actions"], ensure_ascii=False, indent=1),
                                                     ddl=ddl_text)}]
 
 
 def parse_verdict(text):
-    if FINAL not in (text or ""):
+    text = text or ""
+    if FINAL in text:
+        tail = text.split(FINAL)[-1]
+    elif "Verification:" in text:            # the model sometimes drops the question: "Verification: Yes"
+        tail = text.split("Verification:")[-1]
+    else:
         return "unparsed"
-    tail = re.sub(r"[*_`\s]", "", text.split(FINAL)[-1]).lower()
+    tail = re.sub(r"[*_`\s]", "", tail).lower()
     if tail.startswith("yes"):
         return "yes"
     if tail.startswith("no"):

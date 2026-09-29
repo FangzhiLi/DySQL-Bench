@@ -22,7 +22,8 @@ def test_parse_verdict():
 
 def test_messages_contain_policy_requirements_actions_and_ddl():
     m = verify.build_messages(CAND, "CREATE TABLE orders (...)")
-    assert m[0]["role"] == "system" and "authenticate the user identity" in m[0]["content"]
+    assert m[0]["role"] == "system" and "not a conversation transcript" in m[0]["content"]
+    assert "explicit user confirmation" not in m[0]["content"]      # conversational policy steps cannot appear in a SQL list
     assert "[Completeness of parameters]" in m[0]["content"] and "[Solvability]" in m[0]["content"]
     assert CAND["instruction"] in m[1]["content"] and "UPDATE orders SET qty = 3" in m[1]["content"] and "CREATE TABLE orders" in m[1]["content"]
 
@@ -77,3 +78,8 @@ def test_finished_candidates_are_written_before_a_crash(tmp_path):
     c = FakeClient([NO, NO, NO])
     s = verify.run([CAND, c2], c, out, votes=3, workers=1)
     assert s["skipped"] == 1 and c.calls == 3 and [r["id"] for r in io.read_jsonl(out)] == ["c1", "c2"]
+
+
+def test_short_verdict_line_is_accepted():
+    assert verify.parse_verdict("... all fine.\n\nVerification: Yes") == "yes"
+    assert verify.parse_verdict("Verification: **No**") == "no"
