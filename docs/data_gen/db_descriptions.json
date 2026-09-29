@@ -1,0 +1,3 @@
+{
+ "bird:beer_factory": "This database tracks root beer retail activity, cataloging root beer brands along with their breweries, ingredients, packaging options, social media presence, and pricing. The only people in it are the customers, stored with their contact details, addresses, first purchase dates, and email subscription status. The main transactional tables record individual root beer items sold (by brand, container type, selling location, and purchase date), the sales transactions in which customers buy those items at a particular store location with a credit card and price, and customer reviews that pair a customer with a brand they rated in stars and commented on."
+}
