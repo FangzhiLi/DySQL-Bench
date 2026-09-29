@@ -27,7 +27,7 @@ DySQL 放出的代码（`data_pipeline_shell/`）只有出题 prompt、LLM 投�
 ## 3. 模型与接口
 
 - **出题：** GLM-5.3，Z.ai Coding Plan 的 OpenAI 兼容 endpoint（`https://api.z.ai/api/coding/paas/v4`，2026-09-28 测通）。默认开 thinking，答案在 `content`，推理在 `reasoning_content`，客户端只解析 `content`。订阅制不按 token 计费，但有速率限制：并发保守，429 退避重试，并发数试点时探。
-- **校验：** 本地 vLLM，候选两个：Qwen3.8-27B-FP8（31 GB，需下载，GB10 上能跑的最强模型）和 Qwen3.6-35B-A3B（MoE，激活 3B，快 5–10 倍）。都开 thinking，多数决通过。和出题模型不同家族，本地不花钱。DeepSeek-R1 671B 在 GB10 上部署不了；Qwen3-32B-AWQ 这类旧稠密模型投 5 票的用时和 27B 投 3 票差不多，质量更低，不考虑。
+- **校验：** 本地 vLLM，候选两个：Qwen3.8-27B 和 Qwen3.6-35B-A3B（MoE，激活 3B，快 5–10 倍）。27B 是官方 Qwen 里 GB10 能装下的最强模型（Qwen3.5-122B-A10B Int4 能装下但早两代、分数更低；Flash-Next 和更大的装不下）。27B 优先用 NVIDIA 官方的 NVFP4 量化版 `nvidia/Qwen3.8-27B-NVFP4`（约 15 GB，GB10 原生格式，比 FP8 快 1.7–2 倍，还能和用户模拟器并存），加载不了再退回官方 FP8（31 GB）。都开 thinking，多数决通过。和出题模型不同家族，本地不花钱。DeepSeek-R1 671B 在 GB10 上部署不了；Qwen3-32B-AWQ 这类旧稠密模型投 5 票的用时和 27B 投 3 票差不多，质量更低，不考虑。
   - **试点对照：** 100 条候选两个模型各投 5 票，都和人工核对的 20 条比，同时算 3 票与 5 票的结论差异率和单票一致率。三种结果：一致率差不多就全量用 35B-A3B；35B-A3B 明显差就两层（35B-A3B 初筛，27B 复核 2:1 分歧样本和 10% 随机审计）；都不够好切 DeepSeek 官方 API。
   - 全量票数按试点定：3 票和 5 票结论差异 < 5% 就用 3 票。票数是配置项 `TASKGEN_VERIFY_VOTES`。若单票噪声大，多出的票改用第二个 prompt（只问参数是否给全、不看库能不能做），不同角度的票比同一 prompt 重复投更有用。
 - **接口：** 沿用 repo 里的做法，用 `requests` 直接调 `/chat/completions`，带重试和线程池并发，记录 token 用量。出题和校验各一组环境变量：`TASKGEN_GEN_BASE_URL / API_KEY / MODEL`、`TASKGEN_VERIFY_BASE_URL / API_KEY / MODEL`，放在仓库根目录 `.env`（已在 `.gitignore`）。
@@ -159,7 +159,7 @@ DySQL 没有这一步，是主要质量闸门，不花钱，放在 LLM 校验前
 
 ## 12. 已定事项清单
 
-- 出题 GLM-5.3（Z.ai Coding Plan endpoint），校验本地 Qwen3.8-27B-FP8 或 Qwen3.6-35B-A3B，试点对照后定；接口都是 OpenAI 兼容，配置在 `.env`。
+- 出题 GLM-5.3（Z.ai Coding Plan endpoint），校验本地 Qwen3.8-27B（NVFP4 优先）或 Qwen3.6-35B-A3B，试点对照后定；接口都是 OpenAI 兼容，配置在 `.env`。
 - `candidate_anchors.json` 加外键边；建树重算 scope 并与之核对。
 - 出题和校验按库流水，试点串行。
 - 通用 `GenEnv`，`get_env("gen:<db>")`，不给每个库建目录。
