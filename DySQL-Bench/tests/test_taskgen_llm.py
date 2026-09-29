@@ -63,3 +63,9 @@ def test_client_from_env(monkeypatch):
     monkeypatch.setenv("TASKGEN_GEN_MODEL", "m")
     c = llm.client_from_env("GEN")
     assert c.base_url == "https://x/v4" and c.model == "m"
+
+
+def test_reasoning_under_either_key():
+    # GLM returns reasoning_content; vLLM >= 0.30 returns reasoning
+    body = {"choices": [{"message": {"content": "4", "reasoning": "add"}}], "usage": {}}
+    assert client([FakeResp(200, body)]).chat([{"role": "user", "content": "q"}])["reasoning"] == "add"

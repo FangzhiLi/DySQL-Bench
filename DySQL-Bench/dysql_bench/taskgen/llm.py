@@ -34,7 +34,7 @@ class ChatClient:
                 if r.status_code == 200:
                     body = r.json()
                     msg = body["choices"][0]["message"]
-                    return {"content": msg.get("content") or "", "reasoning": msg.get("reasoning_content") or "",
+                    return {"content": msg.get("content") or "", "reasoning": msg.get("reasoning_content") or msg.get("reasoning") or "",
                             "usage": body.get("usage") or {}, "model": body.get("model") or self.model}
                 last = f"HTTP {r.status_code}: {r.text[:300]}"
                 if r.status_code not in RETRY_STATUS:
