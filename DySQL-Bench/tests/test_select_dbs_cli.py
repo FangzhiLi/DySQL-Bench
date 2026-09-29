@@ -18,5 +18,11 @@ def test_cli_applies_fk_extra_and_writes_split_path_and_anchor_json(tmp_path):
     assert r["n_fks_inferred"] == "4"   # card_id by name, winner_id/loser_id by value, champion from --fk-extra
     anchors = json.load(open(anc))
     assert list(anchors) == ["spider2:wwe"]
-    w = next(a for a in anchors["spider2:wwe"] if a["table"] == "Wrestlers")
+    rec = anchors["spider2:wwe"]
+    assert rec["source"] == "spider2" and rec["db"] == "wwe" and rec["path"] == db
+    w = next(a for a in rec["anchors"] if a["table"] == "Wrestlers")
     assert w["kind"] == "person_named" and w["down"] == ["Matches"]
+    edges = {(f["table"], f["col"], f["ref_table"], f["ref_col"]) for f in rec["fks"]}
+    assert ("Matches", "champion", "Wrestlers", "id") in edges     # from --fk-extra
+    assert ("Matches", "winner_id", "Wrestlers", "id") in edges    # inferred by value
+    assert all(f["hit"] is None or f["hit"] >= 0.3 for f in rec["fks"])
