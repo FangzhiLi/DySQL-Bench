@@ -56,11 +56,6 @@ def test_noop_bulk_error_and_no_write(db):
     assert check.run_check(db, {**cand("x", [AUTH]), "instruction": None})["reasons"] == ["no_instruction"]
 
 
-def test_out_of_scope_table(db):
-    r = check.run_check(db, cand("I am a5 b5. Rename staff 2 to Zed.", ["UPDATE staff SET name = 'Zed' WHERE staff_id = 2"]))
-    assert r["reasons"] == ["out_of_scope: staff"]
-
-
 def test_multi_statement_action_is_split(db):
     r = check.run_check(db, cand("I am a5 b5. Set qty of order 5 to 3 and delete order 65.",
                                  ["UPDATE orders SET qty = 3 WHERE order_id = 5; DELETE FROM orders WHERE order_id = 65;"]))
@@ -98,3 +93,37 @@ def test_zero_row_insert_select_counts_as_no_write(db):
     r = check.run_check(db, cand("I am a5 b5. Copy order 999 notes.",
                                  ["INSERT INTO order_items (order_id, note) SELECT order_id, note FROM order_items WHERE item_id = 999"]))
     assert r["reasons"] == ["no_write"]
+
+
+def test_scope_is_the_union_of_the_databases_anchor_scopes(db):
+    # a customer editing a public table that only another anchor's scope reaches (DySQL: customers editing playlist_track)
+    r = check.run_check(db, cand("I am a5 b5. Rename staff 2 to Zed.", ["UPDATE staff SET name = 'Zed' WHERE staff_id = 2"]))
+    assert not any(x.startswith("out_of_scope") for x in r["reasons"])
+    no_staff = {**db, "anchors": [a for a in db["anchors"] if a["table"] != "staff"]}
+    r = check.run_check(no_staff, cand("I am a5 b5. Rename staff 2 to Zed.", ["UPDATE staff SET name = 'Zed' WHERE staff_id = 2"]))
+    assert r["reasons"] == ["out_of_scope: staff"]
+
+
+def test_zero_and_one_need_not_appear_in_the_instruction(db):
+    r = check.run_check(db, cand("I am a5 b5. Add product 7 to my order list as a new order 500.",
+                                 ["INSERT INTO orders (order_id, customer_id, product_id, qty) VALUES (500, 5, 7, 1)"]))
+    assert r["ok"], r["reasons"]
+
+
+def test_several_speaker_ids_count_as_own(db):
+    # calibration only: DySQL's classifier can match more than one person row (same-name customers)
+    c = {**cand("I am a5 b5. Set qty of order 9 to 3.", ["UPDATE orders SET qty = 3 WHERE order_id = 9"], key_value=None),
+         "speaker_ids": [["customers", "5"], ["customers", "9"]]}
+    r = check.run_check(db, c)
+    assert r["task_type"] == "1_self" and r["writes"][0]["label"] == "own"
+
+
+def test_literal_formats_dates_booleans_words_and_strftime():
+    ok = check.literal_ok
+    assert ok("2024-06-19", "book it for June 19, 2024 please", set())
+    assert ok("2024-06-19 19:00:00", "on 19 June 2024 at 19:00", set())
+    assert ok("true", "mark the credit as credited", set()) and ok("FALSE", "x", set())
+    assert ok("3", "my three most recent rentals", set())
+    assert ok("%Y", "matches played in 1999", set())
+    assert not ok("2024-06-20", "book it for June 19, 2024", set())
+    assert not ok("52000", "start him at a good salary", set())

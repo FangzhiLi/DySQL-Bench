@@ -49,12 +49,39 @@ def _num(s):
         return None
 
 
+IMPLIED = {"0", "1", "true", "false"}   # flags, counts and defaults nobody spells out (quantity 1, total 0)
+MONTHS = {m: i + 1 for i, m in enumerate(["january", "february", "march", "april", "may", "june", "july",
+                                           "august", "september", "october", "november", "december"])}
+MONTHS.update({m[:3]: i for m, i in list(MONTHS.items())})
+WORDS = {w: str(i) for i, w in enumerate(["zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
+                                          "nine", "ten", "eleven", "twelve"])}
+_MDY = re.compile(r"\b([a-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b")
+_DMY = re.compile(r"\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?([a-z]{3,9})\.?,?\s+(\d{4})\b")
+
+
+def text_forms(instruction):
+    """The normalized instruction plus ISO forms of its written dates and digits for small number words."""
+    text = norm_literal(instruction)
+    extra = []
+    for mo, d, y in _MDY.findall(text):
+        if mo in MONTHS:
+            extra.append(f"{y}-{MONTHS[mo]:02d}-{int(d):02d}")
+    for d, mo, y in _DMY.findall(text):
+        if mo in MONTHS:
+            extra.append(f"{y}-{MONTHS[mo]:02d}-{int(d):02d}")
+    extra += [WORDS[w] for w in re.findall(r"[a-z]+", text) if w in WORDS]
+    return text + " " + " ".join(extra)
+
+
 def literal_ok(lit, instruction, allowed):
     n = norm_literal(lit)
-    if not n or n in allowed:
+    if not n or n in allowed or n in IMPLIED or "%" in n:   # '%Y' etc. are strftime/LIKE patterns, not values
         return True
-    text = norm_literal(instruction)
+    text = text_forms(instruction)
     if n in text:
+        return True
+    m = re.match(r"^(\d{4}-\d{2}-\d{2})[ t]\d{2}:\d{2}(:\d{2})?(\.\d+)?$", n)   # datetime: the date part suffices
+    if m and m.group(1) in text:
         return True
     v = _num(lit)
     if v is not None:
@@ -131,13 +158,22 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG):
     if not cand.get("actions"):
         out["reasons"].append("no_actions"); return out
     anchor = anchor or next(a for a in db_rec["anchors"] if a["table"] == cand["anchor_table"])
-    scope = {anchor["table"], *anchor["down"], *anchor["up"]}
+    # DySQL's validated property (2432/2432 gold writes) is "in SOME anchor's scope", not the speaker's anchor:
+    # customers also edit public tables only another anchor reaches (chinook playlist_track)
+    scope = {t for a in db_rec["anchors"] for t in (a["table"], *a["down"], *a["up"])}
     speaker_in_db = (cand.get("plan") or {}).get("task_type", "1_self") != "5_proxy" if "plan" in cand else cand.get("speaker_in_db", True)
     db = _memory_copy(db_rec["path"])
     tracer = Tracer(db_rec, db)
     row = db.execute(f"SELECT * FROM {_q(anchor['table'])} WHERE {_q(anchor['key'])} = ?", (cand["key_value"],)).fetchone()
-    allowed = {norm_literal(v) for v in (row or ()) if v not in (None, "")}
-    anchor_id = (anchor["table"], str(cand["key_value"]))
+    # calibration candidates may name several speaker rows (DySQL's classifier matched same-name people)
+    speaker_ids = {tuple(x) for x in cand.get("speaker_ids") or [(anchor["table"], str(cand["key_value"]))]}
+    rows = [row] if row else []
+    for t, k in speaker_ids:
+        if (t, k) != (anchor["table"], str(cand["key_value"])):
+            key = next((a["key"] for a in db_rec["anchors"] if a["table"] == t), None)
+            if key:
+                rows += db.execute(f"SELECT * FROM {_q(t)} WHERE {_q(key)} = ?", (k,)).fetchall()
+    allowed = {norm_literal(v) for r in rows for v in r if v not in (None, "")}
     # capture pre-update FK/key values, like classify_dysql_tasks.py: 'move my order to product 9' is still 'own'
     db.execute("CREATE TEMP TABLE _old (tbl TEXT, j TEXT)")
     for t in scope:
@@ -178,7 +214,7 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG):
                     if op != "INSERT":
                         out["reasons"].append(f"noop_write: {op} {table}")
                 elif speaker_in_db:
-                    lab = "own" if anchor_id in owners else ("other" if owners else "public")
+                    lab = "own" if owners & speaker_ids else ("other" if owners else "public")
                 else:
                     lab = "person_obj" if owners else "public"
                 if len(rs) > cfg["MAX_ROWS_PER_STMT"]:
