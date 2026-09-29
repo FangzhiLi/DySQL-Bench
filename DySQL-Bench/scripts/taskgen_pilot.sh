@@ -3,7 +3,7 @@
 # Verifier must be up on :8003 (scripts/serve_verifier.sh); GLM key in ../.env.
 set -euo pipefail
 DB="${1:?usage: taskgen_pilot.sh <source:db> [n_trees] [votes]}"; N="${2:-100}"; VOTES="${3:-${TASKGEN_VERIFY_VOTES:-5}}"
-GEN_WORKERS="${GEN_WORKERS:-4}"; VERIFY_WORKERS="${VERIFY_WORKERS:-32}"   # GLM rate-limits (429) at 8; verifier serves 32 seqs
+GEN_WORKERS="${GEN_WORKERS:-5}"; VERIFY_WORKERS="${VERIFY_WORKERS:-32}"   # GLM plan allows 5 concurrent requests; verifier serves 32 seqs
 P=~/miniconda3/envs/dysql/bin/python
 cd "$(dirname "$0")/.."
 START=$(date +%s)
