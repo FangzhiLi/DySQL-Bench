@@ -6,7 +6,7 @@ Usage (from DySQL-Bench/), pilot on beer_factory:
   $P scripts/taskgen.py describe --db $DB
   $P scripts/taskgen.py generate --db $DB --workers 5
   $P scripts/taskgen.py check    --db $DB
-  $P scripts/taskgen.py verify   --db $DB --votes 5 --workers 4
+  $P scripts/taskgen.py verify   --db $DB --votes 3 --workers 3
   $P scripts/taskgen.py dedup    --db $DB
   $P scripts/taskgen.py convert  --db $DB
   $P scripts/taskgen.py stats    --db $DB
@@ -153,7 +153,7 @@ def main():
     p = sub.add_parser("describe"); common(p); p.set_defaults(f=cmd_describe)
     p = sub.add_parser("generate"); common(p); p.add_argument("--workers", type=int, default=5, help="GLM plan limit: 5 concurrent requests"); p.add_argument("--per-tree", type=int, default=1); p.add_argument("--retry-errors", action="store_true", help="regenerate candidates whose API call failed (e.g. 429)"); p.set_defaults(f=cmd_generate)
     p = sub.add_parser("check"); common(p); p.set_defaults(f=cmd_check)
-    p = sub.add_parser("verify"); common(p); p.add_argument("--votes", type=int, default=3); p.add_argument("--workers", type=int, default=4); p.add_argument("--all-dbs", action="store_true"); p.set_defaults(f=cmd_verify)
+    p = sub.add_parser("verify"); common(p); p.add_argument("--votes", type=int, default=3); p.add_argument("--workers", type=int, default=3, help="Ollama Pro plan limit: 3 concurrent requests"); p.add_argument("--all-dbs", action="store_true"); p.set_defaults(f=cmd_verify)
     p = sub.add_parser("dedup"); common(p); p.add_argument("--per-person", type=int, default=2); p.add_argument("--per-template", type=int, default=15); p.add_argument("--per-db", type=int, default=600); p.set_defaults(f=cmd_dedup)
     p = sub.add_parser("convert"); common(p); p.add_argument("--tasks"); p.add_argument("--manifest"); p.set_defaults(f=cmd_convert)
     p = sub.add_parser("stats"); common(p); p.set_defaults(f=cmd_stats)
