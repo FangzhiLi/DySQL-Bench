@@ -291,3 +291,19 @@ def test_proxy_registering_a_person_is_unchanged(db):
                                  ["INSERT INTO customers (customer_id, first_name, last_name) VALUES (60, 'Zoe', 'Quinn')"],
                                  task_type="5_proxy"))
     assert r["writes"][0]["label"] == "person_obj" and r["task_type"] == "5_proxy"
+
+
+# --- final review: the rerun replays every statement that ran, DDL included ---
+
+def test_clock_value_after_ddl_in_a_volatile_column_passes(rental):
+    r = check.run_check(rental, cand("I am a5 b5. Add a note column and mark my rental 5 as late.",
+                                     ["ALTER TABLE rental ADD COLUMN note TEXT",
+                                      "UPDATE rental SET note = 'late', last_update = CURRENT_TIMESTAMP WHERE rental_id = 5"]))
+    assert r["ok"], r["reasons"]
+
+
+def test_clock_value_after_ddl_in_a_compared_column_is_rejected(rental):
+    r = check.run_check(rental, cand("I am a5 b5. Add a note column and stamp my rental 5 with the current time.",
+                                     ["ALTER TABLE rental ADD COLUMN note TEXT",
+                                      "UPDATE rental SET note = CURRENT_TIMESTAMP WHERE rental_id = 5"]))
+    assert r["reasons"] == ["nondeterministic: rental"]

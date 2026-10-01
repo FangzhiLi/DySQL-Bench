@@ -199,8 +199,9 @@ def snapshot(db, tables):
 
 
 def rerun_changes(db, stmts, tables):
-    """Run the write statements again, RERUN_GAP_S later, from the same starting state. The caller's open
-    transaction holds the first run. Returns the tables whose compared columns differ, '' when the runs agree."""
+    """Run the statements again (every one that ran the first time, DDL included, so the second run starts from the
+    same state), RERUN_GAP_S later. The caller's open transaction holds the first run. Returns the tables whose
+    compared columns differ, '' when the runs agree."""
     first = snapshot(db, tables)
     db.execute("ROLLBACK"); time.sleep(RERUN_GAP_S); db.execute("BEGIN")
     try:
@@ -253,7 +254,7 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG):
             obj = ", ".join(f"'{c}', OLD.{_q(c)}" for c in sorted(need))
             db.execute(f"CREATE TEMP TRIGGER {_q('_u_' + t)} BEFORE UPDATE ON main.{_q(t)} BEGIN "
                        f"INSERT INTO _old VALUES ('{t}', json_object({obj})); END")
-    stmts, labels = [], []
+    stmts, labels, executed = [], [], []   # executed: every statement that ran, in order (writes and DDL)
     db.execute("BEGIN")
     try:
         for a in cand["actions"]:
@@ -263,12 +264,13 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG):
                 wt = write_target(st)
                 try:
                     if not wt:
-                        db.execute(st).fetchall(); continue
+                        db.execute(st).fetchall(); executed.append(st); continue
                     cur = db.execute(st + " RETURNING *")
                     rcols = [d[0] for d in cur.description]
                     rs = cur.fetchall()
                 except sqlite3.Error as e:
                     out["reasons"].append(f"sql_error: {e} in {st[:80]}"); continue
+                executed.append(st)
                 op, table = wt[0], tracer.canon(wt[1])
                 stmts.append(st)
                 key = table.lower()
@@ -308,8 +310,8 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG):
                     out["reasons"].append(f"bulk: {len(rs)} rows in {op} {table}")
                 labels.append(lab)
                 out["writes"].append({"op": op, "table": table, "rows": len(rs), "label": lab})
-        if any(NONDET.search(s) for s in stmts) and not any(x.startswith("sql_error") for x in out["reasons"]):
-            changed = rerun_changes(db, stmts, {tracer.canon(write_target(s)[1]) for s in stmts})
+        if any(NONDET.search(s) for s in executed) and not any(x.startswith("sql_error") for x in out["reasons"]):
+            changed = rerun_changes(db, executed, {tracer.canon(write_target(s)[1]) for s in stmts})
             if changed:
                 out["reasons"].append("nondeterministic: " + changed)
     finally:
