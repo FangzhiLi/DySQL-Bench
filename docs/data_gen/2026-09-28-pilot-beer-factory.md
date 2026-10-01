@@ -181,3 +181,20 @@
 ```
 cd DySQL-Bench && python run.py --env gen:beer_factory --task-split train --model qwen3-4b --model-api http://127.0.0.1:8002 --user-model qwen2.5-72b-awq --user-model-api http://127.0.0.1:8001 --user-strategy llm --max-concurrency 16 --log-dir <dir>
 ```
+
+## 8. 2026-09-30 补记：全量前的 prompt 修改与运行决定
+
+决定：**先出题、后校验。** 23 个有名字人物锚点的库先跑 `trees → describe → generate → check`（只用 GLM），`verify → dedup → convert` 等校验模型定下来再跑；各步按 id 续跑，顺序可拆。参数 `--n 200 --per-tree 1`，预计约 4.3k 条候选。
+
+针对 §2.1、§2.4 的问题改了出题 prompt（`dysql_bench/taskgen/prompt.py`），每条有测试：
+
+1. **表名一律加双引号。** SYSTEM 第 7 条改为 "Wrap every table name in double quotes"，并点名 `"transaction"`、`"order"` 是关键字。pilot 里 9 条 SQL 报错中 5 条是这个原因。
+2. **给出每张 scope 表的下一个可用主键。** 新增 `schema.next_ids()`：对单列 INTEGER 主键的表取 `MAX+1`；USER 消息在数据块后加 "Next unused primary keys" 段，SYSTEM 加第 8 条要求新行用这些值。pilot 里 4 条 `UNIQUE constraint failed` 是这个原因。
+3. **角色名、职务、开场方式由 plan 抽样。** `prompt.py` 加 48 个名、48 个姓、16 种职务、10 种开场风格；第 5 类的说话人姓名和职务由 rng 抽定，写进 USER 的 "Style" 段，所有类型都抽一种开场风格，并禁止 "Hi, this is / Good morning" 开头。pilot 里 "Priya Raghavan" 出现 6 次、"Dana Whitfield" 5 次，开场四分之一以 "Good morning" 起头。
+
+顺手修的两处：
+
+- `others.json`（第 4 类的"另一个人"）改为取抽样行之后的行，不再是其他题的说话人；锚点行数不够 `--n` 时才退回抽样行。pilot 里第 4 类的 7 个"另一个人"全是别的题的说话人。
+- `generate` 每个锚点用不同的 rng 种子（`seed:anchor_table`）。原来 8 个双锚点库的两个锚点会抽到相同的类型和难度序列。
+
+**beer_factory 的处理：** 已有的 100 条候选（旧 prompt）和 82 条已校验任务保留；`--n 200` 只对新增的 100 棵树用新 prompt 出题。新旧两批可以按 `candidates.jsonl` 里是否有 `plan.style` 区分。
