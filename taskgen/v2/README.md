@@ -12,3 +12,4 @@ v2 从 v1 原样复制起步（tag `taskgen-v1`，61c8133）。复制的那个 c
 | 改动 | 设计条目 |
 |---|---|
 | 从 v1 复制，只改名 | §4.0 |
+| 任务集统计：`scripts/task_stats.py` 和 DySQL 并排比 §3 的指标；DySQL 金标准的读取挪到 `taskgen_v2/dysql.py` | §3、§5 G |
