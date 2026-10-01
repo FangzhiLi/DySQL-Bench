@@ -58,6 +58,16 @@ def test_validate_names_every_problem(shop):
     assert db_profile.validate({**SHOP_PROFILE, "persons": {"customers": "customer_id"}}, shop, FKS)[0].startswith("malformed profile")
 
 
+def test_an_edge_must_lead_to_one_parent_row(shop):
+    # written from the wrong side: an order has many items, so "orders -> order_items" picks one of them at random
+    p = copy.deepcopy(SHOP_PROFILE)
+    p["events"][0]["parents"] = [{"table": "products", "via": "orders.product_id -> products.product_id", "parents": []},
+                                 {"table": "order_items", "via": "orders.order_id -> order_items.order_id", "parents": []}]
+    assert db_profile.validate(p, shop, FKS) == [
+        "events[0].parents[1].via: order_items.order_id repeats values, so the edge leads to several rows; "
+        "write it from the table that holds the reference"]
+
+
 def test_scope_edges_version_and_root_anchor():
     assert db_profile.scope_tables(SCHOOL_PROFILE) == {"Student List", "teacher", "takes", "advisor", "section", "dept", "flags"}
     p = {**SHOP_PROFILE, "persons": {**SHOP_PROFILE["persons"],

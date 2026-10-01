@@ -151,6 +151,14 @@ def edge_hit(conn, e):
     return hit / n if n else None
 
 
+def repeated(conn, e):
+    """Whether a value of the edge's parent columns sits in more than one parent row, so the edge does not lead to one
+    row (written from the wrong side, like book -> book_author, or to a table keyed by more columns)."""
+    cols = ", ".join(_q(c) for c in e.ref_cols)
+    filled = " AND ".join(f"{_q(c)} IS NOT NULL" for c in e.ref_cols)
+    return conn.execute(f"SELECT 1 FROM {_q(e.parent)} WHERE {filled} GROUP BY {cols} HAVING COUNT(*) > 1 LIMIT 1").fetchone() is not None
+
+
 def validate(profile, conn, fks=(), composite=()):
     """What makes a profile unusable, as readable lines; [] when it is fine. Checks names against the database, the
     shape of paths and parent links, that edges are foreign keys, and that every table has a role."""
@@ -201,6 +209,10 @@ def _validate(profile, conn, fks, composite):
             h = edge_hit(conn, e)
             if h is not None and h < MIN_EDGE_HIT:
                 errs.append(f"{where}: only {h:.0%} of {e.child} rows find a {e.parent} row; not a foreign key")
+        if repeated(conn, e):
+            side = e.parent + "." + (e.ref_cols[0] if len(e.ref_cols) == 1 else f"({', '.join(e.ref_cols)})")
+            errs.append(f"{where}: {side} repeats values, so the edge leads to several rows; "
+                        f"write it from the table that holds the reference")
         return e
 
     persons = profile["persons"]
