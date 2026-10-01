@@ -1,0 +1,2358 @@
+{
+ "bird:address": {
+  "roots": [
+   {
+    "table": "congress",
+    "label": "member of Congress",
+    "parents": [
+     {
+      "table": "state",
+      "via": "congress.abbreviation -> state.abbreviation",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "persons": {
+   "congress": {
+    "key": "cognress_rep_id",
+    "name_cols": [
+     "first_name",
+     "last_name"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "zip_congress",
+    "label": "district zip codes",
+    "path": [
+     "zip_congress.district -> congress.cognress_rep_id"
+    ],
+    "parents": [
+     {
+      "table": "zip_data",
+      "via": "zip_congress.zip_code -> zip_data.zip_code",
+      "parents": [
+       {
+        "table": "CBSA",
+        "via": "zip_data.CBSA -> CBSA.CBSA",
+        "parents": []
+       },
+       {
+        "table": "state",
+        "via": "zip_data.state -> state.abbreviation",
+        "parents": []
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "zip_data",
+   "CBSA",
+   "state",
+   "country",
+   "alias",
+   "area_code",
+   "avoid"
+  ],
+  "exclude": [],
+  "no_insert": [
+   "congress",
+   "state"
+  ],
+  "quirks": [
+   "congress.first_name and congress.last_name are swapped: first_name holds the surname ('Young') and last_name holds the given name ('Don').",
+   "The key column of congress is misspelled cognress_rep_id.",
+   "The House column of congress uses the misspelled value 'House of Repsentatives' for House members and 'Senate' for senators; senators have a null District and ids like 'AK-S1'.",
+   "zip_congress.district stores the representative's cognress_rep_id code (e.g. 'NY-1' or 'PR'), not a district number."
+  ],
+  "description": "A United States postal geography and demographics reference built around ZIP codes: zip_data records per-ZIP population, housing, income, business and benefit statistics, while alias, area_code, country and avoid map each ZIP to city names, telephone area codes and counties. The only people are the members of Congress in congress, each linked through zip_congress to the ZIP codes of the district they represent.",
+  "confirmed": false,
+  "notes": [
+   "Claude: roles, edges and every quirk checked against the data; no change"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "bird:beer_factory": {
+  "roots": [
+   {
+    "table": "customers",
+    "label": "customer",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "customers": {
+    "key": "CustomerID",
+    "name_cols": [
+     "First",
+     "Last"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "transaction",
+    "label": "transactions",
+    "path": [
+     "transaction.CustomerID -> customers.CustomerID"
+    ],
+    "parents": [
+     {
+      "table": "rootbeer",
+      "via": "transaction.RootBeerID -> rootbeer.RootBeerID",
+      "parents": [
+       {
+        "table": "rootbeerbrand",
+        "via": "rootbeer.BrandID -> rootbeerbrand.BrandID",
+        "parents": []
+       }
+      ]
+     },
+     {
+      "table": "location",
+      "via": "transaction.LocationID -> location.LocationID",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "rootbeerreview",
+    "label": "reviews",
+    "path": [
+     "rootbeerreview.CustomerID -> customers.CustomerID"
+    ],
+    "parents": [
+     {
+      "table": "rootbeerbrand",
+      "via": "rootbeerreview.BrandID -> rootbeerbrand.BrandID",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "rootbeerbrand",
+   "rootbeer",
+   "location",
+   "geolocation"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "location and geolocation mirror each other one-to-one on LocationID; each references the other.",
+   "LocationID 0 is a placeholder: location 0 is named 'LOST' with null address fields and geolocation 0 has coordinates (0, 0).",
+   "Credit card numbers are stored as plain integers in transaction.CreditCardNumber, not text."
+  ],
+  "description": "A root beer retail tracker: customers buy individual root beer items (a brand in a container sold at a location) recorded as transactions with credit card type and price, and they leave star reviews and comments on brands. Brands carry brewery, ingredient, packaging, social media and pricing details, and selling locations have addresses with coordinates.",
+  "confirmed": false,
+  "notes": [
+   "Claude: transaction parents trimmed to rootbeer -> rootbeerbrand and location -- the coordinates (geolocation) and the root beer's own stock location add two rows per purchase without helping read it"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "bird:book_publishing_company": {
+  "roots": [
+   {
+    "table": "authors",
+    "label": "author",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "authors": {
+    "key": "au_id",
+    "name_cols": [
+     "au_lname",
+     "au_fname"
+    ],
+    "same_as": []
+   },
+   "employee": {
+    "key": "emp_id",
+    "name_cols": [
+     "fname",
+     "minit",
+     "lname"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "titleauthor",
+    "label": "book credits",
+    "path": [
+     "titleauthor.au_id -> authors.au_id"
+    ],
+    "parents": [
+     {
+      "table": "titles",
+      "via": "titleauthor.title_id -> titles.title_id",
+      "parents": [
+       {
+        "table": "publishers",
+        "via": "titles.pub_id -> publishers.pub_id",
+        "parents": []
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "titles",
+   "publishers",
+   "pub_info",
+   "roysched",
+   "jobs"
+  ],
+  "exclude": [
+   "stores",
+   "sales",
+   "discounts"
+  ],
+  "no_insert": [
+   "authors",
+   "employee",
+   "titles",
+   "publishers"
+  ],
+  "quirks": [
+   "authors.contract is stored as text: every author has '0'; a contract flag is written as the text '1' or '0'.",
+   "employee.minit is an empty string, not NULL, when there is no middle initial.",
+   "roysched holds several tier rows per title (lorange/hirange brackets), not one row per title."
+  ],
+  "description": "A book publishing house database: authors write titles that publishers publish, with titleauthor recording each author's order and royalty share on a book and roysched defining royalty tiers per title. Publishers employ staff tracked in employee with job levels from jobs, while stores buy titles through sales orders and discounts on the store side. Requests center on the authors and the books they are credited with.",
+  "confirmed": false,
+  "notes": [
+   "Claude: quirks checked against the data -- contract is '0' for all 23 authors (the draft implied '1' occurs); pub_info.logo is stored as text, not a binary blob, and nobody edits it, so that quirk is dropped"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "bird:books": {
+  "roots": [
+   {
+    "table": "customer",
+    "label": "customer",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "customer": {
+    "key": "customer_id",
+    "name_cols": [
+     "first_name",
+     "last_name"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "cust_order",
+    "label": "orders",
+    "path": [
+     "cust_order.customer_id -> customer.customer_id"
+    ],
+    "parents": [
+     {
+      "table": "shipping_method",
+      "via": "cust_order.shipping_method_id -> shipping_method.method_id",
+      "parents": []
+     },
+     {
+      "table": "address",
+      "via": "cust_order.dest_address_id -> address.address_id",
+      "parents": [
+       {
+        "table": "country",
+        "via": "address.country_id -> country.country_id",
+        "parents": []
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "table": "order_line",
+    "label": "order lines",
+    "path": [
+     "cust_order.customer_id -> customer.customer_id",
+     "order_line.order_id -> cust_order.order_id"
+    ],
+    "parents": [
+     {
+      "table": "book",
+      "via": "order_line.book_id -> book.book_id",
+      "parents": [
+       {
+        "table": "book_language",
+        "via": "book.language_id -> book_language.language_id",
+        "parents": []
+       },
+       {
+        "table": "publisher",
+        "via": "book.publisher_id -> publisher.publisher_id",
+        "parents": []
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "table": "order_history",
+    "label": "order status history",
+    "path": [
+     "cust_order.customer_id -> customer.customer_id",
+     "order_history.order_id -> cust_order.order_id"
+    ],
+    "parents": [
+     {
+      "table": "order_status",
+      "via": "order_history.status_id -> order_status.status_id",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "customer_address",
+    "label": "saved addresses",
+    "path": [
+     "customer_address.customer_id -> customer.customer_id"
+    ],
+    "parents": [
+     {
+      "table": "address",
+      "via": "customer_address.address_id -> address.address_id",
+      "parents": [
+       {
+        "table": "country",
+        "via": "address.country_id -> country.country_id",
+        "parents": []
+       }
+      ]
+     },
+     {
+      "table": "address_status",
+      "via": "customer_address.status_id -> address_status.status_id",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "book",
+   "book_author",
+   "book_language",
+   "publisher",
+   "address",
+   "address_status",
+   "country",
+   "shipping_method",
+   "order_status",
+   "author"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "customer_address.status_id holds address_status.status_id with no declared foreign key; the schema's inferred reference from address_status.status_id to order_status.status_id is bogus — address statuses are Active (1) and Inactive (2), unrelated to order statuses.",
+   "order_line has exactly as many rows as cust_order (7550), so each order currently holds exactly one line."
+  ],
+  "description": "An online bookstore: customers place orders (cust_order) whose books are recorded one per line in order_line, whose progress is tracked in order_history, and which ship to an address by a shipping method. Customers also keep saved addresses (customer_address) marked active or inactive; books carry a language and publisher and link to authors through book_author.",
+  "confirmed": false,
+  "notes": [
+   "Claude: author moved from persons to public -- per the hint, authors are catalogue data for a bookstore customer, not people whose rows are private",
+   "Claude: dropped the order_line parent book -> book_author -- written backwards (a book has several authors), so the tree would show one author at random",
+   "Claude: dropped the isbn13 quirk -- 11102 of 11127 values have 13 characters, not 10-11"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 2,
+   "errors": []
+  }
+ },
+ "bird:car_retails": {
+  "roots": [
+   {
+    "table": "customers",
+    "label": "customer",
+    "parents": [
+     {
+      "table": "employees",
+      "via": "customers.salesRepEmployeeNumber -> employees.employeeNumber",
+      "parents": [
+       {
+        "table": "offices",
+        "via": "employees.officeCode -> offices.officeCode",
+        "parents": []
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "persons": {
+   "customers": {
+    "key": "customerNumber",
+    "name_cols": [
+     "contactFirstName",
+     "contactLastName"
+    ],
+    "same_as": []
+   },
+   "employees": {
+    "key": "employeeNumber",
+    "name_cols": [
+     "firstName",
+     "lastName"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "orders",
+    "label": "orders",
+    "path": [
+     "orders.customerNumber -> customers.customerNumber"
+    ],
+    "parents": []
+   },
+   {
+    "table": "orderdetails",
+    "label": "order lines",
+    "path": [
+     "orders.customerNumber -> customers.customerNumber",
+     "orderdetails.orderNumber -> orders.orderNumber"
+    ],
+    "parents": [
+     {
+      "table": "products",
+      "via": "orderdetails.productCode -> products.productCode",
+      "parents": [
+       {
+        "table": "productlines",
+        "via": "products.productLine -> productlines.productLine",
+        "parents": []
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "table": "payments",
+    "label": "payments",
+    "path": [
+     "payments.customerNumber -> customers.customerNumber"
+    ],
+    "parents": []
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "offices",
+   "products",
+   "productlines"
+  ],
+  "exclude": [],
+  "no_insert": [
+   "products"
+  ],
+  "quirks": [
+   "Customers are companies: customerName is the company name, while contactFirstName and contactLastName name the person who speaks for the company.",
+   "44 of the 122 contactFirstName values end with a space ('Carine '): copy the value exactly or compare with trim().",
+   "payments are keyed by customer-supplied check numbers like 'HQ336336', which follow no sequence."
+  ],
+  "description": "A wholesale distributor of classic model cars. Customers are companies, each with a contact person and a sales representative among the employees, who are assigned to offices. Customers place orders whose line items list products (each belonging to a product line) and make payments by check.",
+  "confirmed": false,
+  "notes": [
+   "Claude: payments removed from no_insert -- the check number comes from the customer, so recording a new payment is a natural request",
+   "Claude: trailing-space quirk made exact (44 of 122 contactFirstName values; checked)"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "bird:food_inspection_2": {
+  "roots": [
+   {
+    "table": "employee",
+    "label": "inspector",
+    "parents": [
+     {
+      "table": "employee",
+      "via": "employee.supervisor -> employee.employee_id",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "persons": {
+   "employee": {
+    "key": "employee_id",
+    "name_cols": [
+     "first_name",
+     "last_name"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "inspection",
+    "label": "inspections",
+    "path": [
+     "inspection.employee_id -> employee.employee_id"
+    ],
+    "parents": [
+     {
+      "table": "establishment",
+      "via": "inspection.license_no -> establishment.license_no",
+      "parents": []
+     },
+     {
+      "table": "inspection",
+      "via": "inspection.followup_to -> inspection.inspection_id",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "violation",
+    "label": "violations",
+    "path": [
+     "inspection.employee_id -> employee.employee_id",
+     "violation.inspection_id -> inspection.inspection_id"
+    ],
+    "parents": [
+     {
+      "table": "inspection_point",
+      "via": "violation.point_id -> inspection_point.point_id",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "establishment",
+   "inspection_point"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "inspection.followup_to is null when the inspection is not a follow-up to an earlier one.",
+   "inspection_point.point_level is padded with spaces ('Minor   ', 'Serious ', 'Critical'): copy it exactly or compare with trim().",
+   "violation.fine is usually, not always (85%), the cited point's standard fine: Critical 500, Serious 250, Minor 100."
+  ],
+  "description": "A municipal food-safety program: health-department employees (sanitarians, supervisors and division managers, each reporting to another employee) inspect licensed establishments such as restaurants and cafeterias. Each visit is an inspection with a type and result, possibly following up an earlier inspection, and each citation is a violation tied to a standard inspection point carrying a fine and the inspector's comment.",
+  "confirmed": false,
+  "notes": [
+   "Claude: fine quirk corrected (85% of violations carry the standard fine, not all) and the space-padded point_level added (checked)"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "bird:legislator": {
+  "roots": [
+   {
+    "table": "historical",
+    "label": "historical legislator",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "historical": {
+    "key": "bioguide_id",
+    "name_cols": [
+     "first_name",
+     "last_name"
+    ],
+    "same_as": []
+   },
+   "current": {
+    "key": "bioguide_id",
+    "name_cols": [
+     "first_name",
+     "last_name"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "historical-terms",
+    "label": "terms of office",
+    "path": [
+     "historical-terms.bioguide -> historical.bioguide_id"
+    ],
+    "parents": []
+   }
+  ],
+  "attributes": [],
+  "public": [],
+  "exclude": [
+   "current-terms",
+   "social-media"
+  ],
+  "no_insert": [
+   "historical",
+   "current",
+   "historical-terms"
+  ],
+  "quirks": [
+   "historical-terms has exactly one row per legislator (its key is bioguide alone), so each person has a single term on record.",
+   "chamber is null in historical-terms; type tells the chamber: 'sen' for senators, 'rep' for representatives.",
+   "class is set only for senators (1, 2 or 3) and district only for representatives.",
+   "name, relation, last, title and office in historical-terms are null in almost every row.",
+   "historical.fec_id holds a stringified list, e.g. \"['S6CO00168']\".",
+   "current, current-terms and social-media describe different people (sitting legislators, none of them in historical); leave them alone."
+  ],
+  "description": "A directory of United States members of Congress. The roots are the historical (no longer serving) legislators: each row of historical is a person, and historical-terms records that legislator's term of office with chamber type, state, district, party, and start and end dates. Currently serving legislators live in the separate current table with their terms in current-terms and their accounts in social-media, but they are different people and their records must not be touched.",
+  "confirmed": false,
+  "notes": [
+   "Claude: quirks checked; dropped the two about the current table's column types (current is never written), tightened the rest"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 3,
+   "errors": []
+  }
+ },
+ "bird:movie": {
+  "roots": [
+   {
+    "table": "actor",
+    "label": "actor",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "actor": {
+    "key": "ActorID",
+    "name_cols": [
+     "Name"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "characters",
+    "label": "roles",
+    "path": [
+     "characters.ActorID -> actor.ActorID"
+    ],
+    "parents": [
+     {
+      "table": "movie",
+      "via": "characters.MovieID -> movie.MovieID",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "movie"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "Column names with spaces or parentheses must be double-quoted: actor.\"Date of Birth\", actor.\"Birth City\", actor.\"Birth Country\", actor.\"Height (Inches)\", characters.\"Character Name\", movie.\"Release Date\", movie.\"MPAA Rating\", movie.\"Rating Count\".",
+   "actor.NetWorth and characters.pay are formatted dollar strings like '$250,000,000.00', not numbers.",
+   "characters.pay and characters.screentime are null in all but about ten rows.",
+   "movie.\"Release Date\" is text in yyyy-mm-dd form."
+  ],
+  "description": "A movie database: each actor has a profile (birthplace, gender, ethnicity, net worth) and is cast in movies through the characters table, which records the character name, credit order, pay and screen time for each role. Movies carry budget, box office gross, MPAA rating, genre, runtime, rating and release date.",
+  "confirmed": false,
+  "notes": [
+   "Claude: quirks checked; column quoting now shows double quotes (the draft used single quotes, which SQLite reads as strings); dropped the naming-style remark"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "bird:movies_4": {
+  "roots": [
+   {
+    "table": "person",
+    "label": "person (actor or crew member)",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "person": {
+    "key": "person_id",
+    "name_cols": [
+     "person_name"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "movie_cast",
+    "label": "cast credits (acting roles)",
+    "path": [
+     "movie_cast.person_id -> person.person_id"
+    ],
+    "parents": [
+     {
+      "table": "movie",
+      "via": "movie_cast.movie_id -> movie.movie_id",
+      "parents": []
+     },
+     {
+      "table": "gender",
+      "via": "movie_cast.gender_id -> gender.gender_id",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "movie_crew",
+    "label": "crew credits",
+    "path": [
+     "movie_crew.person_id -> person.person_id"
+    ],
+    "parents": [
+     {
+      "table": "movie",
+      "via": "movie_crew.movie_id -> movie.movie_id",
+      "parents": []
+     },
+     {
+      "table": "department",
+      "via": "movie_crew.department_id -> department.department_id",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "movie",
+   "genre",
+   "keyword",
+   "language",
+   "language_role",
+   "department",
+   "gender",
+   "production_company",
+   "country",
+   "movie_genres",
+   "movie_keywords",
+   "movie_languages",
+   "movie_company",
+   "production_country"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "movie_cast.gender_id is the actor's own gender recorded on the credit; 0 means Unspecified, 1 Female, 2 Male.",
+   "movie_status is 'Released' for all but 7 movies ('Post Production', 'Rumored').",
+   "language_id values run from 24574 (English) to 24701, not from 1.",
+   "A person can have both cast and crew credits, even on the same movie (1076 such person-movie pairs)."
+  ],
+  "description": "A film catalog modeled on The Movie Database: each movie carries title, budget, revenue, release date, runtime, popularity and vote statistics, and is linked to genres, keywords, languages, production companies and countries. The people are film industry figures in person; movie_cast records the characters they played and movie_crew their departments and jobs.",
+  "confirmed": false,
+  "notes": [
+   "Claude: quirks checked; movie_status corrected (7 movies are not 'Released'), the others made exact"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "bird:olympics": {
+  "roots": [
+   {
+    "table": "person",
+    "label": "athlete",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "person": {
+    "key": "id",
+    "name_cols": [
+     "full_name"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "games_competitor",
+    "label": "games entries",
+    "path": [
+     "games_competitor.person_id -> person.id"
+    ],
+    "parents": [
+     {
+      "table": "games",
+      "via": "games_competitor.games_id -> games.id",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "competitor_event",
+    "label": "event entries",
+    "path": [
+     "games_competitor.person_id -> person.id",
+     "competitor_event.competitor_id -> games_competitor.id"
+    ],
+    "parents": [
+     {
+      "table": "event",
+      "via": "competitor_event.event_id -> event.id",
+      "parents": [
+       {
+        "table": "sport",
+        "via": "event.sport_id -> sport.id",
+        "parents": []
+       }
+      ]
+     },
+     {
+      "table": "medal",
+      "via": "competitor_event.medal_id -> medal.id",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "person_region",
+    "label": "region links",
+    "path": [
+     "person_region.person_id -> person.id"
+    ],
+    "parents": [
+     {
+      "table": "noc_region",
+      "via": "person_region.region_id -> noc_region.id",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "games",
+   "sport",
+   "event",
+   "medal",
+   "noc_region",
+   "city",
+   "games_city"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "In person, height 0 or weight 0 means unknown, not a real measurement.",
+   "medal has a fourth row (id 4, 'NA') meaning no medal; competitor_event.medal_id is 4 whenever the athlete did not win one.",
+   "A person can have more than one row in person_region, representing different regions over time.",
+   "games_name always equals games_year followed by season (for example '1992 Summer').",
+   "The host city of a games edition is reachable only through games_city, a link table (games_id, city_id) with no primary key; an edition may have several host-city rows."
+  ],
+  "description": "A history of the modern Olympic Games: each athlete (person) has an entry per edition attended (games_competitor, with their age) and, under it, one row per event entered (competitor_event) recording any medal won. Athletes represent NOC regions through person_region; editions have a year, a season and host cities, and events belong to sports. Everything besides the athletes is reference data: sports, events, medals, cities and regions.",
+  "confirmed": false,
+  "notes": [
+   "Claude: roles, edges and every quirk checked against the data; no change"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "bird:professional_basketball": {
+  "roots": [
+   {
+    "table": "players",
+    "label": "player",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "players": {
+    "key": "playerID",
+    "name_cols": [
+     "firstName",
+     "lastName"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "players_teams",
+    "label": "season statistics",
+    "path": [
+     "players_teams.playerID -> players.playerID"
+    ],
+    "parents": [
+     {
+      "table": "teams",
+      "via": "players_teams.(tmID, year) -> teams.(tmID, year)",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "draft",
+    "label": "draft picks",
+    "path": [
+     "draft.playerID -> players.playerID"
+    ],
+    "parents": [
+     {
+      "table": "teams",
+      "via": "draft.(tmID, draftYear) -> teams.(tmID, year)",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "player_allstar",
+    "label": "all-star appearances",
+    "path": [
+     "player_allstar.playerID -> players.playerID"
+    ],
+    "parents": []
+   },
+   {
+    "table": "awards_players",
+    "label": "awards",
+    "path": [
+     "awards_players.playerID -> players.playerID"
+    ],
+    "parents": []
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "teams",
+   "series_post"
+  ],
+  "exclude": [
+   "coaches",
+   "awards_coaches"
+  ],
+  "no_insert": [
+   "players"
+  ],
+  "quirks": [
+   "playerID values are text codes built from names, like 'abdulka01', not numbers.",
+   "players.firstseason and lastseason are 0 in almost every row; a player's real seasons are the years in players_teams.",
+   "players.deathDate '0000-00-00' means the player is alive.",
+   "draft.playerID is null for 4958 of 8621 picks (players who never played in the league); such rows belong to no player.",
+   "In draft, draftRound or draftSelection 0 means the number is unknown.",
+   "draft and player_allstar repeat the player's name next to playerID, and the copy often differs from players (nicknames, spellings).",
+   "Null statistics in player_allstar and players_teams mean the stat was not tracked, not zero.",
+   "In awards_players, note 'tie' means the award was shared; null means nothing special.",
+   "teams has one row per team per season, keyed by (year, tmID), and covers early leagues (ABA, NBL, ABL1, NPBL, PBLA) besides the NBA."
+  ],
+  "description": "A historical professional basketball database (NBA, ABA and earlier leagues): players are drafted by teams, record season-by-season and playoff statistics with each team (players_teams), appear in all-star games (player_allstar) and win awards (awards_players). Coaches are tracked with one row per team-season stint (coaches) plus their awards (awards_coaches). Teams are tracked per season with wins, losses, scoring and playoff results (teams, series_post).",
+  "confirmed": false,
+  "notes": [
+   "Claude: removed the second root coaches and its awards_coaches event -- the hint names players only, coachID repeats across a coach's stints and coaches have no name columns, so coaches and awards_coaches are excluded",
+   "Claude: quirks checked; dropped the coach ones, firstseason/lastseason are 0 in 5046 of 5062 rows (not all)"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 3,
+   "errors": [
+    "no profile JSON in the answer: Expecting ',' delimiter: line 63 column 4 (char 1070)"
+   ]
+  }
+ },
+ "bird:regional_sales": {
+  "roots": [
+   {
+    "table": "Customers",
+    "label": "customer",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "Customers": {
+    "key": "CustomerID",
+    "name_cols": [
+     "Customer Names"
+    ],
+    "same_as": []
+   },
+   "Sales Team": {
+    "key": "SalesTeamID",
+    "name_cols": [
+     "Sales Team"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "Sales Orders",
+    "label": "sales orders",
+    "path": [
+     "Sales Orders._CustomerID -> Customers.CustomerID"
+    ],
+    "parents": [
+     {
+      "table": "Products",
+      "via": "Sales Orders._ProductID -> Products.ProductID",
+      "parents": []
+     },
+     {
+      "table": "Store Locations",
+      "via": "Sales Orders._StoreID -> Store Locations.StoreID",
+      "parents": [
+       {
+        "table": "Regions",
+        "via": "Store Locations.StateCode -> Regions.StateCode",
+        "parents": []
+       }
+      ]
+     },
+     {
+      "table": "Sales Team",
+      "via": "Sales Orders._SalesTeamID -> Sales Team.SalesTeamID",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "Products",
+   "Store Locations",
+   "Regions"
+  ],
+  "exclude": [],
+  "no_insert": [
+   "Sales Orders"
+  ],
+  "quirks": [
+   "Table and column names contain spaces (\"Sales Orders\", \"Customer Names\", \"Sales Team\").",
+   "The foreign key columns in Sales Orders are prefixed with an underscore: _CustomerID, _ProductID, _StoreID, _SalesTeamID.",
+   "Unit Price and Unit Cost are stored as TEXT with comma thousands separators, e.g. \"1,963.10\".",
+   "Dates in Sales Orders are TEXT in month/day/two-digit-year form, e.g. \"5/31/18\"; \"17\" means 2017.",
+   "Each Sales Team row is a single named salesperson (e.g. \"Adam Hernandez\"), not a group of people.",
+   "13 of the 50 \"Customer Names\" values end with a space (\"WakeFern \"): copy the value exactly or compare with trim()."
+  ],
+  "description": "A retail sales database: customers place sales orders for products through in-store, online, distributor or wholesale channels, each order handled by a salesperson from Sales Team and tied to a store location with regional context. The people are the customers (companies such as Avon Corp) and the sales staff listed by name in Sales Team.",
+  "confirmed": false,
+  "notes": [
+   "Claude: quirks checked; trailing-space quirk made exact (13 of 50)"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "bird:retail_complains": {
+  "roots": [
+   {
+    "table": "client",
+    "label": "customer",
+    "parents": [
+     {
+      "table": "district",
+      "via": "client.district_id -> district.district_id",
+      "parents": [
+       {
+        "table": "state",
+        "via": "district.state_abbrev -> state.StateCode",
+        "parents": []
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "persons": {
+   "client": {
+    "key": "client_id",
+    "name_cols": [
+     "first",
+     "middle",
+     "last"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "callcenterlogs",
+    "label": "complaint calls",
+    "path": [
+     "callcenterlogs.rand client -> client.client_id"
+    ],
+    "parents": []
+   },
+   {
+    "table": "events",
+    "label": "complaint records",
+    "path": [
+     "events.Client_ID -> client.client_id"
+    ],
+    "parents": []
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "district",
+   "state",
+   "reviews"
+  ],
+  "exclude": [],
+  "no_insert": [
+   "client",
+   "callcenterlogs",
+   "events"
+  ],
+  "quirks": [
+   "Many column names contain spaces or special characters ('Complaint ID', 'rand client', 'vru+line', 'Date received', 'Consumer consent provided?', 'Timely response?', 'Consumer disputed?') and must be double-quoted in SQL.",
+   "'rand client' in callcenterlogs is a foreign key to client.client_id despite the space in its name.",
+   "The client table stores the birth date as three separate columns day, month, year instead of one date column.",
+   "Complaint ID appears in both callcenterlogs and events, but no foreign key links the two tables, so a call and a complaint record are only loosely associated.",
+   "callcenterlogs.priority is 0, 1, 2 or null, with higher meaning more urgent.",
+   "The server column in callcenterlogs holds call-center agents' first names (e.g. MICHAL, TOVA), not ids."
+  ],
+  "description": "A consumer-complaint call center: clients (customers) lodge complaints by phone, each call logged in callcenterlogs with priority, type, outcome and server handling times, while events records the substance of each complaint (product, issue, narrative, channel) and the company's response. Clients live in districts grouped by state, and reviews logs daily product star ratings per district.",
+  "confirmed": false,
+  "notes": [
+   "Claude: roles, edges and every quirk checked against the data; no change"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "bird:shipping": {
+  "roots": [
+   {
+    "table": "customer",
+    "label": "customer",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "customer": {
+    "key": "cust_id",
+    "name_cols": [
+     "cust_name"
+    ],
+    "same_as": []
+   },
+   "driver": {
+    "key": "driver_id",
+    "name_cols": [
+     "first_name",
+     "last_name"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "shipment",
+    "label": "shipments",
+    "path": [
+     "shipment.cust_id -> customer.cust_id"
+    ],
+    "parents": [
+     {
+      "table": "driver",
+      "via": "shipment.driver_id -> driver.driver_id",
+      "parents": []
+     },
+     {
+      "table": "truck",
+      "via": "shipment.truck_id -> truck.truck_id",
+      "parents": []
+     },
+     {
+      "table": "city",
+      "via": "shipment.city_id -> city.city_id",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "truck",
+   "city"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "customer.city and customer.state hold plain names, not keys into the city table.",
+   "customer.zip is stored as a number (e.g. 33415.0).",
+   "cust_type includes values like 'retailer' beyond the documented 'manufacturer' and 'wholesaler'."
+  ],
+  "description": "A freight delivery operation: business customers (manufacturers, wholesalers, retailers) send shipments of goods by weight to destination cities, each shipment recording the truck and driver used. Customers are the roots of requests; drivers are the other people in the data, and trucks and cities are reference data.",
+  "confirmed": false,
+  "notes": [
+   "Claude: dropped the model_year quirk -- it repeats a BIRD column note, not something in the data, and does not matter for writing SQL"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "bird:student_club": {
+  "roots": [
+   {
+    "table": "member",
+    "label": "club member",
+    "parents": [
+     {
+      "table": "major",
+      "via": "member.link_to_major -> major.major_id",
+      "parents": []
+     },
+     {
+      "table": "zip_code",
+      "via": "member.zip -> zip_code.zip_code",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "persons": {
+   "member": {
+    "key": "member_id",
+    "name_cols": [
+     "first_name",
+     "last_name"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "attendance",
+    "label": "attendance records",
+    "path": [
+     "attendance.link_to_member -> member.member_id"
+    ],
+    "parents": [
+     {
+      "table": "event",
+      "via": "attendance.link_to_event -> event.event_id",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "expense",
+    "label": "expenses",
+    "path": [
+     "expense.link_to_member -> member.member_id"
+    ],
+    "parents": [
+     {
+      "table": "budget",
+      "via": "expense.link_to_budget -> budget.budget_id",
+      "parents": [
+       {
+        "table": "event",
+        "via": "budget.link_to_event -> event.event_id",
+        "parents": []
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "table": "income",
+    "label": "income records (e.g. dues paid)",
+    "path": [
+     "income.link_to_member -> member.member_id"
+    ],
+    "parents": []
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "event",
+   "budget",
+   "major",
+   "zip_code"
+  ],
+  "exclude": [],
+  "no_insert": [
+   "member",
+   "event",
+   "budget",
+   "expense",
+   "income",
+   "major"
+  ],
+  "quirks": [
+   "All id columns hold Airtable-style text codes like 'rec1x5zBFIqoOuPW8'; there is no meaningful next value for a new row.",
+   "expense.approved holds the text 'true' (one row is null); write 'true' or 'false' as text, not 1/0.",
+   "budget.remaining equals amount minus spent and may be negative or show floating-point noise such as -0.199999999999999.",
+   "budget.event_status duplicates the status of the linked event row.",
+   "Dates are stored as text: event.event_date like '2020-03-10T12:00:00', expense.expense_date and income.date_received as 'YYYY-MM-DD'."
+  ],
+  "description": "A student club's administrative system: members (each with a club position, academic major and hometown ZIP code) attend events, incur expenses charged against per-event per-category budgets, and pay dues that are recorded as income. Events belong to the club rather than to any member, and each budget's spent and remaining figures summarize the expenses linked to it.",
+  "confirmed": false,
+  "notes": [
+   "Claude: quirks checked; approved holds only 'true' and one null (no 'false' yet)"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "bird:student_loan": {
+  "roots": [
+   {
+    "table": "person",
+    "label": "student",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "person": {
+    "key": "name",
+    "name_cols": [
+     "name"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "enlist",
+    "label": "enlistments",
+    "path": [
+     "enlist.name -> person.name"
+    ],
+    "parents": []
+   },
+   {
+    "table": "enrolled",
+    "label": "enrollments",
+    "path": [
+     "enrolled.name -> person.name"
+    ],
+    "parents": []
+   }
+  ],
+  "attributes": [
+   {
+    "table": "disabled",
+    "of": "person",
+    "via": "disabled.name -> person.name"
+   },
+   {
+    "table": "filed_for_bankrupcy",
+    "of": "person",
+    "via": "filed_for_bankrupcy.name -> person.name"
+   },
+   {
+    "table": "male",
+    "of": "person",
+    "via": "male.name -> person.name"
+   },
+   {
+    "table": "unemployed",
+    "of": "person",
+    "via": "unemployed.name -> person.name"
+   },
+   {
+    "table": "longest_absense_from_school",
+    "of": "person",
+    "via": "longest_absense_from_school.name -> person.name"
+   },
+   {
+    "table": "no_payment_due",
+    "of": "person",
+    "via": "no_payment_due.name -> person.name"
+   }
+  ],
+  "public": [],
+  "exclude": [
+   "bool"
+  ],
+  "no_insert": [],
+  "quirks": [
+   "Students are identified by codes like 'student123' stored in a name column, not by real names or numeric ids.",
+   "filed_for_bankrupcy and longest_absense_from_school are misspelled in the schema; always use those exact table names.",
+   "In longest_absense_from_school, month 0 means the student has never been absent.",
+   "Only male students appear in male; a student missing from that table is female, so 'changing gender' means adding or removing the row.",
+   "In no_payment_due, bool 'neg' means the student has no payment due and 'pos' means the student has payment due; those are the only two values.",
+   "enlist.organ and enrolled.school hold text codes like 'fire_department' and 'ucb' with no reference table."
+  ],
+  "description": "A student loan database of 1000 students identified by codes like 'student123'. One-to-one tables record each student's circumstances (disabled, unemployed, male, filed for bankruptcy, longest absence, payment due), while enlist records organizations a student enlisted in and enrolled records the school and month of enrollment.",
+  "confirmed": false,
+  "notes": [
+   "Claude: roles, edges and every quirk checked against the data; no change"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "bird:superhero": {
+  "roots": [
+   {
+    "table": "superhero",
+    "label": "superhero",
+    "parents": [
+     {
+      "table": "gender",
+      "via": "superhero.gender_id -> gender.id",
+      "parents": []
+     },
+     {
+      "table": "colour",
+      "via": "superhero.eye_colour_id -> colour.id",
+      "parents": []
+     },
+     {
+      "table": "colour",
+      "via": "superhero.hair_colour_id -> colour.id",
+      "parents": []
+     },
+     {
+      "table": "colour",
+      "via": "superhero.skin_colour_id -> colour.id",
+      "parents": []
+     },
+     {
+      "table": "race",
+      "via": "superhero.race_id -> race.id",
+      "parents": []
+     },
+     {
+      "table": "publisher",
+      "via": "superhero.publisher_id -> publisher.id",
+      "parents": []
+     },
+     {
+      "table": "alignment",
+      "via": "superhero.alignment_id -> alignment.id",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "persons": {
+   "superhero": {
+    "key": "id",
+    "name_cols": [
+     "superhero_name",
+     "full_name"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "hero_attribute",
+    "label": "attribute ratings",
+    "path": [
+     "hero_attribute.hero_id -> superhero.id"
+    ],
+    "parents": [
+     {
+      "table": "attribute",
+      "via": "hero_attribute.attribute_id -> attribute.id",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "hero_power",
+    "label": "powers",
+    "path": [
+     "hero_power.hero_id -> superhero.id"
+    ],
+    "parents": [
+     {
+      "table": "superpower",
+      "via": "hero_power.power_id -> superpower.id",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "alignment",
+   "attribute",
+   "colour",
+   "gender",
+   "publisher",
+   "race",
+   "superpower"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "hero_attribute and hero_power have no primary key; a hero has at most one row per attribute_id and at most one row per power_id.",
+   "publisher id 1 has an empty publisher_name, race id 1 is '-' and colour id 1 is 'No Colour'; these are placeholders for an unknown value.",
+   "height_cm and weight_kg of NULL or 0 mean the hero's height or weight is unknown, not that they are actually zero."
+  ],
+  "description": "A catalog of comic-book superheroes: each hero has a hero name, full name, physical traits (gender, eye/hair/skin colour, race, height, weight) plus a publisher and moral alignment, all described via small lookup tables. hero_attribute rates each hero on traits like intelligence and strength, and hero_power records which superpowers the hero has.",
+  "confirmed": false,
+  "notes": [
+   "Claude: roles, edges and every quirk checked against the data; no change"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "bird:synthea": {
+  "roots": [
+   {
+    "table": "patients",
+    "label": "patient",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "patients": {
+    "key": "patient",
+    "name_cols": [
+     "first",
+     "last"
+    ],
+    "same_as": [
+     "claims.ENCOUNTER"
+    ]
+   }
+  },
+  "events": [
+   {
+    "table": "encounters",
+    "label": "encounters",
+    "path": [
+     "encounters.PATIENT -> patients.patient"
+    ],
+    "parents": []
+   },
+   {
+    "table": "allergies",
+    "label": "allergies",
+    "path": [
+     "allergies.PATIENT -> patients.patient"
+    ],
+    "parents": [
+     {
+      "table": "encounters",
+      "via": "allergies.ENCOUNTER -> encounters.ID",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "careplans",
+    "label": "care plans",
+    "path": [
+     "careplans.PATIENT -> patients.patient"
+    ],
+    "parents": [
+     {
+      "table": "encounters",
+      "via": "careplans.ENCOUNTER -> encounters.ID",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "claims",
+    "label": "claims",
+    "path": [
+     "claims.PATIENT -> patients.patient"
+    ],
+    "parents": []
+   },
+   {
+    "table": "conditions",
+    "label": "conditions (diagnoses)",
+    "path": [
+     "conditions.PATIENT -> patients.patient"
+    ],
+    "parents": [
+     {
+      "table": "encounters",
+      "via": "conditions.ENCOUNTER -> encounters.ID",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "immunizations",
+    "label": "immunizations",
+    "path": [
+     "immunizations.PATIENT -> patients.patient"
+    ],
+    "parents": [
+     {
+      "table": "encounters",
+      "via": "immunizations.ENCOUNTER -> encounters.ID",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "medications",
+    "label": "medications",
+    "path": [
+     "medications.PATIENT -> patients.patient"
+    ],
+    "parents": [
+     {
+      "table": "encounters",
+      "via": "medications.ENCOUNTER -> encounters.ID",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "observations",
+    "label": "observations",
+    "path": [
+     "observations.PATIENT -> patients.patient"
+    ],
+    "parents": [
+     {
+      "table": "encounters",
+      "via": "observations.ENCOUNTER -> encounters.ID",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "procedures",
+    "label": "procedures",
+    "path": [
+     "procedures.PATIENT -> patients.patient"
+    ],
+    "parents": [
+     {
+      "table": "encounters",
+      "via": "procedures.ENCOUNTER -> encounters.ID",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "all_prevalences"
+  ],
+  "exclude": [],
+  "no_insert": [
+   "patients",
+   "encounters",
+   "claims",
+   "careplans"
+  ],
+  "quirks": [
+   "In claims, the ENCOUNTER column holds the patient's id rather than an encounter id; it always matches claims.PATIENT.",
+   "allergies START and STOP are text dates in m/d/yy format (e.g. 3/11/95), unlike the yyyy-mm-dd dates used everywhere else.",
+   "patients.passport holds the string 'FALSE' (564 patients) or null (339) when a patient has no passport.",
+   "careplans.CODE is stored as a REAL number (e.g. 53950000.0) while code columns in the other clinical tables are integers."
+  ],
+  "description": "A synthetic electronic health record system: each patient's identity and demographics live in patients, and their medical history is a series of encounters, each of which can carry allergies, care plans, conditions, immunizations, medications, observations, procedures and claims. Claims reference only the patient. all_prevalences is reference data on how common each disease is in the living population.",
+  "confirmed": false,
+  "notes": [
+   "Claude: quirks checked; passport is 'FALSE' or null for patients without one"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "spider1:college_2": {
+  "roots": [
+   {
+    "table": "student",
+    "label": "student",
+    "parents": [
+     {
+      "table": "department",
+      "via": "student.dept_name -> department.dept_name",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "instructor",
+    "label": "instructor",
+    "parents": [
+     {
+      "table": "department",
+      "via": "instructor.dept_name -> department.dept_name",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "persons": {
+   "student": {
+    "key": "ID",
+    "name_cols": [
+     "name"
+    ],
+    "same_as": []
+   },
+   "instructor": {
+    "key": "ID",
+    "name_cols": [
+     "name"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "takes",
+    "label": "enrollments",
+    "path": [
+     "takes.ID -> student.ID"
+    ],
+    "parents": [
+     {
+      "table": "section",
+      "via": "takes.(course_id, sec_id, semester, year) -> section.(course_id, sec_id, semester, year)",
+      "parents": [
+       {
+        "table": "course",
+        "via": "section.course_id -> course.course_id",
+        "parents": []
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "table": "advisor",
+    "label": "advisor assignment",
+    "path": [
+     "advisor.s_ID -> student.ID"
+    ],
+    "parents": [
+     {
+      "table": "instructor",
+      "via": "advisor.i_ID -> instructor.ID",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "teaches",
+    "label": "sections taught",
+    "path": [
+     "teaches.ID -> instructor.ID"
+    ],
+    "parents": [
+     {
+      "table": "section",
+      "via": "teaches.(course_id, sec_id, semester, year) -> section.(course_id, sec_id, semester, year)",
+      "parents": [
+       {
+        "table": "course",
+        "via": "section.course_id -> course.course_id",
+        "parents": []
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "table": "advisor",
+    "label": "advisees",
+    "path": [
+     "advisor.i_ID -> instructor.ID"
+    ],
+    "parents": [
+     {
+      "table": "student",
+      "via": "advisor.s_ID -> student.ID",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "course",
+   "section",
+   "prereq",
+   "department",
+   "classroom",
+   "time_slot"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "section, teaches and takes all share the composite key (course_id, sec_id, semester, year); a new takes or teaches row must copy the values of an existing section row.",
+   "IDs in student, instructor and course are plain digit strings (e.g. '24746', '787'), and sec_id holds plain digits like '1'."
+  ],
+  "description": "A university database: students and instructors each belong to a department, and advisor links every student to a supervising instructor. Courses are offered as sections in a semester, classroom and time slot; teaches records the instructor leading each section and takes records each student's enrollment and grade, with prereq holding course prerequisites.",
+  "confirmed": false,
+  "notes": [
+   "Claude: event parents trimmed to section -> course for takes and teaches and to the other person for advisor -- a student has about 15 enrolments, and classroom, time slot and departments added four rows to each; section -> time_slot also led to several rows (one per day)"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "spider1:hr_1": {
+  "roots": [
+   {
+    "table": "employees",
+    "label": "employee",
+    "parents": [
+     {
+      "table": "employees",
+      "via": "employees.MANAGER_ID -> employees.EMPLOYEE_ID",
+      "parents": []
+     },
+     {
+      "table": "jobs",
+      "via": "employees.JOB_ID -> jobs.JOB_ID",
+      "parents": []
+     },
+     {
+      "table": "departments",
+      "via": "employees.DEPARTMENT_ID -> departments.DEPARTMENT_ID",
+      "parents": [
+       {
+        "table": "locations",
+        "via": "departments.LOCATION_ID -> locations.LOCATION_ID",
+        "parents": []
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "persons": {
+   "employees": {
+    "key": "EMPLOYEE_ID",
+    "name_cols": [
+     "FIRST_NAME",
+     "LAST_NAME"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "job_history",
+    "label": "job history entries",
+    "path": [
+     "job_history.EMPLOYEE_ID -> employees.EMPLOYEE_ID"
+    ],
+    "parents": [
+     {
+      "table": "jobs",
+      "via": "job_history.JOB_ID -> jobs.JOB_ID",
+      "parents": []
+     },
+     {
+      "table": "departments",
+      "via": "job_history.DEPARTMENT_ID -> departments.DEPARTMENT_ID",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "jobs",
+   "departments",
+   "locations",
+   "countries",
+   "regions"
+  ],
+  "exclude": [],
+  "no_insert": [
+   "jobs",
+   "countries"
+  ],
+  "quirks": [
+   "No key is assigned automatically: every key is a DECIMAL or a varchar code, so a new row needs an explicit id.",
+   "employees.MANAGER_ID 0 (on employee 100, the president) means 'no manager' and matches no employee row.",
+   "regions.REGION_NAME values end with the two characters \\r (a backslash and r), e.g. 'Europe\\r'.",
+   "Only 7 of the 107 employees have job_history rows."
+  ],
+  "description": "A human resources database: employees hold jobs, report to managers, and belong to departments at office locations in countries grouped by region. Each employee's past assignments are logged in job_history with the job and department held over a start-to-end date range.",
+  "confirmed": false,
+  "notes": [
+   "Claude: removed same_as employees.MANAGER_ID and departments.MANAGER_ID -- same_as is for the same person's id in another table; these columns name a manager, and as ownership edges they would make every department the manager's private data",
+   "Claude: root parents end at departments -> locations and job_history parents at jobs and departments -- countries and regions add rows without helping",
+   "Claude: quirks checked: REGION_NAME ends with a literal backslash and r, not a carriage return; dropped the unverifiable claim that job_history rows predate the current job"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "spider2:IPL": {
+  "roots": [
+   {
+    "table": "player",
+    "label": "cricketer",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "player": {
+    "key": "player_id",
+    "name_cols": [
+     "player_name"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "player_match",
+    "label": "match appearances",
+    "path": [
+     "player_match.player_id -> player.player_id"
+    ],
+    "parents": [
+     {
+      "table": "match",
+      "via": "player_match.match_id -> match.match_id",
+      "parents": []
+     },
+     {
+      "table": "team",
+      "via": "player_match.team_id -> team.team_id",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "ball_by_ball",
+    "label": "balls faced (striker)",
+    "path": [
+     "ball_by_ball.striker -> player.player_id"
+    ],
+    "parents": [
+     {
+      "table": "match",
+      "via": "ball_by_ball.match_id -> match.match_id",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "ball_by_ball",
+    "label": "balls bowled",
+    "path": [
+     "ball_by_ball.bowler -> player.player_id"
+    ],
+    "parents": [
+     {
+      "table": "match",
+      "via": "ball_by_ball.match_id -> match.match_id",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "batsman_scored",
+    "label": "runs scored off the bat",
+    "path": [
+     "ball_by_ball.striker -> player.player_id",
+     "batsman_scored.(match_id, over_id, ball_id, innings_no) -> ball_by_ball.(match_id, over_id, ball_id, innings_no)"
+    ],
+    "parents": [
+     {
+      "table": "match",
+      "via": "batsman_scored.match_id -> match.match_id",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "extra_runs",
+    "label": "extras on balls they bowled",
+    "path": [
+     "ball_by_ball.bowler -> player.player_id",
+     "extra_runs.(match_id, over_id, ball_id, innings_no) -> ball_by_ball.(match_id, over_id, ball_id, innings_no)"
+    ],
+    "parents": [
+     {
+      "table": "match",
+      "via": "extra_runs.match_id -> match.match_id",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "wicket_taken",
+    "label": "dismissals (the player out)",
+    "path": [
+     "wicket_taken.player_out -> player.player_id"
+    ],
+    "parents": [
+     {
+      "table": "match",
+      "via": "wicket_taken.match_id -> match.match_id",
+      "parents": []
+     },
+     {
+      "table": "ball_by_ball",
+      "via": "wicket_taken.(match_id, over_id, ball_id, innings_no) -> ball_by_ball.(match_id, over_id, ball_id, innings_no)",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "team",
+   "match"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "batsman_scored, extra_runs and wicket_taken have no declared foreign key to ball_by_ball; they join on the shared columns (match_id, over_id, ball_id, innings_no).",
+   "ball_by_ball.striker, ball_by_ball.non_striker, ball_by_ball.bowler, wicket_taken.player_out and match.man_of_the_match hold player_id values without declared foreign keys.",
+   "match.team_1, match.team_2, match.toss_winner, match.match_winner, ball_by_ball.team_batting and ball_by_ball.team_bowling hold team_id values without declared foreign keys.",
+   "There is no season table; match.season_id is just a season number."
+  ],
+  "description": "An Indian Premier League (Twenty20 cricket) results database over many seasons: each match between two teams records venue, toss and result, every delivery sits in ball_by_ball, and the runs, extras and wickets off each ball live in separate tables sharing the ball's key. The people are the cricketers in player, linked to the matches they played with a role and team in player_match, and appearing throughout the ball data as striker, non-striker, bowler, dismissed player and man of the match.",
+  "confirmed": false,
+  "notes": [
+   "Claude: removed same_as -- striker, non_striker, bowler and player_out are references already in the recorded foreign keys, and match.man_of_the_match as an identity column would make every match the man of the match's private data",
+   "Claude: dropped the non-striker event group and trimmed parents to the match (plus the player's team and the dismissal ball) -- a player has hundreds of ball rows per role and team rows under each added little"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "spider2:WWE": {
+  "roots": [
+   {
+    "table": "Wrestlers",
+    "label": "wrestler",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "Wrestlers": {
+    "key": "id",
+    "name_cols": [
+     "name"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "Matches",
+    "label": "matches won",
+    "path": [
+     "Matches.winner_id -> Wrestlers.id"
+    ],
+    "parents": [
+     {
+      "table": "Wrestlers",
+      "via": "Matches.loser_id -> Wrestlers.id",
+      "parents": []
+     },
+     {
+      "table": "Cards",
+      "via": "Matches.card_id -> Cards.id",
+      "parents": [
+       {
+        "table": "Events",
+        "via": "Cards.event_id -> Events.id",
+        "parents": []
+       }
+      ]
+     },
+     {
+      "table": "Match_Types",
+      "via": "Matches.match_type_id -> Match_Types.id",
+      "parents": []
+     },
+     {
+      "table": "Belts",
+      "via": "Matches.title_id -> Belts.id",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "Matches",
+    "label": "matches lost",
+    "path": [
+     "Matches.loser_id -> Wrestlers.id"
+    ],
+    "parents": [
+     {
+      "table": "Wrestlers",
+      "via": "Matches.winner_id -> Wrestlers.id",
+      "parents": []
+     },
+     {
+      "table": "Cards",
+      "via": "Matches.card_id -> Cards.id",
+      "parents": [
+       {
+        "table": "Events",
+        "via": "Cards.event_id -> Events.id",
+        "parents": []
+       }
+      ]
+     },
+     {
+      "table": "Match_Types",
+      "via": "Matches.match_type_id -> Match_Types.id",
+      "parents": []
+     },
+     {
+      "table": "Belts",
+      "via": "Matches.title_id -> Belts.id",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "Cards",
+   "Events",
+   "Locations",
+   "Promotions",
+   "Match_Types",
+   "Belts"
+  ],
+  "exclude": [
+   "Tables"
+  ],
+  "no_insert": [],
+  "quirks": [
+   "Matches.winner_id, loser_id, match_type_id and title_id are TEXT columns holding integer ids as strings; compare them as text.",
+   "Wrestlers.name, Belts.name, Events.name, Locations.name, Promotions.name and Match_Types.name are UNIQUE.",
+   "sqlite_sequence is ahead of MAX(id) in Belts, Cards, Events, Locations, Match_Types, Promotions, Tables and Wrestlers, so a new row in any of those tables needs an explicit id.",
+   "Belts id 1 and Match_Types id 1 have empty names and act as 'no title' / 'no special type' placeholders referenced by most Matches.",
+   "Cards.url, Cards.info_html, Cards.match_html and Tables.html are scraped web artifacts, not data a request should rewrite."
+  ],
+  "description": "A professional-wrestling results database assembled by scraping profightdb.com. Cards record each event card (date, promotion, location and event name), and Matches record each individual bout with its winner, loser, win type, match type, duration and the championship belt at stake. The only people are the wrestlers, who appear in Matches as the winner and the loser.",
+  "confirmed": false,
+  "notes": [
+   "Claude: removed same_as Matches.winner_id -- it repeats the 'matches won' path, and same_as is for identity columns, not references",
+   "Claude: Cards parents trimmed to Events -- each card row already carries cut-down HTML, Locations and Promotions added two more rows per match"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "spider2:school_scheduling": {
+  "roots": [
+   {
+    "table": "Students",
+    "label": "student",
+    "parents": [
+     {
+      "table": "Majors",
+      "via": "Students.StudMajor -> Majors.MajorID",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "Staff",
+    "label": "staff member",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "Students": {
+    "key": "StudentID",
+    "name_cols": [
+     "StudFirstName",
+     "StudLastName"
+    ],
+    "same_as": []
+   },
+   "Staff": {
+    "key": "StaffID",
+    "name_cols": [
+     "StfFirstName",
+     "StfLastname"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "Student_Schedules",
+    "label": "class enrollments",
+    "path": [
+     "Student_Schedules.StudentID -> Students.StudentID"
+    ],
+    "parents": [
+     {
+      "table": "Classes",
+      "via": "Student_Schedules.ClassID -> Classes.ClassID",
+      "parents": [
+       {
+        "table": "Subjects",
+        "via": "Classes.SubjectID -> Subjects.SubjectID",
+        "parents": []
+       }
+      ]
+     },
+     {
+      "table": "Student_Class_Status",
+      "via": "Student_Schedules.ClassStatus -> Student_Class_Status.ClassStatus",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "Faculty_Classes",
+    "label": "classes taught",
+    "path": [
+     "Faculty_Classes.StaffID -> Staff.StaffID"
+    ],
+    "parents": [
+     {
+      "table": "Classes",
+      "via": "Faculty_Classes.ClassID -> Classes.ClassID",
+      "parents": [
+       {
+        "table": "Subjects",
+        "via": "Classes.SubjectID -> Subjects.SubjectID",
+        "parents": []
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "table": "Faculty_Subjects",
+    "label": "subject proficiencies",
+    "path": [
+     "Faculty.StaffID -> Staff.StaffID",
+     "Faculty_Subjects.StaffID -> Faculty.StaffID"
+    ],
+    "parents": [
+     {
+      "table": "Subjects",
+      "via": "Faculty_Subjects.SubjectID -> Subjects.SubjectID",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "Faculty_Categories",
+    "label": "teaching categories",
+    "path": [
+     "Faculty.StaffID -> Staff.StaffID",
+     "Faculty_Categories.StaffID -> Faculty.StaffID"
+    ],
+    "parents": [
+     {
+      "table": "Categories",
+      "via": "Faculty_Categories.CategoryID -> Categories.CategoryID",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [
+   {
+    "table": "Faculty",
+    "of": "Staff",
+    "via": "Faculty.StaffID -> Staff.StaffID"
+   }
+  ],
+  "public": [
+   "Classes",
+   "Subjects",
+   "Categories",
+   "Departments",
+   "Class_Rooms",
+   "Buildings",
+   "Majors",
+   "Student_Class_Status"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "Staff's last-name column is StfLastname (lowercase n), while Students uses StudLastName.",
+   "Subjects.SubjectPreReq stores another subject's SubjectCode (e.g. 'ACC 210'), not a SubjectID; it is null when there is no prerequisite.",
+   "Faculty is the teaching profile of a Staff member and reuses Staff.StaffID; only 24 of the 27 staff members are faculty.",
+   "Departments.DeptChair holds the StaffID of the staff member who chairs the department.",
+   "Grades in Student_Schedules and StudGPA in Students are on a 0-100 scale, not 0-4."
+  ],
+  "description": "A university course scheduling and academic records database: students, each with a major, enroll in class sections (Classes) through Student_Schedules records carrying an enrollment status and grade, while staff members teach those sections via Faculty_Classes and hold subject proficiencies and teaching categories. Classes meet in classrooms grouped by building and teach subjects grouped into categories and departments; some staff carry a Faculty profile (title, status, tenure) sharing the same StaffID, and one staff member chairs each department.",
+  "confirmed": false,
+  "notes": [
+   "Claude: event parents trimmed to class -> subject (plus the enrolment status) -- category, classroom, building and department added up to four rows per record",
+   "Claude: quirks checked against the data; no change"
+  ],
+  "draft": {
+   "model": "glm-5.3",
+   "rounds": 1,
+   "errors": []
+  }
+ }
+}
