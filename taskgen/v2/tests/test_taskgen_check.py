@@ -1,5 +1,5 @@
 # tests/test_taskgen_check.py
-import sqlite3
+import sqlite3, time
 import pytest
 from taskgen_common.testing import make_db, SHOP, rows
 from test_taskgen_trees import SHOP2, FKS, CUSTOMER
@@ -377,10 +377,53 @@ def test_auto_key_for_a_table_written_in_another_case(tmp_path):
     assert r["reasons"] == ["out_of_scope: logs"]                  # 3 is what SQLite would give: no literal is missing
 
 
-def test_ctrl_c_in_the_rerun_pause_is_not_swallowed(rental, monkeypatch):
-    def interrupted(seconds):
+def test_ctrl_c_in_the_rerun_is_not_swallowed(rental, monkeypatch):
+    def interrupted(stmt, instant):
         raise KeyboardInterrupt
-    monkeypatch.setattr(check.time, "sleep", interrupted)
+    monkeypatch.setattr(check, "at_instant", interrupted)
     with pytest.raises(KeyboardInterrupt):
         check.run_check_safe(rental, cand("I am a5 b5. Mark my rental 5 as returned right now.",
                                           ["UPDATE rental SET return_date = CURRENT_TIMESTAMP WHERE rental_id = 5"]))
+
+
+# --- plan 3: literal rules and clock readings left over from plan 1 ---
+
+def test_plurals_and_units_after_numbers_match():
+    ok = check.literal_ok
+    assert ok("cup", "add 2 cups of flour", set()) and ok("box", "ship three boxes", set())
+    assert ok("g", "use 10g of salt", set()) and ok("ml", "add 20ml of lime juice", set())
+    assert not ok("ml", "the html page", set()) and not ok("203", "card 12030", set())
+    assert not ok("cup", "the cupboard", set())
+
+
+def test_a_number_glued_to_letters_on_its_left_does_not_count():
+    ok = check.literal_ok
+    assert not ok("3174", "client C00003174, please", set())
+    assert ok("3174", "invoice #3174, please", set()) and ok("3174", "3174kg of steel", set())
+
+
+def test_clock_readings_without_a_time_value_are_nondeterministic():
+    for sql in ["UPDATE r SET d = date()", "UPDATE r SET d = datetime( )", "UPDATE r SET d = julianday()",
+                "UPDATE r SET d = strftime('%Y-%m-%d %H:%M')", "UPDATE r SET d = time()"]:
+        assert check.NONDET.search(sql), sql
+    for sql in ["UPDATE r SET d = date('2024-01-02')", "UPDATE r SET d = strftime('%Y', d)"]:
+        assert not check.NONDET.search(sql), sql
+
+
+def test_at_instant_replaces_every_clock_reading():
+    sql = ("UPDATE r SET a = CURRENT_TIMESTAMP, b = current_date, c = CURRENT_TIME, d = datetime('now', 'localtime'), "
+           "e = date(), f = strftime('%H:%M'), g = 'nowhere'")
+    assert check.at_instant(sql, "2000-01-01 13:37:42") == (
+        "UPDATE r SET a = '2000-01-01 13:37:42', b = '2000-01-01', c = '13:37:42', "
+        "d = datetime('2000-01-01 13:37:42', 'localtime'), e = date('2000-01-01 13:37:42'), "
+        "f = strftime('%H:%M', '2000-01-01 13:37:42'), g = 'nowhere'")
+
+
+def test_minute_precise_clock_value_is_rejected_without_waiting(rental):
+    t0 = time.time()
+    r = check.run_check(rental, cand("I am a5 b5. Stamp my rental 5 with the current minute, as of now.",
+                                     ["UPDATE rental SET return_date = strftime('%Y-%m-%d %H:%M', 'now') WHERE rental_id = 5"]))
+    assert r["reasons"] == ["nondeterministic: rental"] and time.time() - t0 < 1
+    r = check.run_check(rental, cand("I am a5 b5. Mark my rental 5 as returned today.",
+                                     ["UPDATE rental SET return_date = date() WHERE rental_id = 5"]))
+    assert r["ok"], r["reasons"]

@@ -1,7 +1,7 @@
 # taskgen/v2/taskgen_v2/check.py
 """Execution check of a candidate task on an in-memory copy of its database, plus the derived labels
 (task type, difficulty, template) that dedup and the pilot statistics use. Nothing here calls a model."""
-import json, re, sqlite3, time, unicodedata
+import json, re, sqlite3, unicodedata
 import sqlparse
 from sqlparse import tokens as T
 from taskgen_common.db_select import _q
@@ -15,12 +15,16 @@ TXN = re.compile(r"(?is)^\s*(begin|commit|end|rollback|savepoint|release)\b")
 _NAME = r'(?:"([^"]+)"|\[([^\]]+)\]|`([^`]+)`|([\w$]+))'
 # archive = INSERT whose source is a SELECT (not a subquery inside VALUES) ...
 ARCHIVE_SRC = re.compile(r"(?is)^\s*insert\b(?:(?!\bvalues\b).)*?\bselect\b.*?\bfrom\s+" + _NAME)
-# gold that reads the clock or random(): run it twice and compare what the eval hash compares
-NONDET = re.compile(r"(?i)\bcurrent_(?:timestamp|time|date)\b|'now'|\brandom(?:blob)?\s*\(|\bunixepoch\s*\(")
+# gold that reads the clock or random(): run it twice and compare what the eval hash compares. Date functions called
+# without a time value read the clock too: date(), datetime(), julianday(), strftime('%H:%M')
+NONDET = re.compile(r"(?i)\bcurrent_(?:timestamp|time|date)\b|'now'|\brandom(?:blob)?\s*\(|\bunixepoch\s*\(|"
+                    r"\b(?:date|time|datetime|julianday)\s*\(\s*\)|\bstrftime\s*\(\s*'(?:[^']|'')*'\s*\)")
 # columns the eval hash skips, copied from DySQL-Bench/dysql_bench/envs/base.py (test_volatile_columns_match_the_eval)
 VOLATILE_COL_RE = re.compile(
     r"(?i)^(last_?update|updated_?at|update_?time|modified(_at)?|modification_?time|create(d)?_?at|timestamp)$")
-RERUN_GAP_S = 1.1   # CURRENT_TIMESTAMP has one-second resolution; date-only values agree within a day and pass
+# the two clock readings of the rerun: the same day at two times, so values precise to the day agree and pass, and
+# values precise to the hour, minute or second differ (the 1.1-second rerun of plan 1 let minutes and hours through)
+INSTANTS = ("2000-01-01 00:00:00", "2000-01-01 13:37:42")
 
 
 def split_statements(sql):
@@ -112,8 +116,11 @@ def text_forms(instruction):
 
 
 def _contains(text, n):
-    """n occurs in text as a whole token: '203' is not in '2030', 'ann' is not in 'joanna'."""
-    return re.search(r"(?<!\w)" + re.escape(n) + r"(?!\w)", text) is not None
+    """n occurs in text as a whole token: '203' is not in '2030', 'ann' is not in 'joanna'. A word may take a plural
+    ending ('cup' in '2 cups') and a unit may follow a number ('g' in '10g'), as in DySQL's cookbook gold."""
+    before = r"(?:(?<!\w)|(?<=\d))" if n.isalpha() else r"(?<!\w)"
+    after = r"(?:e?s)?(?!\w)" if n[-1:].isalpha() else r"(?!\w)"
+    return re.search(before + re.escape(n) + after, text) is not None
 
 
 def literal_ok(lit, instruction, allowed):
@@ -130,7 +137,7 @@ def literal_ok(lit, instruction, allowed):
     if v is not None:
         if any(_num(a) == v for a in allowed):
             return True
-        return any(_num(m) == v for m in re.findall(r"-?\d[\d,]*\.?\d*", text))
+        return any(_num(m) == v for m in re.findall(r"(?<![\w.])-?\d[\d,]*\.?\d*", text))   # a whole number: not 3174 in 'c00003174'
     return False
 
 
@@ -163,19 +170,33 @@ def snapshot(db, tables):
     return out
 
 
+def at_instant(stmt, instant):
+    """The statement with every clock reading replaced by a fixed instant: 'now', CURRENT_TIMESTAMP/DATE/TIME, and
+    date functions called without a time value. A column default that reads the clock is not replaced; none of the
+    36 databases (23 here, 13 in DySQL) has one."""
+    day, tod = instant.split()
+    s = re.sub(r"(?i)\bcurrent_timestamp\b", f"'{instant}'", stmt)
+    s = re.sub(r"(?i)\bcurrent_date\b", f"'{day}'", s)
+    s = re.sub(r"(?i)\bcurrent_time\b", f"'{tod}'", s)
+    s = re.sub(r"(?i)'now'", f"'{instant}'", s)
+    s = re.sub(r"(?i)\b(date|time|datetime|julianday|unixepoch)\s*\(\s*\)", rf"\1('{instant}')", s)
+    return re.sub(r"(?i)\bstrftime\s*\(\s*('(?:[^']|'')*')\s*\)", rf"strftime(\1, '{instant}')", s)
+
+
 def rerun_changes(db, stmts, tables):
-    """Run the statements again (every one that ran the first time, DDL included, so the second run starts from the
-    same state), RERUN_GAP_S later. The caller's open transaction holds the first run. Returns the tables whose
-    compared columns differ, '' when the runs agree."""
-    first = snapshot(db, tables)
-    db.execute("ROLLBACK"); time.sleep(RERUN_GAP_S); db.execute("BEGIN")
-    try:
-        for s in stmts:
-            db.execute(s).fetchall()
-    except sqlite3.Error as e:
-        return f"rerun failed: {e}"
-    second = snapshot(db, tables)
-    return ", ".join(t for t in sorted(tables) if first[t] != second[t])
+    """Run the statements again twice, at the two INSTANTS (every statement that ran the first time, DDL included, so
+    both runs start from the same state), and compare what the eval hash compares. The caller's open transaction
+    holds the first run. Returns the tables whose compared columns differ, '' when the runs agree."""
+    snaps = []
+    for instant in INSTANTS:
+        db.execute("ROLLBACK"); db.execute("BEGIN")
+        try:
+            for st in stmts:
+                db.execute(at_instant(st, instant)).fetchall()
+        except sqlite3.Error as e:
+            return f"rerun failed: {e}"
+        snaps.append(snapshot(db, tables))
+    return ", ".join(t for t in sorted(tables) if snaps[0][t] != snaps[1][t])
 
 
 def _keys(db, table, col):
@@ -295,7 +316,7 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
             if changed:
                 out["reasons"].append("nondeterministic: " + changed)
     finally:
-        if db.in_transaction:   # a Ctrl-C in the rerun's pause leaves none open; ROLLBACK would hide the interrupt
+        if db.in_transaction:   # a Ctrl-C between the rerun's ROLLBACK and BEGIN leaves none open; ROLLBACK would hide it
             db.execute("ROLLBACK")
         db.close()
     if not out["writes"] or (all(w["rows"] == 0 for w in out["writes"])
