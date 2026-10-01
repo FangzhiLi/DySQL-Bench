@@ -12,12 +12,13 @@ CFG = {
     # write statements per task; type 2 never writes once, so overall this lands near DySQL's 33/45/13/6/3 (§4.4)
     "WRITES_MIX": {1: 0.37, 2: 0.41, 3: 0.13, 4: 0.06, 5: 0.03},
     # shape shares, set so the task-level rates over the 23 databases match DySQL's gold (simulated on the plan-2
-    # trees): two tables 57%, subquery 12%, archive 6.4%, batch 7%
+    # trees): two tables 58%, subquery 12%, archive 6.5%, batch 6%
     "TWO_TABLES": 0.85,      # multi-write tasks that write two tables, when two are in scope
     "SUBQUERY": 0.13,        # tasks that find the person through a subquery (D8), when the tree has a lookup
     "BATCH": 0.12,           # tasks with one UPDATE/DELETE over 2-50 of the person's rows, when a group has 2 to 50
     "BATCH_ALL": 0.6,        # ... of which change all of the group's rows (DySQL: "all my invoices"), the rest by a condition
-    "ARCHIVE": 0.18,         # multi-write tasks that copy rows with INSERT ... SELECT before changing them, when a table can
+    "ARCHIVE": 0.40,         # tasks that copy rows with INSERT ... SELECT before changing them, when a table can and
+                             # there is a write left for each other table (the copy and the change take two)
     "FREE_TABLE_SHARE": 0.30,
     "MAX_ROWS_PER_STMT": 50,
     "WORDS": (40, 80),       # instruction length asked for (DySQL: mean 57, p90 80)
@@ -194,17 +195,17 @@ def sample_plan(rng, tree, anchor, cfg=CFG, ctx=None):
     if task_type != "3_public_only" and groups and rng.random() < cfg["BATCH"]:
         g = max(groups, key=lambda g: g["count"])
         batch = {"table": g["table"], "label": g["label"], "count": g["count"], "all": rng.random() < cfg["BATCH_ALL"]}
-    archive = None   # copy rows as new rows of the same table, then change the originals; with a batch, its table
-    sources = [t for t in pool if t in copyable and t != anchor["table"] and (t in events or task_type == "3_public_only")]
-    if n_writes >= 2 and sources and rng.random() < cfg["ARCHIVE"]:
-        archive = rng.choice(sources) if not batch else batch["table"] if batch["table"] in sources else None
-    subquery = bool(tree.get("lookup")) and task_type != "3_public_only" and rng.random() < cfg["SUBQUERY"]
-
     n_tables = 1
     if task_type == "2_self_and_public":
         n_tables = 2
     elif n_writes >= 2 and len(pool) >= 2 and rng.random() < cfg["TWO_TABLES"]:
         n_tables = 2
+    archive = None   # copy rows as new rows of the same table, then change the originals; with a batch, its table
+    sources = [t for t in pool if t in copyable and t != anchor["table"] and (t in events or task_type == "3_public_only")]
+    if n_writes >= n_tables + 1 and sources and rng.random() < cfg["ARCHIVE"]:   # copy + change, one more per other table
+        archive = rng.choice(sources) if not batch else batch["table"] if batch["table"] in sources else None
+    subquery = bool(tree.get("lookup")) and task_type != "3_public_only" and rng.random() < cfg["SUBQUERY"]
+
     must = archive or (batch and batch["table"])   # the one table a batch or an archive needs written
     write_tables = None
     if rng.random() >= cfg["FREE_TABLE_SHARE"]:

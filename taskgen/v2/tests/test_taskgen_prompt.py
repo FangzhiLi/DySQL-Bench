@@ -167,3 +167,10 @@ def test_style_varies_tones_names_and_roles():
     assert len({p["style"]["name"] for p in proxies}) > 30 and len({p["style"]["role"] for p in proxies}) >= 8
     assert all(p["style"]["name"] is None for p in ps if p["task_type"] != "5_proxy")
     assert len({p["style"]["tone"] for p in ps}) >= 6 and not any("question" in t for t in prompt.TONES)
+
+
+def test_an_archive_leaves_a_write_for_every_other_table():
+    # the copy and the change of the original are two statements on the archive's table; each other table needs one
+    arch = [p for p in plans(6000) if p["shape"]["archive"]]
+    assert arch and all(p["shape"]["n_writes"] >= p["shape"]["n_tables"] + 1 for p in arch)
+    assert any(p["shape"]["n_tables"] == 2 for p in arch)
