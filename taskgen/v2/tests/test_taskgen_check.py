@@ -454,3 +454,22 @@ def test_changing_only_the_new_row_of_an_insert_select_is_fine(db):
                                  [f"INSERT INTO order_items (item_id, order_id, note) SELECT {new_id}, order_id, note FROM order_items WHERE item_id = 5",
                                   f"UPDATE order_items SET note = 'x' WHERE item_id = {new_id}"]))
     assert not any(x.startswith("archive_copy_changed") for x in r["reasons"]), r["reasons"]
+
+
+def test_final_state_compares_what_the_statements_leave_behind(tmp_path):
+    db = make_db(tmp_path, "shop", SHOP + "CREATE TABLE tags (name TEXT, last_update TEXT); INSERT INTO tags VALUES ('a', 'x');")
+    fs = lambda *s: check.final_state(db, list(s))
+    assert fs("UPDATE orders SET qty = 3 WHERE order_id = 5") == fs("UPDATE orders SET qty = 3 WHERE order_id IN (5)")
+    assert fs("UPDATE orders SET qty = 3 WHERE order_id = 5") != fs("UPDATE orders SET qty = 3 WHERE order_id = 6")
+    assert fs("UPDATE orders SET qty = 3 WHERE order_id = 5") == {"orders": ([(5, 5, 5, 3)], [(5, 5, 5, 1)])}
+    assert fs("UPDATE orders SET qty = 1 WHERE order_id = 5") == {"orders": ([], [])}          # touched, not changed
+    assert fs("INSERT INTO tags VALUES ('a', 'y')") != fs("INSERT INTO tags VALUES ('a', 'y')", "INSERT INTO tags VALUES ('a', 'z')")
+    assert fs("INSERT INTO tags VALUES ('b', 'y')") == fs("INSERT INTO tags VALUES ('b', 'z')")   # last_update is not compared
+    assert fs("UPDATE nope SET x = 1") is None
+
+
+def test_final_state_reads_the_clock_at_a_fixed_instant(tmp_path):
+    db = make_db(tmp_path, "shop", SHOP + "CREATE TABLE notes (customer_id INTEGER, at TEXT);")
+    a = check.final_state(db, ["INSERT INTO notes VALUES (5, CURRENT_TIMESTAMP)"])
+    time.sleep(1.1)
+    assert a == check.final_state(db, ["INSERT INTO notes VALUES (5, datetime('now'))"]) == {"notes": ([(5, check.INSTANTS[0])], [])}

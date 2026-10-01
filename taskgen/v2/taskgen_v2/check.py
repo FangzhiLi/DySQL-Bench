@@ -2,6 +2,7 @@
 """Execution check of a candidate task on an in-memory copy of its database, plus the derived labels
 (task type, difficulty, template) that dedup and the pilot statistics use. Nothing here calls a model."""
 import json, re, sqlite3, unicodedata
+from collections import Counter
 import sqlparse
 from sqlparse import tokens as T
 from taskgen_common.db_select import _q
@@ -223,6 +224,36 @@ def _memory_copy(path):
     db = sqlite3.connect(":memory:", isolation_level=None)
     src.backup(db); src.close()
     return db
+
+
+def final_state(db_path, stmts):
+    """How the statements leave the tables they write, as the eval hash sees them: per table, the rows (non-volatile
+    columns) added and removed against the original file, as sorted lists that keep duplicates. Run on a fresh copy
+    with the clock read at INSTANTS[0]; None when a statement fails. Temporary triggers note the rowids a statement
+    touches, so only those rows are compared (eu_soccer's Match has 26k rows of 115 columns)."""
+    db = _memory_copy(db_path)
+    try:
+        db.execute("ATTACH DATABASE ? AS orig", (db_path,))
+        db.execute("CREATE TEMP TABLE _touched (t TEXT, r INTEGER)")
+        tables = sorted({w[1].lower() for st in stmts if (w := write_target(st))})
+        for n, t in enumerate(tables):
+            for ev, ref in (("INSERT", "NEW"), ("UPDATE", "OLD"), ("UPDATE", "NEW"), ("DELETE", "OLD")):
+                db.execute(f"CREATE TEMP TRIGGER _f{n}_{ev}_{ref} AFTER {ev} ON main.{_q(t)} BEGIN "
+                           f"INSERT INTO _touched VALUES ('{n}', {ref}.rowid); END")
+        for st in stmts:
+            db.execute(at_instant(st, INSTANTS[0])).fetchall()
+        out = {}
+        for n, t in enumerate(tables):
+            cols = [r[1] for r in db.execute(f"PRAGMA main.table_info({_q(t)})")]
+            keep = ", ".join(_q(c) for c in cols if not VOLATILE_COL_RE.match(c)) or "1"
+            now, before = (Counter(db.execute(f"SELECT {keep} FROM {s}.{_q(t)} WHERE rowid IN "
+                                              f"(SELECT r FROM _touched WHERE t = '{n}')").fetchall()) for s in ("main", "orig"))
+            out[t] = (sorted((now - before).elements(), key=repr), sorted((before - now).elements(), key=repr))
+        return out
+    except sqlite3.Error:
+        return None
+    finally:
+        db.close()
 
 
 def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
