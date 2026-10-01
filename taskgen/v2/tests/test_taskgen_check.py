@@ -427,3 +427,30 @@ def test_minute_precise_clock_value_is_rejected_without_waiting(rental):
     r = check.run_check(rental, cand("I am a5 b5. Mark my rental 5 as returned today.",
                                      ["UPDATE rental SET return_date = date() WHERE rental_id = 5"]))
     assert r["ok"], r["reasons"]
+
+
+def test_a_write_that_also_changes_the_archived_copy_is_rejected(db):
+    # the copy is the original but for the key SQLite gives it, so a later write by any other condition hits it too;
+    # an agent that leaves the copy alone would then miss the gold state
+    copy = "INSERT INTO order_items (order_id, note) SELECT order_id, note FROM order_items WHERE item_id = 5"
+    r = check.run_check(db, cand("I am a5 b5. Copy order item 5, then delete the original item 5.",
+                                 [copy, "DELETE FROM order_items WHERE item_id = 5"]))
+    assert r["ok"]
+    note = sqlite3.connect(db["path"]).execute("SELECT order_id, note FROM order_items WHERE item_id = 5").fetchone()
+    r = check.run_check(db, cand(f"I am a5 b5. Copy order item 5, then delete the items of order {note[0]}.",
+                                 [copy, f"DELETE FROM order_items WHERE order_id = {note[0]}"]))
+    assert "archive_copy_changed: DELETE order_items" in r["reasons"]
+    r = check.run_check(db, cand(f"I am a5 b5. Copy order item 5, then set the note of order {note[0]}'s items to x.",
+                                 [copy, f"UPDATE order_items SET note = 'x' WHERE order_id = {note[0]}"]))
+    assert "archive_copy_changed: UPDATE order_items" in r["reasons"]
+
+
+def test_changing_only_the_new_row_of_an_insert_select_is_fine(db):
+    # v1's movie tasks build a new row from a SELECT and then edit that row by its key: on purpose, not a hit on a copy
+    con = sqlite3.connect(db["path"])
+    new_id = con.execute("SELECT MAX(item_id) + 1 FROM order_items").fetchone()[0]
+    note = con.execute("SELECT note FROM order_items WHERE item_id = 5").fetchone()[0]
+    r = check.run_check(db, cand(f"I am a5 b5. Copy order item 5 as item {new_id}, then set the note of item {new_id} to x.",
+                                 [f"INSERT INTO order_items (item_id, order_id, note) SELECT {new_id}, order_id, note FROM order_items WHERE item_id = 5",
+                                  f"UPDATE order_items SET note = 'x' WHERE item_id = {new_id}"]))
+    assert not any(x.startswith("archive_copy_changed") for x in r["reasons"]), r["reasons"]

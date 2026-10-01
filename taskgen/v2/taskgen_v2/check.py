@@ -203,6 +203,21 @@ def _keys(db, table, col):
     return {str(k) for (k,) in db.execute(f"SELECT {_q(col)} FROM {_q(table)}")}
 
 
+def _max_rowid(db, table):
+    """MAX(rowid) before an INSERT ... SELECT, so the rows it adds can be told apart; None for WITHOUT ROWID tables."""
+    try:
+        return db.execute(f"SELECT COALESCE(MAX(rowid), 0) FROM {_q(table)}").fetchone()[0]
+    except sqlite3.Error:
+        return None
+
+
+def _copy_rows(db, table, rowids):
+    if not rowids:
+        return None
+    marks = ",".join("?" * len(rowids))
+    return db.execute(f"SELECT rowid, * FROM {_q(table)} WHERE rowid IN ({marks}) ORDER BY rowid", sorted(rowids)).fetchall()
+
+
 def _memory_copy(path):
     src = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     db = sqlite3.connect(":memory:", isolation_level=None)
@@ -249,6 +264,7 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
             db.execute(f"CREATE TEMP TRIGGER {_q('_u_' + t)} BEFORE UPDATE ON main.{_q(t)} BEGIN "
                        f"INSERT INTO _old VALUES ('{t}', json_object({obj})); END")
     stmts, labels, executed = [], [], []   # executed: every statement that ran, in order (writes and DDL)
+    copies = {}   # table -> rowids an INSERT ... SELECT added: the archived copies, which later writes must leave alone
     db.execute("BEGIN")
     try:
         for a in cand["actions"]:
@@ -265,6 +281,8 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
                     nxt = schema.next_rowid(db, *auto[key]) if op == "INSERT" and key in auto else None
                     existing = (_keys(db, table, tracer.persons[table])
                                 if op == "INSERT" and speaker_in_db and table in tracer.persons else set())
+                    top = _max_rowid(db, table) if op == "INSERT" and ARCHIVE_SRC.match(st) else None
+                    before = _copy_rows(db, table, copies.get(table)) if op != "INSERT" else None
                     cur = db.execute(st + " RETURNING *")
                     rcols = [d[0] for d in cur.description]
                     rs = cur.fetchall()
@@ -272,6 +290,13 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
                     out["reasons"].append(f"sql_error: {e} in {st[:80]}"); continue
                 executed.append(st)
                 stmts.append(st)
+                if top is not None:
+                    copies.setdefault(table, set()).update(
+                        x for (x,) in db.execute(f"SELECT rowid FROM {_q(table)} WHERE rowid > ?", (top,)))
+                if before:   # one statement over the copies and other rows: it meant the originals and hit the copies too
+                    hit = len(set(before) - set(_copy_rows(db, table, copies[table]) or ()))
+                    if hit and len(rs) > hit:
+                        out["reasons"].append(f"archive_copy_changed: {op} {table}")
                 if nxt is not None:
                     # keys SQLite would assign anyway: an agent may leave them out, so the user need not say them,
                     # here or in a later statement that refers to the new row
