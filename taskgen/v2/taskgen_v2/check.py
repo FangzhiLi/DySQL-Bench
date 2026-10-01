@@ -5,7 +5,7 @@ import json, re, sqlite3, time, unicodedata
 import sqlparse
 from sqlparse import tokens as T
 from taskgen_common.db_select import _q
-from taskgen_v2 import owners, prompt, schema
+from taskgen_v2 import db_profile, owners, prompt, schema
 
 WRITE = re.compile(r"(?is)^\s*(insert|update|delete|replace)\b")
 TARGET = re.compile(r'(?is)^\s*(?:insert\s+(?:or\s+\w+\s+)?into|replace\s+into|update(?:\s+or\s+\w+)?|delete\s+from)\s+'
@@ -92,7 +92,7 @@ WORDS = {w: str(i) for i, w in enumerate(["zero", "one", "two", "three", "four",
                                           "nine", "ten", "eleven", "twelve"])}
 ORDINALS = {w: str(i + 1) for i, w in enumerate(["first", "second", "third", "fourth", "fifth", "sixth", "seventh",
                                                  "eighth", "ninth", "tenth", "eleventh", "twelfth"])}
-_MDY =re.compile(r"\b([a-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b")
+_MDY = re.compile(r"\b([a-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b")
 _DMY = re.compile(r"\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?([a-z]{3,9})\.?,?\s+(\d{4})\b")
 
 
@@ -178,6 +178,10 @@ def rerun_changes(db, stmts, tables):
     return ", ".join(t for t in sorted(tables) if first[t] != second[t])
 
 
+def _keys(db, table, col):
+    return {str(k) for (k,) in db.execute(f"SELECT {_q(col)} FROM {_q(table)}")}
+
+
 def _memory_copy(path):
     src = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     db = sqlite3.connect(":memory:", isolation_level=None)
@@ -185,22 +189,26 @@ def _memory_copy(path):
     return db
 
 
-def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG):
+def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
+    """With a profile (generated candidates), scope, people and ownership come from it, INSERT into no_insert tables
+    and writes to another person's data are rejected; without one (DySQL gold, v1 candidates), as in v1."""
     out = {"id": cand.get("id"), "ok": False, "reasons": [], "writes": [], "task_type": None, "template": None, "difficulty": None}
     if not cand.get("instruction"):
         out["reasons"].append("no_instruction"); return out
     if not cand.get("actions"):
         out["reasons"].append("no_actions"); return out
-    anchor = anchor or next(a for a in db_rec["anchors"] if a["table"] == cand["anchor_table"])
-    # DySQL's validated property (2432/2432 gold writes) is "in SOME anchor's scope", not the speaker's anchor:
-    # customers also edit public tables only another anchor reaches (chinook playlist_track)
-    scope = {t for a in db_rec["anchors"] for t in (a["table"], *a["down"], *a["up"])}
+    if profile:
+        anchor = anchor or db_profile.root_anchor(profile, cand["anchor_table"])
+        scope = db_profile.scope_tables(profile)
+    else:
+        anchor = anchor or next(a for a in db_rec["anchors"] if a["table"] == cand["anchor_table"])
+        # DySQL's validated property (2432/2432 gold writes) is "in SOME anchor's scope", not the speaker's anchor:
+        # customers also edit public tables only another anchor reaches (chinook playlist_track)
+        scope = {t for a in db_rec["anchors"] for t in (a["table"], *a["down"], *a["up"])}
     speaker_in_db = (cand.get("plan") or {}).get("task_type", "1_self") != "5_proxy" if "plan" in cand else cand.get("speaker_in_db", True)
     db = _memory_copy(db_rec["path"])
-    tracer = owners.Tracer.from_rec(db_rec, db)
-    pks = schema.pk_info(db)
-    auto_next = {t.lower(): v["next"] for t, v in pks.items() if v["omittable"]}
-    auto_col = {t.lower(): v["cols"][0] for t, v in pks.items() if v["omittable"]}
+    tracer = owners.Tracer.from_profile(profile, db_rec, db) if profile else owners.Tracer.from_rec(db_rec, db)
+    auto = {t.lower(): (t, v["cols"][0]) for t, v in schema.pk_info(db).items() if v["omittable"]}   # D9 tables
     row = db.execute(f"SELECT * FROM {_q(anchor['table'])} WHERE {_q(anchor['key'])} = ?", (cand["key_value"],)).fetchone()
     # calibration candidates may name several speaker rows (DySQL's classifier matched same-name people)
     speaker_ids = {tuple(x) for x in cand.get("speaker_ids") or [(anchor["table"], str(cand["key_value"]))]}
@@ -230,25 +238,31 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG):
                 try:
                     if not wt:
                         db.execute(st).fetchall(); executed.append(st); continue
+                    op, table = wt[0], tracer.canon(wt[1])
+                    key = table.lower()
+                    # what SQLite would give a row that leaves the key out, at this point of the task
+                    nxt = schema.next_rowid(db, *auto[key]) if op == "INSERT" and key in auto else None
+                    existing = (_keys(db, table, tracer.persons[table])
+                                if op == "INSERT" and speaker_in_db and table in tracer.persons else set())
                     cur = db.execute(st + " RETURNING *")
                     rcols = [d[0] for d in cur.description]
                     rs = cur.fetchall()
                 except sqlite3.Error as e:
                     out["reasons"].append(f"sql_error: {e} in {st[:80]}"); continue
                 executed.append(st)
-                op, table = wt[0], tracer.canon(wt[1])
                 stmts.append(st)
-                key = table.lower()
-                if op == "INSERT" and key in auto_next:
+                if nxt is not None:
                     # keys SQLite would assign anyway: an agent may leave them out, so the user need not say them,
                     # here or in a later statement that refers to the new row
                     for r in rs:
-                        v = dict(zip(rcols, r)).get(auto_col[key])
-                        if v != auto_next[key]:
+                        v = dict(zip(rcols, r)).get(auto[key][1])
+                        if v != nxt:
                             break
-                        allowed.add(norm_literal(v)); auto_next[key] += 1
+                        allowed.add(norm_literal(v)); nxt += 1
                 if table not in scope:
                     out["reasons"].append(f"out_of_scope: {table}")
+                if profile and op == "INSERT" and table in profile["no_insert"]:
+                    out["reasons"].append(f"no_insert: {table}")
                 for lit in literals(st):
                     if not literal_ok(lit, cand["instruction"], allowed):
                         out["reasons"].append(f"literal_missing: '{lit}' in {op} {table}"); break
@@ -265,7 +279,8 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG):
                 elif speaker_in_db:
                     if holders & speaker_ids:
                         lab = "own"
-                    elif op == "INSERT" and table in tracer.persons:
+                    elif op == "INSERT" and table in tracer.persons and not any(
+                            str(dict(zip(rcols, r)).get(tracer.persons[table])) in existing for r in rs):
                         lab = "new_person"   # a person row that did not exist before is nobody else's data yet
                     else:
                         lab = "other" if holders else "public"
@@ -280,11 +295,15 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG):
             if changed:
                 out["reasons"].append("nondeterministic: " + changed)
     finally:
-        db.execute("ROLLBACK"); db.close()
+        if db.in_transaction:   # a Ctrl-C in the rerun's pause leaves none open; ROLLBACK would hide the interrupt
+            db.execute("ROLLBACK")
+        db.close()
     if not out["writes"] or (all(w["rows"] == 0 for w in out["writes"])
                              and not any(r.startswith("noop_write") for r in out["reasons"])):
         out["reasons"].append("no_write")   # nothing written, or only zero-row INSERT ... SELECT
     out["task_type"] = task_group(speaker_in_db, labels) if out["writes"] else None
+    if profile and out["task_type"] == "4_other_person":
+        out["reasons"].append("other_person")   # design D6: the agent policy denies requests about another person
     if out["task_type"]:
         out["template"] = out["task_type"] + "|" + "+".join(sorted(f"{w['op']} {w['table']}" for w in out["writes"]))
         out["difficulty"] = difficulty(out["writes"], out["task_type"], stmts)

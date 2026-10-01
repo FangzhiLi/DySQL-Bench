@@ -98,3 +98,13 @@ def pk_info(conn):
                 nxt = (mx or 0) + 1
         out[name] = {"cols": cols, "rowid_alias": rowid_alias, "omittable": nxt is not None, "next": nxt}
     return out
+
+
+def next_rowid(conn, table, col):
+    """The key SQLite gives the next row that leaves col (a rowid alias) out: one above the larger of MAX(col) and,
+    with AUTOINCREMENT, the table's sqlite_sequence value."""
+    (mx,) = conn.execute(f"SELECT MAX({_q(col)}) FROM {_q(table)}").fetchone()
+    seq = None
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'sqlite_sequence'").fetchone():
+        seq = conn.execute("SELECT seq FROM sqlite_sequence WHERE name = ?", (table,)).fetchone()
+    return max(mx or 0, (seq or (0,))[0] or 0) + 1

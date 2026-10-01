@@ -3,6 +3,7 @@ import sqlite3
 import pytest
 from taskgen_common.testing import make_db, SHOP, rows
 from test_taskgen_trees import SHOP2, FKS, CUSTOMER
+from v2_fixtures import SHOP_PROFILE, SCHOOL, SCHOOL_FKS, SCHOOL_COMPOSITE, SCHOOL_PROFILE
 from taskgen_v2 import check
 
 STAFF_ANCHOR = {"table": "staff", "key": "staff_id", "kind": "person_named", "rows": 5, "names": ["name"],
@@ -307,3 +308,79 @@ def test_clock_value_after_ddl_in_a_compared_column_is_rejected(rental):
                                      ["ALTER TABLE rental ADD COLUMN note TEXT",
                                       "UPDATE rental SET note = CURRENT_TIMESTAMP WHERE rental_id = 5"]))
     assert r["reasons"] == ["nondeterministic: rental"]
+
+
+# --- plan 2: checks that read the database profile ---
+
+@pytest.fixture
+def school(tmp_path):
+    return {"source": "test", "db": "school", "path": make_db(tmp_path, "school", SCHOOL), "anchors": [],
+            "fks": SCHOOL_FKS, "fks_composite": SCHOOL_COMPOSITE}
+
+
+def scand(instruction, sqls, task_type="1_self", key_value=3):
+    return {"id": "s", "anchor_table": "Student List", "anchor_key": "sid", "key_value": key_value,
+            "plan": {"task_type": task_type}, "instruction": instruction, "actions": [{"sql": s} for s in sqls]}
+
+
+def test_profile_edges_decide_ownership(school):
+    r = check.run_check(school, scand("I am s3. Drop my advisor t0.", ["DELETE FROM advisor WHERE s_id = '3'"]), profile=SCHOOL_PROFILE)
+    assert r["ok"], r["reasons"]
+    assert r["writes"] == [{"op": "DELETE", "table": "advisor", "rows": 1, "label": "own"}] and r["task_type"] == "1_self"
+
+
+def test_profile_rejects_another_persons_data(school, db):
+    r = check.run_check(school, scand("I am s3. Rename teacher 1 to Tao.", ["UPDATE teacher SET name = 'Tao' WHERE tid = 1"]),
+                        profile=SCHOOL_PROFILE)
+    assert r["reasons"] == ["other_person"] and r["task_type"] == "4_other_person"
+    c = cand("I am a5 b5. Set qty of order 9 to 3.", ["UPDATE orders SET qty = 3 WHERE order_id = 9"])
+    assert check.run_check(db, c)["ok"]                                       # without a profile, as in v1
+    assert check.run_check(db, c, profile=SHOP_PROFILE)["reasons"] == ["other_person"]
+
+
+def test_profile_scope_and_no_insert(school):
+    r = check.run_check(school, scand("I am s3. Add the day 2024-01-03.", ["INSERT INTO calendar VALUES ('2024-01-03')"]),
+                        profile=SCHOOL_PROFILE)
+    assert r["reasons"] == ["out_of_scope: calendar"]
+    r = check.run_check(school, scand("I am s3. Open section c2 2 called Biology.", ["INSERT INTO section VALUES ('c2', 2, 'Biology')"]),
+                        profile=SCHOOL_PROFILE)
+    assert r["reasons"] == ["no_insert: section"]
+
+
+def test_profile_speaker_must_be_a_root(school):
+    c = {**scand("I am t0.", ["UPDATE teacher SET name = 'Tao' WHERE tid = 0"]), "anchor_table": "teacher", "key_value": 0}
+    assert check.run_check_safe(school, c, profile=SCHOOL_PROFILE)["reasons"][0].startswith("crash: ValueError: teacher is not a root")
+
+
+def test_replacing_or_upserting_an_existing_person_is_not_a_new_person(db):
+    r = check.run_check(db, cand("I am a5 b5. Customer 9 is now Zed Quinn.",
+                                 ["INSERT OR REPLACE INTO customers (customer_id, first_name, last_name) VALUES (9, 'Zed', 'Quinn')"]))
+    assert r["writes"][0]["label"] == "other" and r["task_type"] == "4_other_person"
+    r = check.run_check(db, cand("I am a5 b5. Customer 9 is now Zed.",
+                                 ["INSERT INTO customers (customer_id, first_name, last_name) VALUES (9, 'Zed', 'b9') "
+                                  "ON CONFLICT(customer_id) DO UPDATE SET first_name = excluded.first_name"]))
+    assert r["writes"][0]["label"] == "other"
+
+
+def test_auto_key_is_what_sqlite_would_assign_at_that_point(db):
+    # orders run 0..99 and order 99 is customer 39's: once it is deleted, SQLite gives a new order 99, not 100
+    r = check.run_check(db, cand("I am a39 b39. Cancel my order 99 and place a new order of product 7, qty 2.",
+                                 ["DELETE FROM orders WHERE order_id = 99",
+                                  "INSERT INTO orders (order_id, customer_id, product_id, qty) VALUES (100, 39, 7, 2)"], key_value=39))
+    assert r["reasons"] == ["literal_missing: '100' in INSERT orders"]
+
+
+def test_auto_key_for_a_table_written_in_another_case(tmp_path):
+    path = make_db(tmp_path, "shop3", SHOP2 + "CREATE TABLE Logs (log_id INTEGER PRIMARY KEY, note TEXT);" + rows("Logs", 3, lambda i: f"{i},'x'"))
+    rec = {"source": "test", "db": "shop3", "path": path, "anchors": [CUSTOMER, STAFF_ANCHOR], "fks": FKS}
+    r = check.run_check(rec, cand("I am a5 b5. Log the note hello.", ["INSERT INTO logs (log_id, note) VALUES (3, 'hello')"]))
+    assert r["reasons"] == ["out_of_scope: logs"]                  # 3 is what SQLite would give: no literal is missing
+
+
+def test_ctrl_c_in_the_rerun_pause_is_not_swallowed(rental, monkeypatch):
+    def interrupted(seconds):
+        raise KeyboardInterrupt
+    monkeypatch.setattr(check.time, "sleep", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        check.run_check_safe(rental, cand("I am a5 b5. Mark my rental 5 as returned right now.",
+                                          ["UPDATE rental SET return_date = CURRENT_TIMESTAMP WHERE rental_id = 5"]))

@@ -21,3 +21,4 @@ v2 从 v1 原样复制起步（tag `taskgen-v1`，61c8133）。复制的那个 c
 | 执行检查重新校准：v1 和 v2 的检查在 DySQL 金标准和 v1 全部候选上逐条对比（`scripts/check_diff.py`），报告 `docs/2026-10-01-check-recalibration.md` | §5 E |
 | 库档案：`taskgen_v2/db_profile.py`（格式、校验、写入范围、审阅页）；测试夹具 `tests/v2_fixtures.py` | §4.1 |
 | 归属追溯挪到 `taskgen_v2/owners.py`（支持复合外键和档案里的边），执行检查改用它，行为不变（校准报告逐字不变） | §4.5 |
+| 执行检查读档案：范围按档案，往 `no_insert` 表 INSERT 拒，算出第 4 类拒（`other_person`）；REPLACE/UPSERT 覆盖已有人物行不算新人，自动主键按每条 INSERT 前现算，重跑时 Ctrl-C 不被吞；`check_diff.py --profiles` | §4.5、D6 |
