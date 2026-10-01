@@ -20,6 +20,16 @@ def test_verdict_takes_the_first_k_real_votes():
     assert calibrate.verdict(votes("unparsed", "yes", "yes"), 3) == "pass" and calibrate.verdict(votes("unparsed"), 1) == "fail"
 
 
+def test_a_rule_is_decided_as_soon_as_more_votes_cannot_change_it():
+    # Ollama's plan is small: two votes each, a third only when they split, gives all three rules
+    assert calibrate.verdict(votes("yes", "yes"), 3) == "pass" and calibrate.verdict(votes("no", "unparsed"), 3) == "fail"
+    assert calibrate.verdict(votes("yes", "no"), 3) is None and calibrate.verdict(votes("no"), 2) == "fail"
+    assert calibrate.verdict(votes("err", "no"), 2) == "fail" and calibrate.verdict(votes("yes", "err"), 2) is None
+    items = [item(x, "positives") for x in "abcd"]
+    v = {"a": votes("yes", "yes"), "b": votes("yes", "no"), "c": votes("yes", "no", "no"), "d": votes("yes")}
+    assert [i["id"] for i in calibrate.undecided(items, v)] == ["b", "d"]
+
+
 def test_metrics_per_rule_and_the_rule_choice():
     items = ([item(f"p{i}", "positives") for i in range(20)]
              + [item(f"n{i}", "negatives", source="dysql", kind="where") for i in range(10)]

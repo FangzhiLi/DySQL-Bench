@@ -2,8 +2,9 @@
 """The verifier's calibration (design §4.6, D5), one sub-command per step; files under --dir (results/, not git).
 Usage (from taskgen/v2/):
   P=~/miniconda3/envs/dysql/bin/python; D=results/plan4/calib
-  $P scripts/verify_calibrate.py build  --dir $D --labeled results/plan4/fresh   # items.jsonl: the three sets
-  $P scripts/verify_calibrate.py vote   --dir $D --models deepseek-v4.1-flash:3   # votes.jsonl, resumable
+  $P scripts/verify_calibrate.py build  --dir $D --labeled results/plan4/fresh --positives 300 --per-kind-dysql 30 --per-kind-v2 30
+  $P scripts/verify_calibrate.py vote   --dir $D --models deepseek-v4.1-flash:2   # votes.jsonl, resumable
+  $P scripts/verify_calibrate.py vote   --dir $D --models deepseek-v4.1-flash:3 --undecided   # a third vote where two split
   $P scripts/verify_calibrate.py sheet  --dir $D                                  # label_sheet.md for Claude
   $P scripts/verify_calibrate.py review --dir $D                                  # review.md for the user
   $P scripts/verify_calibrate.py report --dir $D                                  # report.md
@@ -29,18 +30,22 @@ def cmd_build(a):
         sys.exit(f"{path} exists: the sets are built once, so votes and labels keep pointing at the same items")
     os.makedirs(a.dir, exist_ok=True)
     dbs = calibrate.Databases()
-    pos = calibrate.positives()
+    gold = calibrate.positives()
     lab = calibrate.v2_items(a.labeled)
-    neg = (calibrate.negatives(pos, dbs, a.per_kind_dysql, random.Random(a.seed), "dysql")
+    neg = (calibrate.negatives(gold, dbs, a.per_kind_dysql, random.Random(a.seed), "dysql")
            + calibrate.negatives(lab, dbs, a.per_kind_v2, random.Random(a.seed), "v2"))
+    keep = set(map(id, random.Random(a.seed).sample(gold, min(a.positives, len(gold))))) if a.positives else set(map(id, gold))
+    pos = [g for g in gold if id(g) in keep]   # a sample keeps the Ollama plan's calls down; negatives use all gold
     io.append_jsonl(path, pos + neg + lab)
     print(json.dumps(calibrate.counts(pos + neg + lab), indent=1))
 
 
 def cmd_vote(a):
-    items, _, _ = load(a.dir)
+    items, votes, _ = load(a.dir)
     if a.set:
         items = [i for i in items if i["set"] in a.set]
+    if a.undecided:   # only where the votes so far leave a rule open: two each, a third when they split
+        items = calibrate.undecided(items, votes)
     dbs = calibrate.Databases()
     t0 = time.time()
     s = verify.run(items, verify.models_from_env(a.models), os.path.join(a.dir, "votes.jsonl"), workers=a.workers,
@@ -128,9 +133,9 @@ def cmd_report(a):
     lines.append("| 标注集 被拒的是坏题（精度） | " + " | ".join(pct(m[r]["labeled_precision"]) for r in rules) + " |")
     allv = [x for r in votes.values() for x in r["votes"]]
     trunc = sum(x.get("error", "").startswith("Truncated") for x in allv)
-    short = sum(1 for i in items if calibrate.verdict(votes.get(i["id"]), 3) is None)
+    short = len(calibrate.undecided(items, votes))
     lines += ["", f"票数 {len(allv)}；思考被截断的 {trunc}；其它失败 {sum('error' in x for x in allv) - trunc}；"
-              f"不满 3 票的条目 {short}；标注 {len(labels)} 条（用户复核 {sum(r.get('by') == 'user' for r in labels.values())}）。",
+              f"还判不了的条目 {short}；标注 {len(labels)} 条（用户复核 {sum(r.get('by') == 'user' for r in labels.values())}）。",
               "", f"按 calibrate.choose_rule 选出的规则：{calibrate.choose_rule(m) or '没有规则同时满足两条 95%'}"]
     text = "\n".join(lines)
     with open(os.path.join(a.dir, "report.md"), "w", encoding="utf-8") as f:
@@ -143,9 +148,11 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("build"); p.add_argument("--dir", required=True); p.add_argument("--labeled", action="append", required=True)
     p.add_argument("--per-kind-dysql", type=int, default=60); p.add_argument("--per-kind-v2", type=int, default=40)
+    p.add_argument("--positives", type=int, help="a random sample of this many DySQL gold (default: all)")
     p.add_argument("--seed", type=int, default=0); p.set_defaults(f=cmd_build)
     p = sub.add_parser("vote"); p.add_argument("--dir", required=True); p.add_argument("--models", required=True)
     p.add_argument("--set", action="append", help="positives / negatives / labeled (default: all)")
+    p.add_argument("--undecided", action="store_true", help="only items some rule cannot judge yet")
     p.add_argument("--workers", type=int, default=3, help="Ollama Pro plan limit: 3 concurrent requests"); p.set_defaults(f=cmd_vote)
     for name, f in (("sheet", cmd_sheet), ("review", cmd_review), ("report", cmd_report)):
         p = sub.add_parser(name); p.add_argument("--dir", required=True); p.set_defaults(f=f)

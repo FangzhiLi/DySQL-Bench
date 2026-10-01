@@ -108,13 +108,21 @@ def _round_robin(keys, groups):
 
 
 def verdict(rec, k):
-    """'pass' / 'fail' under the k-vote rule (the first k real votes; Yes must outnumber No), None while fewer than
-    k votes exist (a vote cut off while thinking is retried, not counted)."""
+    """'pass' / 'fail' under the k-vote rule (the first k real votes; Yes must outnumber No, unparsed counts as No),
+    as soon as the votes so far settle it: two Yes or two No settle three votes, one No settles two. None while
+    they do not (a vote cut off while thinking is retried, not counted)."""
     votes = [v for v in (rec or {}).get("votes", []) if "error" not in v][:k]
-    if len(votes) < k:
-        return None
     yes = sum(v["verdict"] == "yes" for v in votes)
-    return "pass" if yes > len(votes) - yes else "fail"
+    if yes > k / 2:
+        return "pass"
+    if len(votes) - yes >= k / 2:
+        return "fail"
+    return None
+
+
+def undecided(items, votes):
+    """The items some rule cannot judge yet: they need another vote (two each, a third when the two split)."""
+    return [i for i in items if any(verdict(votes.get(i["id"]), k) is None for k in RULES.values())]
 
 
 def _rate(xs):
