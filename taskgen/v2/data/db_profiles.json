@@ -241,17 +241,18 @@
    "employee.minit is an empty string, not NULL, when there is no middle initial.",
    "roysched holds several tier rows per title (lorange/hirange brackets), not one row per title."
   ],
-  "description": "A book publishing house database: authors write titles that publishers publish, with titleauthor recording each author's order and royalty share on a book and roysched defining royalty tiers per title. Publishers employ staff tracked in employee with job levels from jobs, while stores buy titles through sales orders and discounts on the store side. Requests center on the authors and the books they are credited with.",
+  "description": "A book publishing house database: authors write titles that publishers publish, with titleauthor recording each author's order and royalty share on a book and roysched defining royalty tiers per title. Publishers employ staff tracked in employee with job levels from jobs. Requests center on the authors and the books they are credited with; the store side (stores, sales, discounts) is out of scope.",
   "confirmed": true,
   "notes": [
-   "Claude: quirks checked against the data -- contract is '0' for all 23 authors (the draft implied '1' occurs); pub_info.logo is stored as text, not a binary blob, and nobody edits it, so that quirk is dropped"
+   "Claude: quirks checked against the data -- contract is '0' for all 23 authors (the draft implied '1' occurs); pub_info.logo is stored as text, not a binary blob, and nobody edits it, so that quirk is dropped",
+   "Claude: description drops the store side (stores, sales, discounts are excluded) and says it is out of scope (after the final review; approved by the user)"
   ],
   "draft": {
    "model": "glm-5.3",
    "rounds": 1,
    "errors": []
   },
-  "confirmed_version": "70e6849060"
+  "confirmed_version": "9e9a179e9c"
  },
  "bird:books": {
   "roots": [
@@ -995,11 +996,12 @@
    "In awards_players, note 'tie' means the award was shared; null means nothing special.",
    "teams has one row per team per season, keyed by (year, tmID), and covers early leagues (ABA, NBL, ABL1, NPBL, PBLA) besides the NBA."
   ],
-  "description": "A historical professional basketball database (NBA, ABA and earlier leagues): players are drafted by teams, record season-by-season and playoff statistics with each team (players_teams), appear in all-star games (player_allstar) and win awards (awards_players). Coaches are tracked with one row per team-season stint (coaches) plus their awards (awards_coaches). Teams are tracked per season with wins, losses, scoring and playoff results (teams, series_post).",
+  "description": "A historical professional basketball database (NBA, ABA and earlier leagues): players are drafted by teams, record season-by-season and playoff statistics with each team (players_teams), appear in all-star games (player_allstar) and win awards (awards_players). Teams are tracked per season with wins, losses, scoring and playoff results (teams, series_post). The coaches tables (coaches, awards_coaches) are out of scope.",
   "confirmed": true,
   "notes": [
    "Claude: removed the second root coaches and its awards_coaches event -- the hint names players only, coachID repeats across a coach's stints and coaches have no name columns, so coaches and awards_coaches are excluded",
-   "Claude: quirks checked; dropped the coach ones, firstseason/lastseason are 0 in 5046 of 5062 rows (not all)"
+   "Claude: quirks checked; dropped the coach ones, firstseason/lastseason are 0 in 5046 of 5062 rows (not all)",
+   "Claude: description no longer presents the excluded coaches tables as data and says they are out of scope (after the final review; approved by the user)"
   ],
   "draft": {
    "model": "glm-5.3",
@@ -1008,7 +1010,7 @@
     "no profile JSON in the answer: Expecting ',' delimiter: line 63 column 4 (char 1070)"
    ]
   },
-  "confirmed_version": "7c6f9c29e3"
+  "confirmed_version": "4ab39913d2"
  },
  "bird:regional_sales": {
   "roots": [

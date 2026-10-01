@@ -1,6 +1,6 @@
 # 23 个库的档案：审阅页
 
-GLM-5.3 按 `data/profile_hints.json` 的提示和两份 DySQL 手写示例起草了这些档案，Claude 又对着库逐个预审过。所有档案都通过了 `profile check`。用户 2026-10-01 审阅后回复"保持现状"：下面九点都按建议，档案没有再改，23 个库全部确认。由 `taskgen.py profile render` 生成，档案原文在 `taskgen/v2/data/db_profiles.json`。
+GLM-5.3 按 `data/profile_hints.json` 的提示和两份 DySQL 手写示例起草了这些档案，Claude 又对着库逐个预审过。所有档案都通过了 `profile check`。用户 2026-10-01 审阅后回复"保持现状"：下面九点都按建议，档案没有再改，23 个库全部确认。之后，最终复核后的检查发现两份描述还在介绍已排除的表，于是改了 professional_basketball 和 book_publishing_company 的描述：不再把这些表当成数据介绍，并写明它们不在范围内。用户同意后重新确认。由 `taskgen.py profile render` 生成，档案原文在 `taskgen/v2/data/db_profiles.json`。
 
 ## 怎么看
 
@@ -124,7 +124,7 @@ Claude 的改动：
 
 ## bird:book_publishing_company　已确认　校验通过
 
-> A book publishing house database: authors write titles that publishers publish, with titleauthor recording each author's order and royalty share on a book and roysched defining royalty tiers per title. Publishers employ staff tracked in employee with job levels from jobs, while stores buy titles through sales orders and discounts on the store side. Requests center on the authors and the books they are credited with.
+> A book publishing house database: authors write titles that publishers publish, with titleauthor recording each author's order and royalty share on a book and roysched defining royalty tiers per title. Publishers employ staff tracked in employee with job levels from jobs. Requests center on the authors and the books they are credited with; the store side (stores, sales, discounts) is out of scope.
 
 | 项 | 内容 |
 |---|---|
@@ -147,6 +147,7 @@ Claude 的改动：
 
 Claude 的改动：
 - Claude: quirks checked against the data -- contract is '0' for all 23 authors (the draft implied '1' occurs); pub_info.logo is stored as text, not a binary blob, and nobody edits it, so that quirk is dropped
+- Claude: description drops the store side (stores, sales, discounts are excluded) and says it is out of scope (after the final review; approved by the user)
 
 起草：glm-5.3，1 轮
 
@@ -370,7 +371,7 @@ Claude 的改动：
 
 ## bird:professional_basketball　已确认　校验通过
 
-> A historical professional basketball database (NBA, ABA and earlier leagues): players are drafted by teams, record season-by-season and playoff statistics with each team (players_teams), appear in all-star games (player_allstar) and win awards (awards_players). Coaches are tracked with one row per team-season stint (coaches) plus their awards (awards_coaches). Teams are tracked per season with wins, losses, scoring and playoff results (teams, series_post).
+> A historical professional basketball database (NBA, ABA and earlier leagues): players are drafted by teams, record season-by-season and playoff statistics with each team (players_teams), appear in all-star games (player_allstar) and win awards (awards_players). Teams are tracked per season with wins, losses, scoring and playoff results (teams, series_post). The coaches tables (coaches, awards_coaches) are out of scope.
 
 | 项 | 内容 |
 |---|---|
@@ -395,6 +396,7 @@ Claude 的改动：
 Claude 的改动：
 - Claude: removed the second root coaches and its awards_coaches event -- the hint names players only, coachID repeats across a coach's stints and coaches have no name columns, so coaches and awards_coaches are excluded
 - Claude: quirks checked; dropped the coach ones, firstseason/lastseason are 0 in 5046 of 5062 rows (not all)
+- Claude: description no longer presents the excluded coaches tables as data and says they are out of scope (after the final review; approved by the user)
 
 起草：glm-5.3，3 轮，没改掉的问题 1 条
 
