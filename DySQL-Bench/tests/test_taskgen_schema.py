@@ -38,3 +38,13 @@ def test_describe_db_calls_llm_once_and_caches(tmp_path):
     b = schema.describe_db("test:shop", db, client, str(cache))
     assert a == b == "A small web shop: customers place orders for products." and client.calls == 1
     assert json.load(open(cache)) == {"test:shop": a}
+
+
+def test_next_ids_for_integer_primary_keys(tmp_path):
+    db = make_db(tmp_path, "shop", SHOP)
+    assert schema.next_ids(db) == {"customers": ("customer_id", 60), "products": ("product_id", 60), "orders": ("order_id", 100)}
+    # a table without an integer primary key is left out
+    import sqlite3
+    c = sqlite3.connect(db); c.execute("CREATE TABLE tags (name TEXT PRIMARY KEY)"); c.execute("CREATE TABLE empty (id INTEGER PRIMARY KEY)"); c.commit(); c.close()
+    n = schema.next_ids(db)
+    assert "tags" not in n and n["empty"] == ("id", 1)

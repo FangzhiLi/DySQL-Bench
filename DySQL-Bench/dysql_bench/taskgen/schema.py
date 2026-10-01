@@ -56,3 +56,20 @@ def describe_db(db_key, db_path, client, cache_path):
     with open(cache_path, "w", encoding="utf-8") as f:
         json.dump(cache, f, ensure_ascii=False, indent=1)
     return text
+
+
+def next_ids(db_path):
+    """{table: (pk_column, MAX(pk) + 1)} for every table whose primary key is one INTEGER column (1 when empty).
+    The generation prompt lists these so new rows do not collide with existing keys."""
+    c = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    out = {}
+    try:
+        for (t,) in c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").fetchall():
+            pk = [r for r in c.execute(f'PRAGMA table_info("{t}")') if r[5]]
+            if len(pk) != 1 or (pk[0][2] or "").upper() not in ("INTEGER", "INT"):
+                continue
+            (m,) = c.execute(f'SELECT MAX("{pk[0][1]}") FROM "{t}"').fetchone()
+            out[t] = (pk[0][1], (m or 0) + 1)
+    finally:
+        c.close()
+    return out

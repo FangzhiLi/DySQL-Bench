@@ -58,6 +58,7 @@ def cmd_generate(a):
     if not desc:
         sys.exit("run `describe` first")
     client = llm.client_from_env("GEN")
+    next_ids = schema.next_ids(path)
     all_trees = io.read_jsonl(f"{out}/trees.jsonl")
     others = json.load(open(f"{out}/others.json"))
     if a.retry_errors:   # their check results are stale once the candidates are regenerated
@@ -72,7 +73,8 @@ def cmd_generate(a):
         ts = [t for t in all_trees if t["anchor_table"] == anchor["table"]]
         s = generate.run(rec, anchor, ts, others.get(anchor["table"], []), client, f"{out}/candidates.jsonl",
                          random.Random(a.seed), workers=a.workers, per_tree=a.per_tree,
-                         db_description=desc, schema_text=schema.schema_block(path), retry_errors=a.retry_errors)
+                         db_description=desc, schema_text=schema.schema_block(path), retry_errors=a.retry_errors,
+                         next_ids=next_ids)
         total = {k: total[k] + s[k] for k in total}
     usage = sum((c.get("usage") or {}).get("total_tokens", 0) for c in io.read_jsonl(f"{out}/candidates.jsonl"))
     print(f"{total} in {time.time() - t0:.0f}s; total tokens so far {usage}")

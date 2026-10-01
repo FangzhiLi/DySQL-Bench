@@ -79,7 +79,7 @@ def _drop_api_failures(out_path):
 
 
 def run(db_rec, anchor, trees_list, others, client, out_path, rng, workers=8, per_tree=1, cfg=prompt.CFG,
-        db_description="", schema_text="", retry_errors=False):
+        db_description="", schema_text="", retry_errors=False, next_ids=None):
     if retry_errors:
         _drop_api_failures(out_path)
     done = io.done_ids(out_path)
@@ -94,7 +94,7 @@ def run(db_rec, anchor, trees_list, others, client, out_path, rng, workers=8, pe
 
     def one(job):
         tree, idx, plan = job
-        msgs = prompt.build_messages(db_rec, anchor, tree, plan, db_description, schema_text, cfg)
+        msgs = prompt.build_messages(db_rec, anchor, tree, plan, db_description, schema_text, cfg, next_ids=next_ids)
         return client.chat(msgs, temperature=GEN_TEMPERATURE, max_tokens=GEN_MAX_TOKENS, top_p=GEN_TOP_P)
 
     def safe(job):

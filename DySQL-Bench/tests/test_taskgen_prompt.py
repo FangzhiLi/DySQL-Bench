@@ -62,3 +62,33 @@ def test_build_messages_free_tables_and_other_person():
             "write_tables": None, "other": OTHERS[0]}
     u = prompt.build_messages(DB, ANCHOR, TREE, plan, "A shop.", "DDL")[1]["content"]
     assert "ANOTHER person: a9 b9 (customer_id = 9)" in u and "Choose freely" in u
+
+
+def test_system_requires_quoted_table_names():
+    plan = {"task_type": "1_self", "difficulty": "easy", "example": "EX", "style": {"opener": "O", "name": None, "role": None},
+            "shape": {"n_writes": 1, "n_tables": 1, "ownership_subquery": False, "archive": False, "public_table": False},
+            "write_tables": None, "other": None}
+    s = prompt.build_messages(DB, ANCHOR, TREE, plan, "A shop.", "DDL")[0]["content"]
+    assert 'Wrap every table name in double quotes' in s and '"transaction"' in s
+
+
+def test_user_lists_next_ids_for_scope_tables_only():
+    plan = {"task_type": "1_self", "difficulty": "easy", "example": "EX", "style": {"opener": "O", "name": None, "role": None},
+            "shape": {"n_writes": 1, "n_tables": 1, "ownership_subquery": False, "archive": False, "public_table": False},
+            "write_tables": None, "other": None}
+    u = prompt.build_messages(DB, ANCHOR, TREE, plan, "A shop.", "DDL", next_ids={"orders": ("order_id", 101), "products": ("product_id", 61), "unrelated": ("id", 9)})[1]["content"]
+    assert "## Next unused primary keys" in u and "orders.order_id = 101" in u and "products.product_id = 61" in u and "unrelated" not in u
+    # no next_ids -> section absent
+    assert "Next unused" not in prompt.build_messages(DB, ANCHOR, TREE, plan, "A shop.", "DDL")[1]["content"]
+
+
+def test_sample_plan_style_varies_names_roles_and_openers():
+    rng = random.Random(1)
+    plans = [prompt.sample_plan(rng, TREE, ANCHOR, OTHERS) for _ in range(400)]
+    proxies = [p for p in plans if p["task_type"] == "5_proxy"]
+    assert len({p["style"]["name"] for p in proxies}) > 30 and len({p["style"]["role"] for p in proxies}) >= 8
+    assert all(p["style"]["name"] is None for p in plans if p["task_type"] != "5_proxy")
+    assert len({p["style"]["opener"] for p in plans}) >= 6
+    p = next(p for p in proxies)
+    u = prompt.build_messages(DB, ANCHOR, TREE, p, "A shop.", "DDL")[1]["content"]
+    assert f"The speaker is {p['style']['name']}, {p['style']['role']}" in u and p["style"]["opener"] in u
