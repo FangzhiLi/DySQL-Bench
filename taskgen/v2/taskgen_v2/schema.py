@@ -10,13 +10,15 @@ the main transactional or fact tables record. Plain prose, no bullet points, no 
 {ddl}"""
 
 
-def ddl(db_path):
+def ddl(db_path, tables=None):
+    """CREATE TABLE statements, of the given tables only when tables is set."""
     c = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     try:
-        return "\n".join(r[0] for r in c.execute(
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND sql IS NOT NULL ORDER BY rowid"))
+        rows = c.execute("SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' "
+                         "AND sql IS NOT NULL ORDER BY rowid").fetchall()
     finally:
         c.close()
+    return "\n".join(sql for name, sql in rows if tables is None or name in tables)
 
 
 def column_descriptions(db_path):
@@ -34,12 +36,15 @@ def column_descriptions(db_path):
     return out
 
 
-def schema_block(db_path):
-    text = ddl(db_path)
-    cd = column_descriptions(db_path)
-    if cd:
-        notes = "\n".join(f"- {t}.{c}: {d}" for t, cols in cd.items() for c, d in cols.items())
-        text += "\n\n## Column notes\n" + notes
+def schema_block(db_path, tables=None):
+    """DDL plus BIRD's column notes; with tables set, only those tables (the profile's scope: excluded tables stay out
+    of the prompt). BIRD names a notes file after its table, sometimes in another case."""
+    text = ddl(db_path, tables)
+    keep = None if tables is None else {t.lower() for t in tables}
+    notes = [f"- {t}.{c}: {d}" for t, cols in column_descriptions(db_path).items() if keep is None or t.lower() in keep
+             for c, d in cols.items()]
+    if notes:
+        text += "\n\n## Column notes\n" + "\n".join(notes)
     return text
 
 
@@ -108,3 +113,54 @@ def next_rowid(conn, table, col):
     if conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'sqlite_sequence'").fetchone():
         seq = conn.execute("SELECT seq FROM sqlite_sequence WHERE name = ?", (table,)).fetchone()
     return max(mx or 0, (seq or (0,))[0] or 0) + 1
+
+
+def unique_columns(conn, table):
+    """Column groups under a UNIQUE constraint or a unique index, those equal to the primary key left out (WWE
+    declares its INTEGER keys UNIQUE as well)."""
+    pk = tuple(r[1] for r in sorted((r for r in conn.execute(f"PRAGMA table_info({_q(table)})") if r[5]), key=lambda r: r[5]))
+    out = set()
+    for idx in conn.execute(f"PRAGMA index_list({_q(table)})").fetchall():
+        cols = tuple(r[2] for r in conn.execute(f"PRAGMA index_info({_q(idx[1])})"))
+        if idx[2] and idx[3] != "pk" and sorted(cols) != sorted(pk):
+            out.add(cols)
+    return sorted(out)
+
+
+def _next_number(conn, table, col):
+    """MAX + 1 when every value of a one-column key is a whole number, also when stored as text (college_2's IDs)."""
+    vals = [v for (v,) in conn.execute(f"SELECT {_q(col)} FROM {_q(table)}") if v is not None]
+    if not vals or not all(re.fullmatch(r"-?\d+(\.0+)?", str(v)) for v in vals):
+        return None
+    return max(int(float(v)) for v in vals) + 1
+
+
+def key_notes(conn, tables, no_insert=(), fks=None):
+    """design §4.3, one line per table: how a new row gets its key -- left out (SQLite assigns it), stated with a
+    suggested value, stated as a new natural value, the key of the row it belongs to, every column of a composite
+    key, or no new rows at all -- and which columns must stay unique. fks: {table: its foreign-key columns}."""
+    pk, notes, fks = pk_info(conn), {}, fks or {}
+    for t in tables:
+        info = pk.get(t)
+        if info is None:
+            continue
+        cols = info["cols"]
+        if t in no_insert:
+            note = "no new rows (UPDATE or DELETE only)"
+        elif len(cols) == 1 and cols[0] in fks.get(t, ()):   # college_2's advisor.s_ID is a student's ID
+            note = f"a new row states {cols[0]}, the key of the row it belongs to, written in the instruction"
+        elif info["omittable"]:
+            note = f"a new row may leave {cols[0]} out (SQLite assigns {info['next']})"
+        elif len(cols) == 1:
+            n = _next_number(conn, t, cols[0])
+            note = (f"a new row must state {cols[0]} = {n}, written in the instruction" if n is not None
+                    else f"a new row must state a new {cols[0]}, one not used yet, written in the instruction")
+        elif cols:
+            note = f"key ({', '.join(cols)}); a new row states every key column, in a combination not used yet"
+        else:
+            note = "no primary key"
+        uniq = unique_columns(conn, t)
+        if uniq:
+            note += "; unique: " + ", ".join(u[0] if len(u) == 1 else f"({', '.join(u)})" for u in uniq) + " (no value used twice)"
+        notes[t] = f"- {t}: {note}"
+    return notes
