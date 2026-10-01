@@ -6,7 +6,7 @@ import sqlite3
 from taskgen_common.db_select import _q
 from taskgen_v2 import db_profile
 
-MAX_HOPS = 3
+MAX_HOPS = db_profile.MAX_PATH   # an event row reaches its root through at most this many edges
 
 
 def _key(e):

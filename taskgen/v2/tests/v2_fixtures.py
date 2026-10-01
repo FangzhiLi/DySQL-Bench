@@ -1,6 +1,7 @@
 # tests/v2_fixtures.py -- fixtures shared by the v2 tests (no tests here). The shop tables and anchors moved here from
 # test_taskgen_trees.py, which re-exports them for the older test modules.
 from taskgen_common.testing import SHOP, rows
+from taskgen_v2.db_profile import version
 
 SHOP2 = SHOP + """
 CREATE TABLE order_items (item_id INTEGER PRIMARY KEY, order_id INTEGER REFERENCES orders(order_id), note TEXT);
@@ -26,6 +27,7 @@ SHOP_PROFILE = {
                 "path": ["orders.customer_id -> customers.customer_id", "order_items.order_id -> orders.order_id"], "parents": []}],
     "attributes": [], "public": ["products"], "exclude": [], "no_insert": [], "quirks": [],
     "description": "A small shop.", "confirmed": True}
+SHOP_PROFILE["confirmed_version"] = version(SHOP_PROFILE)   # confirmed for exactly this content
 
 # a table name with a space, a composite foreign key, an edge only the profile knows (advisor.s_id is TEXT and holds
 # "Student List".sid), another person under an event, a 1:1 attribute, a root parent, an excluded helper table
@@ -62,3 +64,4 @@ SCHOOL_PROFILE = {
     "attributes": [{"table": "flags", "of": "Student List", "via": "flags.sid -> Student List.sid"}],
     "public": ["dept", "section"], "exclude": ["calendar"], "no_insert": ["section"],
     "quirks": ["dept names are codes such as d0."], "description": "A small school.", "confirmed": True}
+SCHOOL_PROFILE["confirmed_version"] = version(SCHOOL_PROFILE)

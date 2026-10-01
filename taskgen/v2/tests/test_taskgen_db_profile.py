@@ -1,9 +1,9 @@
 # tests/test_taskgen_db_profile.py
 import copy, sqlite3
 import pytest
-from taskgen_common.testing import make_db
+from taskgen_common.testing import make_db, rows
 from v2_fixtures import SHOP2, FKS, SHOP_PROFILE, SCHOOL, SCHOOL_FKS, SCHOOL_COMPOSITE, SCHOOL_PROFILE
-from taskgen_v2 import db_profile, schema
+from taskgen_v2 import db_profile, owners, schema
 
 
 @pytest.fixture
@@ -68,6 +68,44 @@ def test_an_edge_must_lead_to_one_parent_row(shop):
         "write it from the table that holds the reference"]
 
 
+def test_a_persons_own_rows_cannot_be_public(shop, school):
+    # tracing stops at public tables, so an event, attribute or path table listed there would turn own rows public
+    for t in ("takes", "flags"):
+        p = {**SCHOOL_PROFILE, "public": SCHOOL_PROFILE["public"] + [t]}
+        assert db_profile.validate(p, school, SCHOOL_FKS, SCHOOL_COMPOSITE) == [
+            f"public: {t} holds a person's own rows (event, path or attribute table), so it cannot be public"]
+    p = {**SHOP_PROFILE, "events": SHOP_PROFILE["events"][1:], "public": ["products", "orders"]}   # orders: only on a path
+    assert db_profile.validate(p, shop, FKS) == [
+        "public: orders holds a person's own rows (event, path or attribute table), so it cannot be public"]
+
+
+def test_a_path_must_reach_its_root_within_the_tracing_hops(tmp_path):
+    # ownership tracing follows at most MAX_PATH edges, so a longer path would label the person's own events public
+    chain = ["p", "a", "b", "c", "d"]
+    db = make_db(tmp_path, "chain", "CREATE TABLE p (id INTEGER PRIMARY KEY, name TEXT);"
+                 + "".join(f"CREATE TABLE {t} (id INTEGER PRIMARY KEY, up INTEGER);" for t in chain[1:])
+                 + rows("p", 3, lambda i: f"{i},'p{i}'") + "".join(rows(t, 3, lambda i: f"{i},{i}") for t in chain[1:]))
+    path = [f"{t}.up -> {u}.id" for u, t in zip(chain, chain[1:])]
+    p = {"roots": [{"table": "p", "label": "person", "parents": []}],
+         "persons": {"p": {"key": "id", "name_cols": ["name"], "same_as": []}},
+         "events": [{"table": "d", "label": "d rows", "path": path, "parents": []}], "attributes": [], "public": [],
+         "exclude": [], "no_insert": [], "quirks": [], "description": "A chain.", "confirmed": False}
+    conn = sqlite3.connect(db)
+    assert db_profile.validate(p, conn) == [
+        f"events[0]: path has 4 edges, but ownership tracing follows at most {db_profile.MAX_PATH}; its rows would not reach the person"]
+    p = {**p, "events": [{"table": "c", "label": "c rows", "path": path[:3], "parents": []}], "public": ["d"]}
+    assert db_profile.validate(p, conn) == [] and owners.MAX_HOPS == db_profile.MAX_PATH == 3
+
+
+def test_same_as_must_hold_the_persons_keys(shop):
+    # same_as says "this column holds the same person's key"; a column that seldom matches would mislabel rows
+    p = copy.deepcopy(SHOP_PROFILE)
+    p["persons"]["staff"]["same_as"] = ["order_items.note"]
+    assert db_profile.validate(p, shop, FKS) == ["persons.staff.same_as: only 0% of order_items.note values are staff keys"]
+    p["persons"]["staff"]["same_as"], p["persons"]["customers"]["same_as"] = [], ["orders.customer_id"]
+    assert db_profile.validate(p, shop, FKS) == []
+
+
 def test_scope_edges_version_and_root_anchor():
     assert db_profile.scope_tables(SCHOOL_PROFILE) == {"Student List", "teacher", "takes", "advisor", "section", "dept", "flags"}
     p = {**SHOP_PROFILE, "persons": {**SHOP_PROFILE["persons"],
@@ -90,6 +128,18 @@ def test_load_save_and_get_only_confirmed(tmp_path):
     with pytest.raises(ValueError, match="no profile"):
         db_profile.get("test:none", path)
     assert db_profile.load(str(tmp_path / "missing.json")) == {}
+
+
+def test_an_edit_after_confirming_undoes_the_confirmation(tmp_path):
+    path = str(tmp_path / "p.json")
+    p = db_profile.confirm({**SHOP_PROFILE, "confirmed": False})
+    assert p["confirmed"] is True and p["confirmed_version"] == db_profile.version(SHOP_PROFILE)
+    db_profile.save({"a": {**p, "notes": ["User: fine"]}, "b": {**p, "quirks": ["qty is never 0."]}}, path)
+    assert db_profile.get("a", path)["notes"] == ["User: fine"]   # review fields are not content
+    with pytest.raises(ValueError, match="changed after it was confirmed"):
+        db_profile.get("b", path)
+    assert [db_profile.status(x) for x in (p, {**p, "quirks": ["x"]}, {**p, "confirmed": False})] == [
+        "confirmed", "changed since confirmed", "not confirmed"]
 
 
 def test_render_shows_roles_parents_keys_and_problems(school):

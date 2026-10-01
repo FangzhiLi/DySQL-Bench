@@ -69,12 +69,13 @@ public: [table...]  exclude: [table...]  no_insert: [table...]
 quirks: ["address: first_name/last_name 存反", "congress.cognress_rep_id 拼写如此"]
 description: 2–3 句
 confirmed: false → 人工过后改 true
+confirmed_version: `profile confirm` 记下的内容版本号；之后内容一改，确认就失效
 notes, draft: 审阅用（Claude 的改动；起草模型、轮数、没改掉的问题），不计入版本号
 ```
 
-边写成 `child.col -> parent.col`，复合外键写成 `child.(a, b) -> parent.(x, y)`；不在已知外键里的边，要有 ≥30% 的子行能在父表里找到。父表那一侧的列必须唯一，一条边只通向一行父行（计划 2 预审时加的：起草里有写反方向的边）。每张表都要有角色（roots、persons、events 及其路径、parents、attributes、public、exclude 之一），漏了算错。
+边写成 `child.col -> parent.col`，复合外键写成 `child.(a, b) -> parent.(x, y)`；不在已知外键里的边，要有 ≥30% 的子行能在父表里找到。父表那一侧的列必须唯一，一条边只通向一行父行（计划 2 预审时加的：起草里有写反方向的边）。每张表都要有角色（roots、persons、events 及其路径、parents、attributes、public、exclude 之一），漏了算错。计划 2 最终复核时又加了三条，都是为了不让归属标签悄悄出错：事件表、路径上的表和属性表不能放进 public（追溯到公共表就停，放进去本人的行就成了公共的）；事件路径最多 3 条边（归属追溯只走 3 跳）；same_as 的列也要有 ≥30% 的值是这个人的主键。
 
-**流程：** `taskgen.py profile draft` 起草（GLM；输入另有 `data/profile_hints.json` 里每库的根和已知怪异点、`taskgen_v2/profile_examples.json` 里两份手写的 DySQL 示例；校验不过或根和提示不一致，就带着问题重写，最多 2 次）→ Claude 预审（怪异点逐条查库核实，改动记进 notes）→ `profile render` 生成审阅页（样例树另写到 `results/`）→ 人工改 → `profile confirm`（校验不过不让确认）。未确认的库，`trees`、`generate`、`check` 拒绝运行。
+**流程：** `taskgen.py profile draft` 起草（GLM；输入另有 `data/profile_hints.json` 里每库的根和已知怪异点、`taskgen_v2/profile_examples.json` 里两份手写的 DySQL 示例；校验不过或根和提示不一致，就带着问题重写，最多 2 次）→ Claude 预审（怪异点逐条查库核实，改动记进 notes）→ `profile render` 生成审阅页（样例树另写到 `results/`）→ 人工改 → `profile confirm`（校验不过不让确认）。未确认的库，以及确认后又改过内容的库，`trees`、`generate`、`check` 拒绝运行；输出目录里有别的档案版本建的树或候选时，这三步也拒绝运行，免得 prompt 用旧标签、检查用新档案。
 **23 个库的根（草案）：** beer_factory customers；books customer；book_publishing_company authors；car_retails customers；regional_sales Customers；retail_complains client；shipping customer；legislator historical（historical-terms 为事件）；professional_basketball players（draft 为事件）；IPL player；WWE Wrestlers；olympics person；movie actor；movies_4 person；superhero superhero；synthea patients；student_club member；student_loan person（exclude bool；flag 表算属性表，计划 2 定）；food_inspection_2 employee；college_2 student + instructor；school_scheduling Students + Staff；hr_1 employees；address congress。
 **可选检验：** 对 DySQL 13 个库也起草一遍，看根是否和论文一致（Bowlers、customer、Entertainers…）。
 

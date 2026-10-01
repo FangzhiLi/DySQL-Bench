@@ -51,7 +51,7 @@ def profile_pairs(results, recs, profiles):
     for f in sorted(glob.glob(os.path.join(results, "*", "candidates.jsonl"))):
         key, rec = by_db.get(os.path.basename(os.path.dirname(f)), (None, None))
         prof = profiles.get(key)
-        if not prof or prof.get("confirmed") is not True:
+        if not prof or db_profile.status(prof) != "confirmed":
             continue
         roots = {r["table"] for r in prof["roots"]}
         for c in io.read_jsonl(f):

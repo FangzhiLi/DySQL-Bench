@@ -27,3 +27,4 @@ v2 从 v1 原样复制起步（tag `taskgen-v1`，61c8133）。复制的那个 c
 | 档案起草：`taskgen_v2/profile_draft.py`（GLM 看每表的键、列、外键、BIRD 列说明和 3 行样例，加 `data/profile_hints.json` 的根和已知怪异点、两份手写 DySQL 示例；校验不过带着问题重写，最多 2 次）；`profile draft/check/render/confirm` 命令 | §4.1、D1 |
 | 23 个库的档案：GLM 起草，Claude 逐库预审，用户确认（`data/db_profiles.json`，审阅页 `docs/2026-10-01-db-profiles-review.md`）；预审时加了两条规则：档案里一条边的父表一侧必须唯一，带档案时公共行不属于任何人 | §4.1、§4.5 |
 | 验证：23 库按档案建树统计、beer_factory 一棵树逐行核对、4 库冒烟（要求和算出的类型不一致 4/95，标签不一致 0）、带档案的检查在 v1 候选上对比（`docs/2026-10-01-check-with-profiles.md`），记录在 `docs/2026-10-01-profiles-and-trees.md`；设计文档写回计划 2 的规则 | §5 B、C |
+| 最终复核后的修正：档案校验加三条（事件表、路径上的表、属性表不能是公共表；事件路径最多 3 条边；same_as 的列要能对上主键）；确认绑定内容的版本号（`confirmed_version`），确认后改过内容要重新确认；`trees`、`generate`、`check` 遇到别的档案版本留下的树或候选就停 | §4.1 |

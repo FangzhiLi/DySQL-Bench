@@ -40,5 +40,7 @@ def test_profile_pairs_compare_root_speakers_only(tmp_path):
     assert [(cid, o["ok"], n["ok"]) for cid, o, n in pairs] == [("own", True, True), ("theirs", True, False)]
     assert pairs[1][2]["reasons"] == ["other_person"]
     assert cd.profile_pairs(str(tmp_path / "res"), {"test:shop2": rec}, {"test:shop2": {**SHOP_PROFILE, "confirmed": False}}) == []
+    edited = {**SHOP_PROFILE, "quirks": ["qty is never 0."]}   # changed after it was confirmed
+    assert cd.profile_pairs(str(tmp_path / "res"), {"test:shop2": rec}, {"test:shop2": edited}) == []
     text = "\n".join(cd.section("demo", pairs, "不用档案", "用档案"))
     assert "| 不用档案 | 用档案 | 条数 |" in text and "- 通过 → 拒绝：other_person（1）：theirs" in text

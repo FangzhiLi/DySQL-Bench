@@ -80,7 +80,8 @@
    "model": "glm-5.3",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "09f7d6adab"
  },
  "bird:beer_factory": {
   "roots": [
@@ -164,7 +165,8 @@
    "model": "glm-5.3",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "b6d4dcedfa"
  },
  "bird:book_publishing_company": {
   "roots": [
@@ -248,7 +250,8 @@
    "model": "glm-5.3",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "70e6849060"
  },
  "bird:books": {
   "roots": [
@@ -391,7 +394,8 @@
    "model": "glm-5.3",
    "rounds": 2,
    "errors": []
-  }
+  },
+  "confirmed_version": "b65d2359b5"
  },
  "bird:car_retails": {
   "roots": [
@@ -495,7 +499,8 @@
    "model": "glm-5.3",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "ce18a36cb0"
  },
  "bird:food_inspection_2": {
   "roots": [
@@ -578,7 +583,8 @@
    "model": "glm-5.3",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "5bbee4e305"
  },
  "bird:legislator": {
   "roots": [
@@ -644,7 +650,8 @@
    "model": "glm-5.3",
    "rounds": 3,
    "errors": []
-  }
+  },
+  "confirmed_version": "b2f333d409"
  },
  "bird:movie": {
   "roots": [
@@ -700,7 +707,8 @@
    "model": "glm-5.3",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "30e6b81a4f"
  },
  "bird:movies_4": {
   "roots": [
@@ -793,7 +801,8 @@
    "model": "glm-5.3",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "9204495d14"
  },
  "bird:olympics": {
   "roots": [
@@ -896,7 +905,8 @@
    "model": "glm-5.3",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "a77f8261df"
  },
  "bird:professional_basketball": {
   "roots": [
@@ -997,7 +1007,8 @@
    "errors": [
     "no profile JSON in the answer: Expecting ',' delimiter: line 63 column 4 (char 1070)"
    ]
-  }
+  },
+  "confirmed_version": "7c6f9c29e3"
  },
  "bird:regional_sales": {
   "roots": [
@@ -1082,7 +1093,8 @@
    "model": "glm-5.3",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "88742c3998"
  },
  "bird:retail_complains": {
   "roots": [
@@ -1162,7 +1174,8 @@
    "model": "glm-5.3",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "da7fdd8462"
  },
  "bird:shipping": {
   "roots": [
@@ -1236,7 +1249,8 @@
    "model": "glm-5.3",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "e3de696022"
  },
  "bird:student_club": {
   "roots": [
@@ -1343,7 +1357,8 @@
    "model": "glm-5.3",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "44b1808f45"
  },
  "bird:student_loan": {
   "roots": [
@@ -1434,7 +1449,8 @@
    "model": "glm-5.3",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "b9ac360111"
  },
  "bird:superhero": {
   "roots": [
@@ -1546,7 +1562,8 @@
    "model": "glm-5.3",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "ce6c4a4f0d"
  },
  "bird:synthea": {
   "roots": [
@@ -1710,7 +1727,8 @@
    "model": "glm-5.3",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "1d823efaae"
  },
  "spider1:college_2": {
   "roots": [
@@ -1847,7 +1865,8 @@
    "model": "glm-5.3",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "ffb83ad2e9"
  },
  "spider1:hr_1": {
   "roots": [
@@ -1940,7 +1959,8 @@
    "model": "glm-5.3",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "07ca34b0ca"
  },
  "spider2:IPL": {
   "roots": [
@@ -2080,7 +2100,8 @@
    "model": "glm-5.3",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "5a8274115d"
  },
  "spider2:WWE": {
   "roots": [
@@ -2201,7 +2222,8 @@
    "model": "glm-5.3",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "262210e3a8"
  },
  "spider2:school_scheduling": {
   "roots": [
@@ -2353,6 +2375,7 @@
    "model": "glm-5.3",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "4ad5d80b55"
  }
 }

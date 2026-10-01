@@ -13,6 +13,7 @@ PROFILES_JSON = os.path.join(io.DATA, "db_profiles.json")
 FIELDS = ("roots", "persons", "events", "attributes", "public", "exclude", "no_insert", "quirks", "description", "confirmed")
 MIN_EDGE_HIT = 0.3   # an edge that no recorded foreign key backs must match like a validated FK (db_select.all_fks)
 EDGE_SAMPLE = 2000   # child rows sampled for that match rate
+MAX_PATH = 3         # edges from an event to its root; ownership tracing (owners.MAX_HOPS) follows no more
 
 Edge = namedtuple("Edge", "child cols parent ref_cols")
 
@@ -60,12 +61,16 @@ def save(profiles, path=PROFILES_JSON):
 
 
 def get(db_key, path=PROFILES_JSON):
-    """The confirmed profile of db_key; ValueError when there is none or it is not confirmed yet (design D1)."""
+    """The confirmed profile of db_key; ValueError when there is none, it is not confirmed yet, or its content changed
+    after it was confirmed (design D1)."""
     p = load(path).get(db_key)
     if p is None:
         raise ValueError(f"no profile for {db_key} in {path}: run `taskgen.py profile draft --db {db_key}`")
-    if p.get("confirmed") is not True:
+    if status(p) == "not confirmed":
         raise ValueError(f"the profile of {db_key} is not confirmed: review it, then `taskgen.py profile confirm --db {db_key}`")
+    if status(p) != "confirmed":
+        raise ValueError(f"the profile of {db_key} changed after it was confirmed: review the change, then "
+                         f"`taskgen.py profile confirm --db {db_key}`")
     return p
 
 
@@ -73,6 +78,18 @@ def version(profile):
     """Short hash of what the profile says (the review fields left out), recorded in every tree."""
     body = {k: profile.get(k) for k in FIELDS if k != "confirmed"}
     return hashlib.sha1(json.dumps(body, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:10]
+
+
+def confirm(profile):
+    """The profile marked confirmed for exactly what it says now; a later edit to its content undoes that."""
+    return {**profile, "confirmed": True, "confirmed_version": version(profile)}
+
+
+def status(profile):
+    """'confirmed', 'changed since confirmed' (edited after `profile confirm`) or 'not confirmed'."""
+    if profile.get("confirmed") is not True:
+        return "not confirmed"
+    return "confirmed" if profile.get("confirmed_version") == version(profile) else "changed since confirmed"
 
 
 def root_anchor(profile, table):
@@ -227,8 +244,10 @@ def _validate(profile, conn, fks, composite):
             st, dot, sc = s.rpartition(".")
             if not dot:
                 errs.append(f"persons.{t}.same_as: {s!r} is not table.column")
-            else:
-                has(st, f"persons.{t}.same_as", [sc])
+            elif has(st, f"persons.{t}.same_as", [sc]) and p.get("key") in tables.get(t, ()):
+                h = edge_hit(conn, Edge(st, (sc,), t, (p["key"],)))   # held to the same match rate as an edge
+                if h is not None and h < MIN_EDGE_HIT:
+                    errs.append(f"persons.{t}.same_as: only {h:.0%} of {s} values are {t} keys")
     roots = profile["roots"]
     if not roots:
         errs.append("roots: needs at least one root")
@@ -250,6 +269,9 @@ def _validate(profile, conn, fks, composite):
         if not path:
             errs.append(f"{where}: empty path")
             continue
+        if len(path) > MAX_PATH:
+            errs.append(f"{where}: path has {len(path)} edges, but ownership tracing follows at most {MAX_PATH}; "
+                        f"its rows would not reach the person")
         for j, text in enumerate(path):
             e = edge(text, f"{where}.path[{j}]", parent=prev)
             if e is None:
@@ -278,6 +300,10 @@ def _validate(profile, conn, fks, composite):
             has(t, k)
     if public & set(persons):
         errs.append(f"public: {', '.join(sorted(public & set(persons)))} hold people, not public data")
+    owned = event_tables | {a.get("table") for a in profile["attributes"]}   # tracing stops at public tables (owners)
+    owned |= {t for ev in profile["events"] for x in _parsed(ev.get("path") or []) for t in (x.child, x.parent)}
+    for t in sorted((public & owned) - set(persons)):
+        errs.append(f"public: {t} holds a person's own rows (event, path or attribute table), so it cannot be public")
     used, excl = used_tables(profile), set(profile["exclude"])
     if used & excl:
         errs.append(f"exclude: {', '.join(sorted(used & excl))} also have a role")
@@ -324,7 +350,7 @@ def render_md(entries):
     lines = []
     for x in entries:
         p, errs = x["profile"], x["errors"]
-        state = "已确认" if p.get("confirmed") is True else "未确认"
+        state = {"confirmed": "已确认", "changed since confirmed": "确认后改过"}.get(status(p), "未确认")
         lines += [f"## {x['key']}　{state}　" + ("校验通过" if not errs else f"{len(errs)} 个问题"), ""]
         if p.get("description"):
             lines += [f"> {p['description']}", ""]

@@ -36,9 +36,19 @@ def profile_of(a):
         sys.exit(str(e))
 
 
+def same_profile(path, ver, what):
+    """Refuse records made from another version of the profile: a prompt built from the old labels must not meet a
+    check that reads the new ones."""
+    old = sorted({str(r.get("profile_version")) for r in io.read_jsonl(path)} - {ver})
+    if old:
+        sys.exit(f"{path} holds {what} from profile version {', '.join(old)}, but the profile is now {ver}: "
+                 "use a new --out-dir, or delete the file to build it again")
+
+
 def cmd_trees(a):
     rec, out = rec_and_dir(a)
     prof = profile_of(a)
+    same_profile(f"{out}/trees.jsonl", db_profile.version(prof), "trees")
     c = trees.open_ro(io.resolve_db_path(rec["path"]))
     tracer = owners.Tracer.from_profile(prof, rec, c)
     done = {(t["anchor_table"], str(t["key_value"])) for t in io.read_jsonl(f"{out}/trees.jsonl")}
@@ -61,6 +71,8 @@ def cmd_describe(a):
 def cmd_generate(a):
     rec, out = rec_and_dir(a)
     prof = profile_of(a)
+    same_profile(f"{out}/trees.jsonl", db_profile.version(prof), "trees")
+    same_profile(f"{out}/candidates.jsonl", db_profile.version(prof), "candidates")
     path = io.resolve_db_path(rec["path"])
     desc = json.load(open(DESC_PATH)).get(a.db, "") if os.path.exists(DESC_PATH) else ""
     if not desc:
@@ -91,6 +103,7 @@ def cmd_generate(a):
 def cmd_check(a):
     rec, out = rec_and_dir(a)
     prof = profile_of(a)
+    same_profile(f"{out}/candidates.jsonl", db_profile.version(prof), "candidates")
     done = io.done_ids(f"{out}/check.jsonl")
     todo = [c for c in io.read_jsonl(f"{out}/candidates.jsonl") if c["id"] not in done]
     n = ok = 0
@@ -216,7 +229,7 @@ def cmd_profile(a):
     if a.action == "check":
         for x in entries:
             print(f"{x['key']}: " + (f"{len(x['errors'])} problems" if x["errors"] else "ok")
-                  + (", confirmed" if x["profile"].get("confirmed") is True else ", not confirmed"))
+                  + ", " + db_profile.status(x["profile"]))
             for e in x["errors"]:
                 print(f"  - {e}")
         sys.exit(1 if bad else 0)
@@ -233,7 +246,7 @@ def cmd_profile(a):
             sys.exit("confirm needs --db")
         if bad:
             sys.exit(f"{a.db} has problems; run `profile check --db {a.db}`")
-        profiles[a.db]["confirmed"] = True
+        profiles[a.db] = db_profile.confirm(profiles[a.db])
         db_profile.save(profiles, a.profiles)
         print(f"{a.db}: confirmed")
 
