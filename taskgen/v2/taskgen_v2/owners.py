@@ -14,10 +14,11 @@ def _key(e):
 
 
 class Tracer:
-    def __init__(self, conn, edges, persons, names=None, tables=()):
+    def __init__(self, conn, edges, persons, names=None, tables=(), public=()):
         """edges: db_profile.Edge list, child -> parent; persons: {table: key column}; names: {table: [name columns]};
-        tables: the names write targets are canonicalized to."""
-        self.conn, self.persons, self.names = conn, persons, names or {}
+        tables: the names write targets are canonicalized to; public: tables whose rows belong to nobody, so tracing
+        stops there (a department names its chair, but the chair does not own the department)."""
+        self.conn, self.persons, self.names, self.public = conn, persons, names or {}, set(public)
         self.up, seen = {}, set()
         for e in edges:
             if e.child.lower() == e.parent.lower() or _key(e) in seen:   # a manager_id says nothing about whose row it is
@@ -46,7 +47,7 @@ class Tracer:
         persons = {t: p["key"] for t, p in profile["persons"].items()}
         names = {t: p["name_cols"] for t, p in profile["persons"].items()}
         tables = [n for (n,) in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")]
-        return cls(conn, edges, persons, names, tables)
+        return cls(conn, edges, persons, names, tables, profile["public"])
 
     def canon(self, table):
         return self.tables.get(table.lower(), table)
@@ -55,6 +56,8 @@ class Tracer:
         """{(person table, key as str)} the row belongs to: itself when it is a person row, plus the people its
         parents (up to MAX_HOPS) belong to."""
         acc = set() if acc is None else acc
+        if table in self.public:
+            return acc
         if table in self.persons:
             v = row.get(self.persons[table])
             if v is not None:

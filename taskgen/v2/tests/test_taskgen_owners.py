@@ -53,3 +53,27 @@ def test_self_references_say_nothing_about_ownership(tmp_path):
            "fks": [{"table": "emp", "col": "boss", "ref_table": "emp", "ref_col": "id"}]}
     t = owners.Tracer.from_rec(rec, c)
     assert t.up == {} and t.trace("emp", {"id": 2, "name": "b", "boss": 1}) == {("emp", "2")}
+
+
+def test_public_rows_belong_to_nobody_even_when_they_name_a_person(tmp_path):
+    # a club names its chair (a person), but the profile lists club as public: neither the club row nor a membership
+    # (through the club) belongs to the chair -- school_scheduling's Departments.DeptChair is the real case
+    c = sqlite3.connect(make_db(tmp_path, "club", "CREATE TABLE person (id INTEGER PRIMARY KEY, name TEXT);"
+                                                  "CREATE TABLE club (id INTEGER PRIMARY KEY, name TEXT, chair INTEGER REFERENCES person(id));"
+                                                  "CREATE TABLE membership (person_id INTEGER REFERENCES person(id), club_id INTEGER REFERENCES club(id));"
+                                                  "INSERT INTO person VALUES (1, 'p1'), (2, 'p2'); INSERT INTO club VALUES (7, 'chess', 2);"
+                                                  "INSERT INTO membership VALUES (1, 7);"))
+    fks = [{"table": "club", "col": "chair", "ref_table": "person", "ref_col": "id"},
+           {"table": "membership", "col": "person_id", "ref_table": "person", "ref_col": "id"},
+           {"table": "membership", "col": "club_id", "ref_table": "club", "ref_col": "id"}]
+    profile = {"roots": [{"table": "person", "label": "member", "parents": []}],
+               "persons": {"person": {"key": "id", "name_cols": ["name"], "same_as": []}},
+               "events": [{"table": "membership", "label": "clubs", "path": ["membership.person_id -> person.id"],
+                           "parents": [{"table": "club", "via": "membership.club_id -> club.id", "parents": []}]}],
+               "attributes": [], "public": ["club"], "exclude": [], "no_insert": [], "quirks": [], "description": "Clubs.", "confirmed": True}
+    t = owners.Tracer.from_profile(profile, {"anchors": [], "fks": fks}, c)
+    assert t.trace("club", {"id": 7, "name": "chess", "chair": 2}) == set()
+    assert t.label("club", {"id": 7, "name": "chess", "chair": 2}, {("person", "1")}) == "public"
+    assert t.trace("membership", {"person_id": 1, "club_id": 7}) == {("person", "1")}
+    rec_t = owners.Tracer.from_rec({"anchors": [{"table": "person", "key": "id", "kind": "person_named", "names": ["name"]}], "fks": fks}, c)
+    assert rec_t.trace("club", {"id": 7, "name": "chess", "chair": 2}) == {("person", "2")}     # without a profile, as before
