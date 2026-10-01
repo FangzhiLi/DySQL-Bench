@@ -1,10 +1,15 @@
 # tests/test_taskgen_prompt.py
 import random
 from collections import Counter
-from taskgen_v2 import prompt
+from taskgen_v2 import metrics, prompt
 
 ANCHOR = {"table": "customers", "key": "customer_id", "names": ["first_name", "last_name"]}
 DB = {"source": "test", "db": "shop", "path": "x", "anchors": [], "fks": []}
+CTX = {"no_insert": {"reviews"}, "copyable": {"orders", "products"}, "fixed": {"orders": {"order_id", "customer_id", "product_id"}, "products": {"product_id"},
+                                           "customers": {"customer_id"}, "reviews": {"review_id", "customer_id"}}}
+MATERIALS = {**CTX, "description": "A small shop.", "quirks": ["qty is never 0."], "schema": "CREATE TABLE customers (...)",
+             "keys": {"orders": "- orders: a new row may leave order_id out (SQLite assigns 101)",
+                      "reviews": "- reviews: no new rows (UPDATE or DELETE only)", "unrelated": "- unrelated: no primary key"}}
 
 
 def order(i, label="own"):
@@ -13,26 +18,37 @@ def order(i, label="own"):
 
 
 TREE = {"anchor_table": "customers", "anchor_key": "customer_id", "key_value": 5, "anchor_name": "a5 b5",
-        "anchor_row": {"customer_id": 5, "first_name": "a5", "last_name": "b5"}, "profile_version": "v1",
+        "anchor_row": {"customer_id": 5, "first_name": "a5", "last_name": "b5", "email": "a5@x.org"},
+        "lookup": {"email": "a5@x.org"}, "profile_version": "v1",
         "parents": [{"table": "staff", "row": {"staff_id": 2, "name": "s2"}, "label": "other:s2", "parents": []}],
         "attributes": {"vip": [{"customer_id": 5, "level": 3}]},
         "events": [{"table": "orders", "label": "orders", "count": 14, "rows": [order(i) for i in range(12)]},
                    {"table": "reviews", "label": "reviews", "count": 1,
                     "rows": [{"table": "reviews", "row": {"review_id": 1, "customer_id": 5, "stars": 4}, "label": "own", "parents": []}]}]}
 NO_PUBLIC = {**TREE, "events": [TREE["events"][1]]}
+NO_EVENTS = {**TREE, "events": [], "parents": [], "lookup": {}}
 
 
-def plan_for(task_type, difficulty="easy", tree=TREE, **shape):
+def plans(n=3000, tree=TREE, seed=0):
+    rng = random.Random(seed)
+    return [prompt.sample_plan(rng, tree, ANCHOR, prompt.CFG, CTX) for _ in range(n)]
+
+
+def plan_for(task_type, tree=TREE, **shape):
     rng = random.Random(0)
     while True:
-        p = prompt.sample_plan(rng, tree, ANCHOR)
-        if p["task_type"] == task_type and p["difficulty"] == difficulty and all(p["shape"][k] == v for k, v in shape.items()):
+        p = prompt.sample_plan(rng, tree, ANCHOR, prompt.CFG, CTX)
+        if p["task_type"] == task_type and all(p["shape"][k] == v for k, v in shape.items()):
             return p
 
 
-def test_examples_cover_every_type_with_at_least_two():
+def test_examples_are_dysql_style_for_the_four_types():
     ex = prompt.load_examples()
-    assert set(ex) == set(prompt.CFG["TYPE_MIX"]) and all(len(v) >= 2 for v in ex.values())
+    assert set(ex) == set(prompt.CFG["TYPE_MIX"]) == {"1_self", "2_self_and_public", "3_public_only", "5_proxy"}
+    for t, xs in ex.items():
+        assert len(xs) >= 3, t
+        for x in xs:
+            assert 40 <= len(x.split()) <= 80 and metrics.ID_RE.search(" ".join(x.split()[:25])) and not metrics.ASK.search(x), x
 
 
 def test_no_type_4_and_public_types_need_a_public_row():
@@ -40,74 +56,114 @@ def test_no_type_4_and_public_types_need_a_public_row():
     assert prompt.feasible_types(NO_PUBLIC) == ["1_self", "5_proxy"]
 
 
-def test_sample_plan_follows_the_mix_and_shows_more_events_when_harder():
-    rng = random.Random(0)
-    plans = [prompt.sample_plan(rng, TREE, ANCHOR) for _ in range(3000)]
-    types, diffs = Counter(p["task_type"] for p in plans), Counter(p["difficulty"] for p in plans)
-    assert "4_other_person" not in types
-    assert abs(types["1_self"] / 3000 - 0.46 / 0.92) < 0.04 and abs(types["5_proxy"] / 3000 - 0.29 / 0.92) < 0.04
-    assert abs(diffs["hard"] / 3000 - 0.29) < 0.04
-    for p in plans:
-        lo, hi = prompt.CFG["EVENTS_SHOWN"][p["difficulty"]]
-        assert lo <= len(p["events"]) <= hi
-        if p["task_type"] in ("2_self_and_public", "3_public_only"):
-            assert p["shape"]["public_table"] and p["tables"]["public"] == ["products"]
-        if p["difficulty"] == "hard":
-            assert p["shape"]["n_writes"] >= 2 and p["shape"]["n_tables"] >= 2
-        assert p["example"] in prompt.load_examples()[p["task_type"]]
-    assert {p["tables"]["own"][0] for p in plans} == {"customers"}
+def test_types_and_write_counts_follow_the_mix():
+    ps = plans()
+    types, writes = Counter(p["task_type"] for p in ps), Counter(p["shape"]["n_writes"] for p in ps)
+    assert abs(types["1_self"] / 3000 - 0.47) < 0.04 and abs(types["5_proxy"] / 3000 - 0.29) < 0.04
+    assert abs(writes[1] / 3000 - 0.37 * 0.83) < 0.04 and abs(writes[2] / 3000 - 0.47) < 0.05   # type 2 never writes once
+    assert abs((writes[4] + writes[5]) / 3000 - 0.09) < 0.03
+    assert all(p["shape"]["n_writes"] >= 2 and p["shape"]["n_tables"] == 2 for p in ps if p["task_type"] == "2_self_and_public")
+
+
+def test_each_type_writes_only_its_own_kind_of_table():
+    for p in plans():
+        tabs, w = p["tables"], p["write_tables"]
+        pool = {"1_self": tabs["own"], "5_proxy": tabs["own"], "3_public_only": tabs["public"]}.get(p["task_type"], tabs["own"] + tabs["public"])
+        assert p["scope"] == pool and p["shape"]["n_tables"] <= max(2, len(pool))
+        if w:
+            assert set(w) <= set(pool) and len(w) == p["shape"]["n_tables"]
+            if p["task_type"] == "2_self_and_public":
+                assert w[0] in tabs["own"] and w[1] in tabs["public"]
+
+
+def test_shapes_only_where_the_tree_allows_them():
+    ps = plans()
+    batch = [p for p in ps if p["shape"]["batch"]]
+    assert 0.08 < len(batch) / 3000 < 0.14 and 0.5 < sum(p["shape"]["batch"]["all"] for p in batch) / len(batch) < 0.7
+    assert all({**p["shape"]["batch"], "all": 0} == {"table": "orders", "label": "orders", "count": 14, "all": 0}
+               and p["task_type"] != "3_public_only" for p in batch)
+    arch = [p for p in ps if p["shape"]["archive"]]
+    assert arch and all(p["shape"]["n_writes"] >= 2 and p["shape"]["archive"] in ("orders", "products") for p in arch)
+    assert all(p["shape"]["archive"] != "reviews" for p in arch)              # not copyable: no new rows
+    sub = [p for p in ps if p["shape"]["ownership_subquery"]]
+    assert 0.09 < len(sub) / 3000 < 0.15 and all(p["task_type"] != "3_public_only" for p in sub)
+    for p in plans(400, NO_EVENTS):                                           # hr_1: most roots have no events
+        s = p["shape"]
+        assert not s["batch"] and not s["archive"] and not s["ownership_subquery"] and s["n_tables"] <= len(p["scope"])
+
+
+def test_difficulty_comes_from_the_shape_like_the_check():
+    for p in plans(500):
+        s = p["shape"]
+        feats = [s["n_writes"] >= 2, s["n_tables"] >= 2, s["ownership_subquery"], s["archive"], p["task_type"] == "2_self_and_public"]
+        assert p["difficulty"] == prompt.level(feats)
+        lo, hi = prompt.CFG["EVENTS_SHOWN"][min(s["n_writes"], 3)]
+        assert lo <= len(p["events"]) <= hi or len(p["events"]) == sum(len(g["rows"]) for g in TREE["events"])
+
+
+def test_targets_are_short_columns_that_are_not_keys():
+    for p in plans(300):
+        for x in p["targets"]:
+            t, c = x.split(".")
+            assert c not in CTX["fixed"].get(t, ()) and t in (p["write_tables"] or p["scope"])
 
 
 def test_long_data_loses_events_until_it_fits():
     big = {**TREE, "events": [{**TREE["events"][0], "rows": [{**order(i), "row": {**order(i)["row"], "note": "x" * 150}} for i in range(12)]}]}
     cfg = {**prompt.CFG, "DATA_CHARS": 1200}
-    p = prompt.sample_plan(random.Random(3), big, ANCHOR, cfg)
-    assert 1 <= len(p["events"]) < prompt.CFG["EVENTS_SHOWN"][p["difficulty"]][0]
+    p = prompt.sample_plan(random.Random(3), big, ANCHOR, cfg, CTX)
+    assert 1 <= len(p["events"]) < prompt.CFG["EVENTS_SHOWN"][1][0]
     assert len(prompt.data_blocks(big, p["events"], "x", cfg)) <= 1200 or len(p["events"]) == 1
 
 
 def test_data_blocks_nest_parents_and_say_whose_data_it_is():
     text = prompt.data_blocks(TREE, [[0, 0], [1, 0]], "the speaker's own row")
-    assert text.startswith('## customers record (the speaker\'s own row)\n{"customer_id": 5, "first_name": "a5", "last_name": "b5"}')
+    assert text.startswith('## customers record (the speaker\'s own row)\n{"customer_id": 5, "first_name": "a5", "last_name": "b5"')
     assert '- vip (own): {"customer_id": 5, "level": 3}' in text
     assert '- staff (another person\'s data: s2): {"staff_id": 2, "name": "s2"}' in text
     assert "## orders: orders records (1 of 14 shown)\n- orders (own): " in text
     assert '\n  - products (public, shared reference data owned by nobody): {"product_id": 0' in text
-    assert "## reviews: reviews records (1 of 1 shown)" in text
     long = {**TREE, "anchor_row": {**TREE["anchor_row"], "bio": "y" * 500}}
     assert '"bio": "' + "y" * 200 + '... (500 chars)"' in prompt.data_blocks(long, [], "x")
 
 
-def test_build_messages_fills_type_shape_and_scope():
-    p = plan_for("2_self_and_public", "medium")
-    msgs = prompt.build_messages(DB, ANCHOR, TREE, p, "A shop.", "CREATE TABLE customers (...)")
-    assert msgs[0]["role"] == "system" and f"## Instruction Example\n{p['example']}" in msgs[0]["content"]
-    u = msgs[1]["content"]
-    assert "a5 b5 (customer_id = 5)" in u and "shared table (products)" in u and "At least one write must change a shared table: products." in u
-    assert "## customers record" in u and "CREATE TABLE customers" in u and "A shop." in u
+def test_messages_hold_the_rules_materials_and_plan():
+    p = plan_for("1_self", batch={"table": "orders", "label": "orders", "count": 14, "all": False}, ownership_subquery=False)
+    sysm, u = (m["content"] for m in prompt.build_messages(DB, ANCHOR, TREE, p, MATERIALS))
+    assert "only asks for changes" in sysm and "no SELECT statements" in sysm and "outputs" not in sysm
+    assert "## Principles for generating SQL calls\n- At the beginning of the conversation, you have to authenticate" in sysm
+    assert "must deny any requests for tasks related to any other user" in sysm   # DySQL's agent policy, verbatim
+    assert "Wrap every table name in double quotes" in sysm and f"## Instruction example (for style only" in sysm and p["example"] in sysm
+    assert u.startswith("# Database\nA small shop.\n\nData quirks (copy names and values exactly as stored):\n- qty is never 0.")
+    assert "CREATE TABLE customers" in u and "unrelated" not in u                          # key notes of the tables in scope only
+    assert ("The speaker is a5 b5, the person in customers with customer_id = 5. Their first sentence gives their name and their ID, "
+            "written with the word ID or the column name (customer_id 5 or ID 5).") in u
+    assert "no new row is added to customers (that would be a new person)" in u   # the pilots' type mismatches did that
+    assert "changes several of the person's orders rows in orders at once (there are 14)" in u and "between 2 and 13 rows" in u
+    assert "written in the instruction exactly as the SQL uses it" in u
+    assert "identify the person by customer_id = 5; names can repeat" in u and "40 to 80 words" in u
+
+
+def test_subquery_archive_batch_and_proxy_wording():
+    p = plan_for("1_self", batch={"table": "orders", "label": "orders", "count": 14, "all": True})
+    u = prompt.build_messages(DB, ANCHOR, TREE, p, MATERIALS)[1]["content"]
+    assert "changes all 14 of the person's orders rows in orders at once; the instruction says it means all of them." in u
+    p = plan_for("1_self", ownership_subquery=True, archive="orders")
+    u = prompt.build_messages(DB, ANCHOR, TREE, p, MATERIALS)[1]["content"]
+    assert "WHERE customer_id = (SELECT customer_id FROM \"customers\" WHERE email = 'a5@x.org'), instead of writing customer_id = 5." in u
+    assert 'First copy the orders rows you will change as new rows with INSERT INTO "orders" ... SELECT ... FROM "orders"' in u
     p5 = plan_for("5_proxy")
-    u = prompt.build_messages(DB, ANCHOR, TREE, p5, "A shop.", "DDL")[1]["content"]
-    assert "NOT in the database" in u and "the person the request is about" in u
-    assert f"The speaker is {p5['style']['name']}, {p5['style']['role']}" in u
+    u = prompt.build_messages(DB, ANCHOR, TREE, p5, MATERIALS)[1]["content"]
+    assert f"The speaker is not in the database: {p5['style']['name']}, {p5['style']['role']}." in u and "the person the request is about" in u
 
 
-def test_system_requires_quoted_table_names():
-    s = prompt.build_messages(DB, ANCHOR, TREE, plan_for("1_self"), "A shop.", "DDL")[0]["content"]
-    assert "Wrap every table name in double quotes" in s and '"transaction"' in s
+def test_sql_value_quotes_text():
+    assert prompt.sql_value("O'Brien") == "'O''Brien'" and prompt.sql_value(42) == "42"
 
 
-def test_next_ids_only_for_tables_the_prompt_shows():
-    p = plan_for("1_self")
-    u = prompt.build_messages(DB, ANCHOR, TREE, p, "A shop.", "DDL",
-                              next_ids={"orders": ("order_id", 101), "products": ("product_id", 61), "unrelated": ("id", 9)})[1]["content"]
-    assert "## Next unused primary keys" in u and "orders.order_id = 101" in u and "unrelated" not in u
-    assert "Next unused" not in prompt.build_messages(DB, ANCHOR, TREE, p, "A shop.", "DDL")[1]["content"]
-
-
-def test_sample_plan_style_varies_names_roles_and_openers():
-    rng = random.Random(1)
-    plans = [prompt.sample_plan(rng, TREE, ANCHOR) for _ in range(400)]
-    proxies = [p for p in plans if p["task_type"] == "5_proxy"]
+def test_style_varies_tones_names_and_roles():
+    ps = plans(400, seed=1)
+    proxies = [p for p in ps if p["task_type"] == "5_proxy"]
     assert len({p["style"]["name"] for p in proxies}) > 30 and len({p["style"]["role"] for p in proxies}) >= 8
-    assert all(p["style"]["name"] is None for p in plans if p["task_type"] != "5_proxy")
-    assert len({p["style"]["opener"] for p in plans}) >= 6
+    assert all(p["style"]["name"] is None for p in ps if p["task_type"] != "5_proxy")
+    assert len({p["style"]["tone"] for p in ps}) >= 6 and not any("question" in t for t in prompt.TONES)

@@ -73,12 +73,8 @@ def cmd_generate(a):
     prof = profile_of(a)
     same_profile(f"{out}/trees.jsonl", db_profile.version(prof), "trees")
     same_profile(f"{out}/candidates.jsonl", db_profile.version(prof), "candidates")
-    path = io.resolve_db_path(rec["path"])
-    desc = json.load(open(DESC_PATH)).get(a.db, "") if os.path.exists(DESC_PATH) else ""
-    if not desc:
-        sys.exit("run `describe` first")
+    materials = generate.context(rec, prof)
     client = llm.client_from_env("GEN")
-    next_ids = schema.next_ids(path)
     all_trees = io.read_jsonl(f"{out}/trees.jsonl")
     if a.retry_errors:   # their check results are stale once the candidates are regenerated
         failed = {c["id"] for c in io.read_jsonl(f"{out}/candidates.jsonl")
@@ -93,8 +89,7 @@ def cmd_generate(a):
         ts = [t for t in all_trees if t["anchor_table"] == anchor["table"]]
         s = generate.run(rec, anchor, ts, client, f"{out}/candidates.jsonl",
                          random.Random(f"{a.seed}:{anchor['table']}"),   # per root: two roots must not draw the same plans
-                         workers=a.workers, per_tree=a.per_tree, db_description=desc, schema_text=schema.schema_block(path),
-                         retry_errors=a.retry_errors, next_ids=next_ids)
+                         workers=a.workers, per_tree=a.per_tree, materials=materials, retry_errors=a.retry_errors)
         total = {k: total[k] + s[k] for k in total}
     usage = sum((c.get("usage") or {}).get("total_tokens", 0) for c in io.read_jsonl(f"{out}/candidates.jsonl"))
     print(f"{total} in {time.time() - t0:.0f}s; total tokens so far {usage}")

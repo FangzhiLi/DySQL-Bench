@@ -1,22 +1,33 @@
 # taskgen/v2/taskgen_v2/prompt.py
-"""Task plan sampling (type x difficulty x shape) and the generation prompt.
-SYSTEM is DySQL's generation prompt (data_pipeline_shell/generate_sqlbench_multiTurn_qa.py) with one example
-instruction chosen by task type; the USER message is built from the event tree (trees.py): the root row, then 3-12 of
-its events with their parent rows nested, every row tagged with whose data it is."""
+"""Task plan sampling (type x write count x shape) and the generation prompt (design §4.3, §4.4). The SYSTEM message
+holds the rules and one hand-written example for the task type; the USER message holds the database (description,
+quirks, the event tree with whose data each row is, the schema and key notes) and the plan."""
 import json, os, random
 from taskgen_v2 import trees
 
 CFG = {
-    "TYPE_MIX": {"1_self": 0.46, "2_self_and_public": 0.12, "3_public_only": 0.05, "4_other_person": 0.08, "5_proxy": 0.29},
-    "DIFFICULTY_MIX": {"easy": 0.26, "medium": 0.45, "hard": 0.29},
+    # weights before a tree's feasible types are taken: legislator, student_loan and synthea have no public rows, so
+    # over the 23 databases this lands near design §3's 50/13/6/31 (simulated on the plan-2 trees: 49/15/6/30)
+    "TYPE_MIX": {"1_self": 0.47, "2_self_and_public": 0.17, "3_public_only": 0.07, "5_proxy": 0.29},   # no type 4 (D6)
+    # write statements per task; type 2 never writes once, so overall this lands near DySQL's 33/45/13/6/3 (§4.4)
+    "WRITES_MIX": {1: 0.37, 2: 0.41, 3: 0.13, 4: 0.06, 5: 0.03},
+    # shape shares, set so the task-level rates over the 23 databases match DySQL's gold (simulated on the plan-2
+    # trees): two tables 57%, subquery 12%, archive 6.4%, batch 7%
+    "TWO_TABLES": 0.85,      # multi-write tasks that write two tables, when two are in scope
+    "SUBQUERY": 0.13,        # tasks that find the person through a subquery (D8), when the tree has a lookup
+    "BATCH": 0.12,           # tasks with one UPDATE/DELETE over 2-50 of the person's rows, when a group has 2 to 50
+    "BATCH_ALL": 0.6,        # ... of which change all of the group's rows (DySQL: "all my invoices"), the rest by a condition
+    "ARCHIVE": 0.18,         # multi-write tasks that copy rows with INSERT ... SELECT before changing them, when a table can
     "FREE_TABLE_SHARE": 0.30,
     "MAX_ROWS_PER_STMT": 50,
-    "EVENTS_SHOWN": {"easy": (3, 5), "medium": (5, 8), "hard": (8, 12)},   # design §4.2: 3-12 events, more when harder
+    "WORDS": (40, 80),       # instruction length asked for (DySQL: mean 57, p90 80)
+    "EVENTS_SHOWN": {1: (3, 5), 2: (5, 8), 3: (8, 12)},   # by write count (3 = three or more), design §4.2
     "DATA_CHARS": 16000,      # data blocks longer than this lose events from the end (about 4k tokens)
     "MAX_VALUE_CHARS": 200,   # longer text values are cut in the prompt
 }
-# style pools: the pilot reused the same invented names ("Priya Raghavan" x6), roles ("records coordinator") and
-# openers ("Hi, this is ..."), so the plan now hands the model a sampled name, role and opening manner
+PUBLIC_TYPES = ("2_self_and_public", "3_public_only")
+# style pools: the pilot reused the same invented names ("Priya Raghavan" x6) and roles, so a proxy speaker gets a
+# sampled name and role, and every plan a sampled tone
 FIRST_NAMES = ["Aisha", "Ben", "Carlos", "Dmitri", "Elena", "Farid", "Grace", "Hiro", "Ingrid", "Jamal", "Keiko", "Luis",
                "Maren", "Nikhil", "Olu", "Petra", "Quinn", "Rosa", "Sven", "Tomasz", "Uma", "Viktor", "Wen", "Ximena",
                "Yusuf", "Zoe", "Amara", "Bastian", "Chloe", "Diego", "Esther", "Felix", "Gwen", "Hassan", "Ines", "Jonas",
@@ -30,29 +41,25 @@ ROLES = ["data analyst", "account manager", "support agent handling a ticket", "
          "intern doing data entry", "compliance officer", "sales representative", "operations coordinator",
          "customer success manager", "database administrator", "quality assurance reviewer", "regional manager",
          "billing specialist", "field technician", "office assistant"]
-OPENERS = ["terse and businesslike, no greeting, straight to the change",
-           "friendly, gives a short reason for the change before asking",
-           "formal, like an internal email or ticket",
-           "slightly annoyed because this was already requested once",
-           "asks a read-only question first, then requests the change",
-           "casual chat message, lower-case tone is fine",
-           "explains that a colleague or customer asked them to do this",
-           "apologetic, corrects a mistake they made earlier",
-           "lists the changes as numbered points",
-           "mentions a deadline or an upcoming event as the reason"]
+TONES = ["terse and businesslike, straight to the change", "friendly, with a short reason for the change",
+         "formal, like a support ticket", "a little impatient because this was asked before", "a casual chat message",
+         "explains that someone else asked for the change", "apologetic, fixing an earlier mistake",
+         "lists the changes as numbered steps", "mentions a deadline as the reason"]
 EXAMPLES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "examples.json")
 
-SYSTEM = """Generate a NEW task instruction that mimics realistic human users and their intentions, such as with different personality and goals. The task instruction should be followed by 'actions' which is a list of the sql to be taken to solve this task and 'outputs' which is a list of the answers to specific information requests made by the user. Think step by step to come up with the action(s) and the corresponding sql(s) translating this thought that would be necessary to fulfill the user's request or solve their intentions. The new user instruction should have all the parameters for the SQL calls in Actions.
+SYSTEM = """You write tasks for training a database customer-service agent. A task is one user's request, written as the user would type it to the agent, and the SQL statements ('actions') that carry it out.
 
-## Guidelines for generating NEW task instruction and Groundtruth Actions
-1. You must generate a new user instruction according to the <Input Database>.
-2. The main focus is to generate actions that can modify the underlying database.
-3. For actions that do not modify the database like specific information requests, scan the provided data directly and append only the answer in 'outputs'. Do not make separate sql calls for this in 'actions'.
-4. Include multiple SQL calls when the scenario requires multiple steps or modifications. Put exactly one SQL statement in each action.
-5. Provide precise SQL calls with all necessary parameters for each action according to the given Dataset Schema, and ALL the parameters should be explicitly given in the new user instruction.
-6. Every UPDATE or DELETE must match at least one existing row of the provided data, and no single statement may change more than {max_rows} rows.
-7. Write standard SQLite. Wrap every table name in double quotes (some table names, e.g. "transaction" or "order", are SQL keywords and fail unquoted); quote column names that contain spaces or punctuation.
-8. When inserting into a table listed under "Next unused primary keys", use that value as the new row's key so it does not collide with an existing row.
+## The instruction
+1. The speaker writes in the first person and only asks for changes: no questions, no requests to look anything up, report or confirm.
+2. Every value the SQL uses appears in the instruction: ids, keys, names, amounts, dates and new values. The only exceptions are the person's own identifying fields and new keys that the key notes say may be left out.
+3. Each record to change is named by its id or key as shown in the data (for example "order 7731"), never only described.
+
+## The actions
+4. Only INSERT, UPDATE or DELETE statements, one per action, exactly as many as the task shape asks; no SELECT statements.
+5. Standard SQLite. Wrap every table name in double quotes ("transaction" and "order" are keywords); quote column names with spaces or punctuation.
+6. Every UPDATE or DELETE matches at least one row shown in the data; no statement changes more than {max_rows} rows.
+7. Never change a key column. Give new rows their keys as the key notes say, and never INSERT into a table marked "no new rows".
+8. Copy table names, column names and stored values exactly, even when they look misspelled or oddly formatted.
 
 ## Principles for generating SQL calls
 - At the beginning of the conversation, you have to authenticate the user identity by locating their user.
@@ -62,39 +69,25 @@ SYSTEM = """Generate a NEW task instruction that mimics realistic human users an
 - You should at most make one sql call at a time, and if you take a sql call, you should not respond to the user at the same time. If you respond to the user, you should not make a sql call.
 - You should transfer the user to a human agent if and only if the request cannot be handled within the scope of your actions.
 
-## Output Format
-Generate your response according to the following <Instruction Example> and <Format Example> format. Enclose the thought process within '<thought></thought>' tags, and the final structured response within '<answer></answer>' tags. The structured response should be in strict JSON format, without any additional comments or explanations.
+These are the agent's policy (DySQL's data_pipeline_shell/sql_wiki.md), so a task never changes rows marked as another person's.
 
-## Instruction Example
-{example_instruction}
+## Output format
+Think inside <thought></thought>, then give the final answer inside <answer></answer> as strict JSON without comments:
+{{"instruction": "...", "actions": [{{"sql": "..."}}, {{"sql": "..."}}]}}
 
-## Format Example (only for reference)
-{{
-    "instruction": "...",
-    "actions": [
-        {{
-            "sql": "..."
-        }},
-        {{
-            "sql": "..."
-        }}
-    ],
-    "outputs": []
-}}
+## Instruction example (for style only: do not copy its wording, its values or its actions)
+{example}"""
 
-The new user instruction must have all the parameters for the SQL calls in Actions. Do not directly copy the instruction or the action patterns from the example. Ground the generation in the provided data."""
-
-USER = """## Instructions
-Generate a NEW task instruction that mimics realistic human users and their intentions, such as with different personality and goals. The task instruction should be followed by 'actions' which is a list of the sql to be taken to solve this task and 'outputs' which is a list of the answers to specific information requests made by the user. ALL SQL parameters in Actions MUST be explicitly given in the new user instruction.
-
-# <Input Database>
-{db_description}
-
+USER = """# Database
+{description}
+{quirks}
 {data_blocks}
-{next_ids_block}
-## Dataset Schema
-The available Dataset schema in DDL format is as follows:
+
+## Schema
 {schema}
+
+## Key notes
+{keys}
 
 ## Task type
 {type_text}
@@ -105,16 +98,13 @@ The available Dataset schema in DDL format is as follows:
 ## Style
 {style_text}
 
-> Every literal value used in the SQL (ids, names, amounts, dates, new values) must appear verbatim in the instruction, except the values that identify the person's own row ({id_fields}), which the agent can look up.
-> Each UPDATE/DELETE must match at least one row shown above; no statement may change more than {max_rows} rows.
-> Confirm the generated instruction has all the parameters in the SQL calls. Generate the task now."""
+Generate the task now."""
 
 TYPE_TEXT = {
-    "1_self": "The speaker is {name} ({key} = {kv}), a person in table {t}. They introduce themselves by name (optionally with one identifying field such as an email or the {key}). Every write must change rows that belong to this person: their own row in {t} or rows in {down} linked to it.",
-    "2_self_and_public": "The speaker is {name} ({key} = {kv}), a person in table {t}. The writes must change at least one row that belongs to this person AND at least one row in a shared table ({up}) that belongs to nobody (reference data such as products, brands, locations).",
-    "3_public_only": "The speaker is {name} ({key} = {kv}), a person in table {t}. They introduce themselves by name, but the writes change ONLY rows in shared tables ({up}) that belong to nobody; the person's own rows stay unchanged.",
-    "4_other_person": "The speaker is {name} ({key} = {kv}), a person in table {t}. The writes change rows belonging to ANOTHER person: {other_name} ({key} = {other_kv}) or rows in {down} linked to that person. Give a plausible reason for the authority (manager, agent, guardian, colleague).",
-    "5_proxy": "The speaker is NOT in the database. They introduce themselves with the name and role given under Style, then ask to change the data of {name} ({key} = {kv}) or rows in {down} linked to that person. Do not pretend to be that person.",
+    "1_self": "The speaker is {name}, the person in {t} with {key} = {kv}. Their first sentence gives their name and their ID, written with the word ID or the column name ({key} {kv} or ID {kv}). Every write changes only rows marked own: rows marked public stay unchanged, and no new row is added to {t} (that would be a new person) or to a public table.",
+    "2_self_and_public": "The speaker is {name}, the person in {t} with {key} = {kv}. Their first sentence gives their name and their ID, written with the word ID or the column name ({key} {kv} or ID {kv}). At least one write changes a row marked own and at least one changes a row marked public ({up}).",
+    "3_public_only": "The speaker is {name}, the person in {t} with {key} = {kv}. Their first sentence gives their name and their ID, written with the word ID or the column name ({key} {kv} or ID {kv}). The writes change only rows marked public ({up}); none of the speaker's own rows change.",
+    "5_proxy": "The speaker is not in the database: {proxy}. Their first sentence gives their own name and role, and the name and ID of {name}, whose data they ask to change, written with the word ID or the column name ({key} {kv} or ID {kv}). Every write changes only rows marked own (that person's rows): rows marked public stay unchanged, and no new row is added to {t} (that would be a new person).",
 }
 
 
@@ -130,56 +120,109 @@ def _weighted(rng, weights):
 
 def feasible_types(tree):
     """Types this tree can carry. Never 4_other_person (design D6); 2 and 3 need a public row to write."""
-    return ["1_self"] + (["2_self_and_public", "3_public_only"] if trees.has_public(tree) else []) + ["5_proxy"]
-
-
-def _shape(rng, difficulty, task_type, n_scope, has_events):
-    s = {"n_writes": 1, "n_tables": 1, "ownership_subquery": False, "archive": False,
-         "public_table": task_type in ("2_self_and_public", "3_public_only")}
-    if difficulty == "medium":
-        pick = rng.choice(["two_writes", "two_tables", "subquery"])
-        if pick == "two_writes" or (pick == "two_tables" and n_scope < 2):
-            s["n_writes"] = 2
-        elif pick == "two_tables":
-            s.update(n_writes=2, n_tables=2)
-        else:
-            s["ownership_subquery"] = True
-    elif difficulty == "hard":
-        s.update(n_writes=rng.choice([2, 3]), n_tables=2 if n_scope >= 2 else 1, ownership_subquery=True)
-        if rng.random() < 0.25 and has_events:
-            s["archive"] = True
-    if s["public_table"] and s["n_tables"] < 2 and task_type == "2_self_and_public":
-        s.update(n_writes=max(s["n_writes"], 2), n_tables=2)
-    return s
+    return ["1_self"] + (list(PUBLIC_TYPES) if trees.has_public(tree) else []) + ["5_proxy"]
 
 
 def _who(task_type):
     return "the speaker's own row" if task_type != "5_proxy" else "the person the request is about"
 
 
-def sample_plan(rng, tree, anchor, cfg=CFG):
+def rows_by_table(tree, refs):
+    """{table: [row, ...]} of every row the prompt shows: the root row, its attributes and parents, and the shown
+    events with their parents."""
+    out = {}
+
+    def walk(node):
+        out.setdefault(node["table"], []).append(node["row"])
+        for p in node["parents"]:
+            walk(p)
+    out[tree["anchor_table"]] = [tree["anchor_row"]]
+    for t, rs in tree["attributes"].items():
+        out.setdefault(t, []).extend(rs)
+    for p in tree["parents"]:
+        walk(p)
+    for g in trees.shown(tree, refs):
+        for n in g["rows"]:
+            walk(n)
+    return out
+
+
+def _targets(rng, shown, tables, fixed, k=2):
+    """Up to k 'table.column' values worth changing (design §4.4): columns of shown rows that are not keys or foreign
+    keys and hold a short value, one per table where possible."""
+    out = []
+    for t in rng.sample(tables, len(tables)):
+        cols = sorted({c for r in shown.get(t, []) for c, v in r.items()
+                       if c not in fixed.get(t, ()) and v not in (None, "") and len(str(v)) <= 60})
+        if cols:
+            out.append(f"{t}.{rng.choice(cols)}")
+        if len(out) == k:
+            break
+    return out
+
+
+def sql_value(v):
+    """A value as an SQL literal: text in single quotes (doubled inside), numbers as they are."""
+    return "'" + v.replace("'", "''") + "'" if isinstance(v, str) else str(v)
+
+
+def level(features):
+    """check.difficulty's levels from the same features: none easy, one or two medium, three or more hard."""
+    score = sum(bool(f) for f in features)
+    return "easy" if score == 0 else "medium" if score <= 2 else "hard"
+
+
+def sample_plan(rng, tree, anchor, cfg=CFG, ctx=None):
+    """ctx: generate.context() of the database -- "fixed" {table: key and foreign-key columns}, never a change target,
+    and "copyable", the tables an archive may copy rows into (keys SQLite fills in, open to INSERT)."""
+    ctx = ctx or {}
+    fixed, copyable = ctx.get("fixed") or {}, set(ctx.get("copyable") or ())
     task_type = _weighted(rng, {k: v for k, v in cfg["TYPE_MIX"].items() if k in feasible_types(tree)})
-    difficulty = _weighted(rng, cfg["DIFFICULTY_MIX"])
-    lo, hi = cfg["EVENTS_SHOWN"][difficulty]
-    refs = trees.pick_events(tree, rng, rng.randint(lo, hi), need_public=task_type in ("2_self_and_public", "3_public_only"))
+    n_writes = _weighted(rng, cfg["WRITES_MIX"])
+    if task_type == "2_self_and_public":
+        n_writes = max(n_writes, 2)
+    lo, hi = cfg["EVENTS_SHOWN"][min(n_writes, 3)]
+    refs = trees.pick_events(tree, rng, rng.randint(lo, hi), need_public=task_type in PUBLIC_TYPES)
     while len(refs) > 1 and len(data_blocks(tree, refs, _who(task_type), cfg)) > cfg["DATA_CHARS"]:
         refs.pop()                                           # the event a public type needs is first, so it stays
     tabs = trees.tables_by_label(tree, refs)
-    shape = _shape(rng, difficulty, task_type, len(tabs["own"]) + len(tabs["public"]), bool(refs))
-    pool = tabs["public"] if task_type == "3_public_only" else tabs["own"]
-    free = rng.random() < cfg["FREE_TABLE_SHARE"]
+    pool = {"3_public_only": tabs["public"], "2_self_and_public": tabs["own"] + tabs["public"]}.get(task_type, tabs["own"])
+    events = {g["table"] for g in tree["events"]}
+
+    batch = None   # one statement over 2-50 of the person's rows of one event group: all of them, or by a condition
+    groups = [g for g in tree["events"] if 2 <= g["count"] <= cfg["MAX_ROWS_PER_STMT"] and g["table"] in tabs["own"]]
+    if task_type != "3_public_only" and groups and rng.random() < cfg["BATCH"]:
+        g = max(groups, key=lambda g: g["count"])
+        batch = {"table": g["table"], "label": g["label"], "count": g["count"], "all": rng.random() < cfg["BATCH_ALL"]}
+    archive = None   # copy rows as new rows of the same table, then change the originals; with a batch, its table
+    sources = [t for t in pool if t in copyable and t != anchor["table"] and (t in events or task_type == "3_public_only")]
+    if n_writes >= 2 and sources and rng.random() < cfg["ARCHIVE"]:
+        archive = rng.choice(sources) if not batch else batch["table"] if batch["table"] in sources else None
+    subquery = bool(tree.get("lookup")) and task_type != "3_public_only" and rng.random() < cfg["SUBQUERY"]
+
+    n_tables = 1
+    if task_type == "2_self_and_public":
+        n_tables = 2
+    elif n_writes >= 2 and len(pool) >= 2 and rng.random() < cfg["TWO_TABLES"]:
+        n_tables = 2
+    must = archive or (batch and batch["table"])   # the one table a batch or an archive needs written
     write_tables = None
-    if not free:
-        k = min(shape["n_tables"], len(pool)) if task_type != "2_self_and_public" else min(shape["n_tables"] - 1, len(pool))
-        write_tables = rng.sample(pool, max(1, k))
+    if rng.random() >= cfg["FREE_TABLE_SHARE"]:
         if task_type == "2_self_and_public":
-            write_tables.append(rng.choice(tabs["public"]))
-    style = {"opener": rng.choice(OPENERS), "name": None, "role": None}
+            write_tables = [must or rng.choice(tabs["own"]), rng.choice(tabs["public"])]
+        else:
+            rest = [t for t in pool if t != must]
+            write_tables = ([must] if must else []) + rng.sample(rest, n_tables - bool(must))
+    shape = {"n_writes": n_writes, "n_tables": n_tables, "ownership_subquery": subquery, "archive": archive,
+             "batch": batch, "public_table": task_type in PUBLIC_TYPES}
+    difficulty = level([n_writes >= 2, n_tables >= 2, subquery, archive, task_type == "2_self_and_public"])
+    style = {"tone": rng.choice(TONES), "name": None, "role": None}
     if task_type == "5_proxy":
         style.update(name=f"{rng.choice(FIRST_NAMES)} {rng.choice(LAST_NAMES)}", role=rng.choice(ROLES))
     return {"task_type": task_type, "difficulty": difficulty, "shape": shape, "write_tables": write_tables,
-            "events": refs, "tables": tabs, "example": rng.choice(load_examples()[task_type]),
-            "scope": tabs["own"] + tabs["public"], "style": style}
+            "events": refs, "tables": tabs, "scope": pool,
+            "targets": _targets(rng, rows_by_table(tree, refs), write_tables or pool, fixed),
+            "example": rng.choice(load_examples()[task_type]), "style": style}
 
 
 def _short(row, cfg):
@@ -215,50 +258,59 @@ def data_blocks(tree, refs, who, cfg=CFG):
     return "\n\n".join(blocks)
 
 
-def shape_text(anchor, plan):
-    s, lines, tabs = plan["shape"], [], plan["tables"]
-    lines.append(f"- Use exactly {s['n_writes']} write statement{'s' if s['n_writes'] > 1 else ''} (INSERT/UPDATE/DELETE) touching {s['n_tables']} distinct table{'s' if s['n_tables'] > 1 else ''}.")
-    if s["ownership_subquery"]:
-        lines.append(f"- Locate the rows to change through their owner with a subquery on {anchor['table']} (e.g. WHERE {anchor['key']} = (SELECT {anchor['key']} FROM {anchor['table']} WHERE ...)) instead of hard-coding the {anchor['key']}.")
-    if s["archive"]:
-        lines.append("- First copy the affected row(s) into another table in scope with INSERT ... SELECT, then change or delete the original row(s).")
-    if s["public_table"]:
-        lines.append(f"- At least one write must change a shared table: {', '.join(tabs['public'])}.")
+def shape_text(anchor, tree, plan, cfg=CFG):
+    s, lines = plan["shape"], []
+    n, k = s["n_writes"], s["n_tables"]
+    lines.append(f"- Exactly {n} write statement{'s' if n > 1 else ''} (INSERT, UPDATE or DELETE) on {k} table{'s' if k > 1 else ''}.")
     if plan["write_tables"]:
-        lines.append(f"- Write to these tables: {', '.join(plan['write_tables'])}.")
+        lines.append(f"- Write to {', '.join(plan['write_tables'])}.")
     else:
-        lines.append(f"- Choose freely which tables in scope to write ({', '.join(plan['scope'])}); prefer a combination that is not the obvious one.")
-    lines.append(f"- Target difficulty: {plan['difficulty']}. Read-only questions (if any) go into 'outputs', not 'actions'.")
+        lines.append(f"- Choose the table{'s' if k > 1 else ''} among {', '.join(plan['scope'])}.")
+    if s["public_table"]:
+        lines.append(f"- At least one write changes a public table: {', '.join(plan['tables']['public'])}.")
+    if s["batch"] and s["batch"]["all"]:
+        b = s["batch"]
+        lines.append(f"- One UPDATE or DELETE changes all {b['count']} of the person's {b['label']} rows in {b['table']} at once; "
+                     f"the instruction says it means all of them.")
+    elif s["batch"]:
+        b = s["batch"]
+        lines.append(f"- One UPDATE or DELETE changes several of the person's {b['label']} rows in {b['table']} at once (there "
+                     f"are {b['count']}): select them by a condition such as a date range, a status or a value, written in the "
+                     f"instruction exactly as the SQL uses it, not by listing ids; it changes between 2 and {b['count'] - 1} rows.")
+    if s["archive"]:
+        lines.append(f"- First copy the {s['archive']} rows you will change as new rows with INSERT INTO \"{s['archive']}\" ... "
+                     f"SELECT ... FROM \"{s['archive']}\", then UPDATE or DELETE the original rows.")
+    if s["ownership_subquery"]:
+        cond = " AND ".join(f"{c} = {sql_value(v)}" for c, v in tree["lookup"].items())
+        lines.append(f"- Find the person's rows through a subquery on {anchor['table']}, e.g. WHERE {anchor['key']} = "
+                     f"(SELECT {anchor['key']} FROM \"{anchor['table']}\" WHERE {cond}), instead of writing {anchor['key']} = {sql_value(tree['key_value'])}.")
+    elif plan["task_type"] != "3_public_only":
+        lines.append(f"- In the SQL, identify the person by {anchor['key']} = {sql_value(tree['key_value'])}; names can repeat.")
+    if plan["targets"]:
+        lines.append(f"- If you UPDATE, change {' or '.join(plan['targets'])}.")
     return "\n".join(lines)
 
 
-def style_text(plan):
-    st = plan.get("style") or {}
-    lines = [f"- Opening manner: {st.get('opener', 'natural, varied')}."]
-    if st.get("name"):
-        lines.append(f"- The speaker is {st['name']}, {st['role']}. Use exactly this name and role.")
-    lines.append("- Vary wording; do not open with 'Hi, this is' or 'Good morning'. Do not use phrases from the example.")
-    return "\n".join(lines)
+def style_text(plan, cfg=CFG):
+    st, (lo, hi) = plan.get("style") or {}, cfg["WORDS"]
+    return "\n".join([f"- Tone: {st.get('tone', 'natural')}.",
+                      f"- {lo} to {hi} words in three or four sentences.",
+                      "- Do not reuse phrases from the example, and do not open with 'Hi, this is' or 'Good morning'."])
 
 
-def next_ids_block(plan, next_ids):
-    """next_ids: schema.next_ids() output, {table: (pk_column, next value)}; only the tables the prompt shows."""
-    items = [(t, *next_ids[t]) for t in plan["scope"] if t in (next_ids or {})]
-    if not items:
-        return ""
-    return "\n## Next unused primary keys (use these for new rows)\n" + "\n".join(f"- {t}.{c} = {v}" for t, c, v in items) + "\n"
-
-
-def build_messages(db_rec, anchor, tree, plan, db_description, schema_text, cfg=CFG, next_ids=None):
-    tabs = plan["tables"]
-    fmt = {"name": tree["anchor_name"] or f"the row with {anchor['key']} = {tree['key_value']}", "key": anchor["key"],
-           "kv": tree["key_value"], "t": anchor["table"],
-           "down": ", ".join(t for t in tabs["own"] if t != anchor["table"]) or "(none)",
-           "up": ", ".join(tabs["public"]) or "(none)", "other_name": "", "other_kv": ""}
-    user = USER.format(db_description=db_description, data_blocks=data_blocks(tree, plan["events"], _who(plan["task_type"]), cfg),
-                       schema=schema_text, next_ids_block=next_ids_block(plan, next_ids),
-                       type_text=TYPE_TEXT[plan["task_type"]].format(**fmt), shape_text=shape_text(anchor, plan),
-                       style_text=style_text(plan),
-                       id_fields=", ".join(anchor["names"] + [anchor["key"]]), max_rows=cfg["MAX_ROWS_PER_STMT"])
-    system = SYSTEM.format(example_instruction=plan["example"], max_rows=cfg["MAX_ROWS_PER_STMT"])
+def build_messages(db_rec, anchor, tree, plan, materials, cfg=CFG):
+    """materials: generate.context() output -- the profile's description and quirks, the schema text, key notes."""
+    tabs, st = plan["tables"], plan.get("style") or {}
+    fmt = {"name": tree["anchor_name"] or f"the person with {anchor['key']} = {tree['key_value']}", "key": anchor["key"],
+           "kv": tree["key_value"], "t": anchor["table"], "up": ", ".join(tabs["public"]) or "(none)",
+           "proxy": f"{st.get('name')}, {st.get('role')}"}
+    quirks = materials.get("quirks") or []
+    user = USER.format(description=materials.get("description", ""),
+                       quirks=("\nData quirks (copy names and values exactly as stored):\n" + "\n".join(f"- {q}" for q in quirks) + "\n") if quirks else "",
+                       data_blocks=data_blocks(tree, plan["events"], _who(plan["task_type"]), cfg),
+                       schema=materials.get("schema", ""),
+                       keys="\n".join(materials.get("keys", {})[t] for t in plan["scope"] if t in materials.get("keys", {})) or "(none)",
+                       type_text=TYPE_TEXT[plan["task_type"]].format(**fmt), shape_text=shape_text(anchor, tree, plan, cfg),
+                       style_text=style_text(plan, cfg))
+    system = SYSTEM.format(example=plan["example"], max_rows=cfg["MAX_ROWS_PER_STMT"])
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]

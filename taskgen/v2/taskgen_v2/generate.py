@@ -1,15 +1,45 @@
 # taskgen/v2/taskgen_v2/generate.py
 """Call the generation model once per (tree, plan) and write candidate tasks. Parse failures and API failures are
 recorded as candidates with instruction=None so the batch never stops and the failure rate is visible."""
-import json, os
+import json, os, sqlite3
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from taskgen_v2 import io, llm, prompt
+from taskgen_v2 import db_profile, io, llm, prompt, schema
 
 GEN_TEMPERATURE, GEN_TOP_P, GEN_MAX_TOKENS = 1.0, 0.95, 16384
 
 
 class ParseError(ValueError):
     pass
+
+
+def context(db_rec, profile):
+    """What every prompt of a database shares (design §4.3): the profile's description and quirks, the DDL and column
+    notes of the tables in scope and a key note per table; and for plan sampling the key and foreign-key columns of
+    each table ("fixed", never the target of a change) and the tables an archive may copy rows into ("copyable")."""
+    path = io.resolve_db_path(db_rec["path"])
+    scope = db_profile.scope_tables(profile)
+
+    def cols_by_table(edges):
+        out = {}
+        for e in edges:
+            out.setdefault(e.child, set()).update(e.cols)
+        return out
+    single = [(f, db_profile.Edge(f["table"], (f["col"],), f["ref_table"], (f["ref_col"],))) for f in db_rec.get("fks", ())]
+    composite = [db_profile.Edge(f["table"], tuple(f["cols"]), f["ref_table"], tuple(f["ref_cols"])) for f in db_rec.get("fks_composite", ())]
+    sure = db_profile.edges(profile) + composite + [e for f, e in single if f.get("source") == "declared"]
+    fks, all_fks = cols_by_table(sure), cols_by_table(sure + [e for _, e in single])   # name-guessed keys only for targets
+    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        keys = schema.key_notes(conn, sorted(scope), set(profile["no_insert"]), fks)
+        pk = {t: v for t, v in schema.pk_info(conn).items() if t in scope}
+    finally:
+        conn.close()
+    fixed = {t: set(v["cols"]) | all_fks.get(t, set()) for t, v in pk.items()}
+    # an archive copies rows into the same table, so the copies need keys SQLite fills in (or no key at all);
+    # school_scheduling's Student_Schedules (StudentID, ClassID) would only collide with itself
+    copyable = {t for t, v in pk.items() if (v["omittable"] or not v["cols"]) and t not in profile["no_insert"]}
+    return {"description": profile["description"], "quirks": profile["quirks"], "schema": schema.schema_block(path, scope),
+            "keys": keys, "no_insert": set(profile["no_insert"]), "fixed": fixed, "copyable": copyable}
 
 
 def parse_answer(text):
@@ -62,7 +92,9 @@ def _drop_api_failures(out_path):
 
 
 def run(db_rec, anchor, trees_list, client, out_path, rng, workers=8, per_tree=1, cfg=prompt.CFG,
-        db_description="", schema_text="", retry_errors=False, next_ids=None):
+        materials=None, retry_errors=False):
+    """materials: context() of this database."""
+    materials = materials or {}
     if retry_errors:
         _drop_api_failures(out_path)
     done = io.done_ids(out_path)
@@ -72,12 +104,12 @@ def run(db_rec, anchor, trees_list, client, out_path, rng, workers=8, per_tree=1
             cid = f"{db_rec['source']}:{db_rec['db']}:{anchor['table']}:{tree['key_value']}:{idx}"
             if cid in done:
                 continue
-            plan = prompt.sample_plan(rng, tree, anchor, cfg)
+            plan = prompt.sample_plan(rng, tree, anchor, cfg, materials)
             jobs.append((tree, idx, plan))
 
     def one(job):
         tree, idx, plan = job
-        msgs = prompt.build_messages(db_rec, anchor, tree, plan, db_description, schema_text, cfg, next_ids=next_ids)
+        msgs = prompt.build_messages(db_rec, anchor, tree, plan, materials, cfg)
         return client.chat(msgs, temperature=GEN_TEMPERATURE, max_tokens=GEN_MAX_TOKENS, top_p=GEN_TOP_P)
 
     def safe(job):

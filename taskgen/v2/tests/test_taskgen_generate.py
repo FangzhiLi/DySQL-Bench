@@ -1,6 +1,8 @@
 # tests/test_taskgen_generate.py
 import json, random
 import pytest
+from taskgen_common.testing import make_db
+from v2_fixtures import SHOP2, FKS, SHOP_PROFILE
 from taskgen_v2 import generate, io
 from test_taskgen_prompt import ANCHOR, DB, TREE
 
@@ -102,3 +104,15 @@ def test_unexpected_parse_exception_is_recorded(tmp_path, monkeypatch):
     out = str(tmp_path / "c.jsonl")
     s = generate.run(DB, ANCHOR, [TREE], FakeClient([GOOD]), out, random.Random(0))
     assert s["errors"] == 1 and "AttributeError" in io.read_jsonl(out)[0]["error"]
+
+
+def test_context_gathers_what_every_prompt_of_a_database_shares(tmp_path):
+    rec = {"source": "test", "db": "shop2", "path": make_db(tmp_path, "shop2", SHOP2), "anchors": [], "fks": FKS}
+    prof = {**SHOP_PROFILE, "no_insert": ["products"], "quirks": ["qty is never 0."]}
+    ctx = generate.context(rec, prof)
+    assert ctx["description"] == "A small shop." and ctx["quirks"] == ["qty is never 0."] and ctx["no_insert"] == {"products"}
+    assert set(ctx["keys"]) == {"customers", "orders", "order_items", "products", "staff"}
+    assert ctx["keys"]["products"] == "- products: no new rows (UPDATE or DELETE only)"
+    assert ctx["keys"]["orders"] == "- orders: a new row may leave order_id out (SQLite assigns 100)"
+    assert ctx["fixed"]["orders"] == {"order_id", "customer_id", "product_id"} and ctx["fixed"]["order_items"] == {"item_id", "order_id"}
+    assert "CREATE TABLE orders" in ctx["schema"] and ctx["copyable"] == {"customers", "orders", "order_items", "staff"}
