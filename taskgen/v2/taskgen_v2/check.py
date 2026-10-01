@@ -5,7 +5,7 @@ import json, re, sqlite3, time, unicodedata
 import sqlparse
 from sqlparse import tokens as T
 from taskgen_common.db_select import _q
-from taskgen_v2 import prompt, schema, trees
+from taskgen_v2 import owners, prompt, schema
 
 WRITE = re.compile(r"(?is)^\s*(insert|update|delete|replace)\b")
 TARGET = re.compile(r'(?is)^\s*(?:insert\s+(?:or\s+\w+\s+)?into|replace\s+into|update(?:\s+or\s+\w+)?|delete\s+from)\s+'
@@ -134,41 +134,6 @@ def literal_ok(lit, instruction, allowed):
     return False
 
 
-class Tracer:
-    """Owner lookup for written rows: child -> parent along FK edges (<= 3 hops) to the person tables."""
-
-    def __init__(self, db_rec, conn):
-        self.conn = conn
-        _, self.up = trees.fk_edges(db_rec["fks"])
-        self.persons = {a["table"]: a["key"] for a in db_rec["anchors"] if a["kind"].startswith("person")}
-        self.tables = {a["table"].lower(): a["table"] for a in db_rec["anchors"]}
-        self.tables.update({f[k].lower(): f[k] for f in db_rec["fks"] for k in ("table", "ref_table")})
-
-    def canon(self, table):
-        return self.tables.get(table.lower(), table)
-
-    def trace(self, table, row, depth=0, acc=None):
-        acc = set() if acc is None else acc
-        if table in self.persons:
-            v = row.get(self.persons[table])
-            if v is not None:
-                acc.add((table, str(v)))
-        if depth >= 3:
-            return acc
-        for col, parent, pcol in self.up.get(table, []):
-            v = row.get(col)
-            if v in (None, ""):
-                continue
-            try:
-                cur = self.conn.execute(f"SELECT * FROM {_q(parent)} WHERE {_q(pcol)} = ? LIMIT 3", (v,))
-            except sqlite3.Error:
-                continue
-            cols = [d[0] for d in cur.description]
-            for r in cur.fetchall():
-                self.trace(parent, dict(zip(cols, r)), depth + 1, acc)
-        return acc
-
-
 def task_group(speaker_in_db, labels):
     core = sorted({"public" if x == "new_person" else x for x in labels if x != "noop"})
     if not core:
@@ -232,7 +197,7 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG):
     scope = {t for a in db_rec["anchors"] for t in (a["table"], *a["down"], *a["up"])}
     speaker_in_db = (cand.get("plan") or {}).get("task_type", "1_self") != "5_proxy" if "plan" in cand else cand.get("speaker_in_db", True)
     db = _memory_copy(db_rec["path"])
-    tracer = Tracer(db_rec, db)
+    tracer = owners.Tracer.from_rec(db_rec, db)
     pks = schema.pk_info(db)
     auto_next = {t.lower(): v["next"] for t, v in pks.items() if v["omittable"]}
     auto_col = {t.lower(): v["cols"][0] for t, v in pks.items() if v["omittable"]}
@@ -249,7 +214,7 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG):
     # capture pre-update FK/key values, like classify_dysql_tasks.py: 'move my order to product 9' is still 'own'
     db.execute("CREATE TEMP TABLE _old (tbl TEXT, j TEXT)")
     for t in scope:
-        need = {c for c, _, _ in tracer.up.get(t, [])} | ({tracer.persons[t]} if t in tracer.persons else set())
+        need = {c for cols, _, _ in tracer.up.get(t, []) for c in cols} | ({tracer.persons[t]} if t in tracer.persons else set())
         if need:
             obj = ", ".join(f"'{c}', OLD.{_q(c)}" for c in sorted(need))
             db.execute(f"CREATE TEMP TRIGGER {_q('_u_' + t)} BEFORE UPDATE ON main.{_q(t)} BEGIN "
@@ -287,25 +252,25 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG):
                 for lit in literals(st):
                     if not literal_ok(lit, cand["instruction"], allowed):
                         out["reasons"].append(f"literal_missing: '{lit}' in {op} {table}"); break
-                owners = set()
+                holders = set()
                 for r in rs[:50]:
-                    owners |= tracer.trace(table, dict(zip(rcols, r)))
+                    holders |= tracer.trace(table, dict(zip(rcols, r)))
                 for (j,) in db.execute("SELECT j FROM _old WHERE tbl = ? LIMIT 50", (table,)).fetchall():
-                    owners |= tracer.trace(table, json.loads(j))
+                    holders |= tracer.trace(table, json.loads(j))
                 db.execute("DELETE FROM _old")
                 if not rs:
                     lab = "noop"
                     if op != "INSERT":
                         out["reasons"].append(f"noop_write: {op} {table}")
                 elif speaker_in_db:
-                    if owners & speaker_ids:
+                    if holders & speaker_ids:
                         lab = "own"
                     elif op == "INSERT" and table in tracer.persons:
                         lab = "new_person"   # a person row that did not exist before is nobody else's data yet
                     else:
-                        lab = "other" if owners else "public"
+                        lab = "other" if holders else "public"
                 else:
-                    lab = "person_obj" if owners else "public"
+                    lab = "person_obj" if holders else "public"
                 if len(rs) > cfg["MAX_ROWS_PER_STMT"]:
                     out["reasons"].append(f"bulk: {len(rs)} rows in {op} {table}")
                 labels.append(lab)
