@@ -25,3 +25,5 @@ v2 从 v1 原样复制起步（tag `taskgen-v1`，61c8133）。复制的那个 c
 | 建树：按档案嵌套事件树（事件行挂实际引用的父行，带归属标签，≤30 条事件，先抽有事件的根行，双根按可用行数分）；`trees` 命令要已确认的档案，不再写 `others.json` | §4.2、D3 |
 | 出题读新树：按难度展示 3–5/5–8/8–12 条事件，数据块 ≤16000 字符，长文本截到 200 字符，每行注明归属；不出第 4 类；`generate`、`check` 命令读档案 | §4.2、§4.4、D6 |
 | 档案起草：`taskgen_v2/profile_draft.py`（GLM 看每表的键、列、外键、BIRD 列说明和 3 行样例，加 `data/profile_hints.json` 的根和已知怪异点、两份手写 DySQL 示例；校验不过带着问题重写，最多 2 次）；`profile draft/check/render/confirm` 命令 | §4.1、D1 |
+| 23 个库的档案：GLM 起草，Claude 逐库预审，用户确认（`data/db_profiles.json`，审阅页 `docs/2026-10-01-db-profiles-review.md`）；预审时加了两条规则：档案里一条边的父表一侧必须唯一，带档案时公共行不属于任何人 | §4.1、§4.5 |
+| 验证：23 库按档案建树统计、beer_factory 一棵树逐行核对、4 库冒烟（要求和算出的类型不一致 4/95，标签不一致 0）、带档案的检查在 v1 候选上对比（`docs/2026-10-01-check-with-profiles.md`），记录在 `docs/2026-10-01-profiles-and-trees.md`；设计文档写回计划 2 的规则 | §5 B、C |
