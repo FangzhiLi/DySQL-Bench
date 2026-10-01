@@ -5,7 +5,7 @@ import json, re, sqlite3, unicodedata
 import sqlparse
 from sqlparse import tokens as T
 from taskgen_common.db_select import _q
-from taskgen_v2 import prompt, trees
+from taskgen_v2 import prompt, schema, trees
 
 WRITE = re.compile(r"(?is)^\s*(insert|update|delete|replace)\b")
 TARGET = re.compile(r'(?is)^\s*(?:insert\s+(?:or\s+\w+\s+)?into|replace\s+into|update(?:\s+or\s+\w+)?|delete\s+from)\s+'
@@ -201,6 +201,9 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG):
     speaker_in_db = (cand.get("plan") or {}).get("task_type", "1_self") != "5_proxy" if "plan" in cand else cand.get("speaker_in_db", True)
     db = _memory_copy(db_rec["path"])
     tracer = Tracer(db_rec, db)
+    pks = schema.pk_info(db)
+    auto_next = {t.lower(): v["next"] for t, v in pks.items() if v["omittable"]}
+    auto_col = {t.lower(): v["cols"][0] for t, v in pks.items() if v["omittable"]}
     row = db.execute(f"SELECT * FROM {_q(anchor['table'])} WHERE {_q(anchor['key'])} = ?", (cand["key_value"],)).fetchone()
     # calibration candidates may name several speaker rows (DySQL's classifier matched same-name people)
     speaker_ids = {tuple(x) for x in cand.get("speaker_ids") or [(anchor["table"], str(cand["key_value"]))]}
@@ -237,6 +240,15 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG):
                     out["reasons"].append(f"sql_error: {e} in {st[:80]}"); continue
                 op, table = wt[0], tracer.canon(wt[1])
                 stmts.append(st)
+                key = table.lower()
+                if op == "INSERT" and key in auto_next:
+                    # keys SQLite would assign anyway: an agent may leave them out, so the user need not say them,
+                    # here or in a later statement that refers to the new row
+                    for r in rs:
+                        v = dict(zip(rcols, r)).get(auto_col[key])
+                        if v != auto_next[key]:
+                            break
+                        allowed.add(norm_literal(v)); auto_next[key] += 1
                 if table not in scope:
                     out["reasons"].append(f"out_of_scope: {table}")
                 for lit in literals(st):

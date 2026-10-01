@@ -1,6 +1,7 @@
 # taskgen/v2/taskgen_v2/schema.py
 """What the generation prompt says about a database: DDL, BIRD's per-column notes, and a one-paragraph description."""
-import csv, glob, json, os, sqlite3
+import csv, glob, json, os, re, sqlite3
+from taskgen_common.db_select import _q
 
 DESCRIBE_PROMPT = """Below is the DDL of a SQLite database{notes}. In two or three English sentences, say what this
 database is about, who the people in it are (which tables hold persons, e.g. customers, employees, players) and what
@@ -72,4 +73,28 @@ def next_ids(db_path):
             out[t] = (pk[0][1], (m or 0) + 1)
     finally:
         c.close()
+    return out
+
+
+def pk_info(conn):
+    """{table: {"cols", "rowid_alias", "omittable", "next"}} for every table of an open connection.
+    omittable: an INSERT may leave the key out and SQLite assigns MAX + 1 -- the key is a rowid alias (one column
+    declared exactly INTEGER, rowid table) and, with AUTOINCREMENT, sqlite_sequence has not run ahead of MAX (it has
+    in 8 WWE tables). next is that MAX + 1 (1 for an empty table) for omittable tables, else None."""
+    seq = {}
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'sqlite_sequence'").fetchone():
+        seq = dict(conn.execute("SELECT name, seq FROM sqlite_sequence").fetchall())
+    out = {}
+    for name, sql in conn.execute("SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").fetchall():
+        pk = sorted((r for r in conn.execute(f"PRAGMA table_info({_q(name)})") if r[5]), key=lambda r: r[5])
+        cols = [r[1] for r in pk]
+        rowid_alias = (len(pk) == 1 and (pk[0][2] or "").upper() == "INTEGER"
+                       and not re.search(r"(?i)\bwithout\s+rowid\b", sql or ""))
+        nxt = None
+        if rowid_alias:
+            (mx,) = conn.execute(f"SELECT MAX({_q(cols[0])}) FROM {_q(name)}").fetchone()
+            autoinc = re.search(r"(?i)\bautoincrement\b", sql or "") is not None
+            if not autoinc or (seq.get(name) or 0) <= (mx or 0):
+                nxt = (mx or 0) + 1
+        out[name] = {"cols": cols, "rowid_alias": rowid_alias, "omittable": nxt is not None, "next": nxt}
     return out

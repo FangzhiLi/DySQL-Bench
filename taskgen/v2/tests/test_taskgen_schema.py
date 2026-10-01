@@ -1,6 +1,6 @@
 # tests/test_taskgen_schema.py
-import json, os
-from taskgen_common.testing import make_db, SHOP
+import json, os, sqlite3
+from taskgen_common.testing import make_db, rows, SHOP
 from taskgen_v2 import schema
 
 
@@ -48,3 +48,28 @@ def test_next_ids_for_integer_primary_keys(tmp_path):
     c = sqlite3.connect(db); c.execute("CREATE TABLE tags (name TEXT PRIMARY KEY)"); c.execute("CREATE TABLE empty (id INTEGER PRIMARY KEY)"); c.commit(); c.close()
     n = schema.next_ids(db)
     assert "tags" not in n and n["empty"] == ("id", 1)
+
+
+def test_pk_info_classifies_primary_keys(tmp_path):
+    path = make_db(tmp_path, "keys", """
+CREATE TABLE plain (id INTEGER PRIMARY KEY, v TEXT);
+CREATE TABLE auto_ok (id INTEGER PRIMARY KEY AUTOINCREMENT, v TEXT);
+CREATE TABLE auto_ahead (id INTEGER PRIMARY KEY AUTOINCREMENT, v TEXT);
+CREATE TABLE int_key (id INT PRIMARY KEY, v TEXT);
+CREATE TABLE text_key (code TEXT PRIMARY KEY, v TEXT);
+CREATE TABLE pair (a INTEGER, b INTEGER, PRIMARY KEY (a, b));
+CREATE TABLE no_rowid (id INTEGER PRIMARY KEY, v TEXT) WITHOUT ROWID;
+CREATE TABLE "Sales Orders" (id INTEGER PRIMARY KEY, v TEXT);
+CREATE TABLE empty (id INTEGER PRIMARY KEY, v TEXT);
+CREATE TABLE nokey (v TEXT);
+""" + rows("plain", 5, lambda i: f"{i + 1},'x'") + rows("auto_ok", 5, lambda i: f"{i + 1},'x'")
+        + rows("auto_ahead", 5, lambda i: f"{i + 1},'x'") + "INSERT INTO auto_ahead VALUES (10, 'y'); DELETE FROM auto_ahead WHERE id = 10;"
+        + rows('"Sales Orders"', 3, lambda i: f"{i + 1},'x'"))
+    info = schema.pk_info(sqlite3.connect(path))
+    assert info["plain"] == {"cols": ["id"], "rowid_alias": True, "omittable": True, "next": 6}
+    assert info["auto_ok"]["omittable"] and info["auto_ok"]["next"] == 6
+    assert info["auto_ahead"] == {"cols": ["id"], "rowid_alias": True, "omittable": False, "next": None}   # sequence at 10 (WWE)
+    for t in ("int_key", "text_key", "pair", "no_rowid", "nokey"):
+        assert not info[t]["omittable"] and info[t]["next"] is None, t
+    assert info["pair"]["cols"] == ["a", "b"] and info["nokey"]["cols"] == []
+    assert info["Sales Orders"]["next"] == 4 and info["empty"]["next"] == 1

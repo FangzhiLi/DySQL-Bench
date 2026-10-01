@@ -100,7 +100,7 @@ confirmed: false → 人工过后改 true
 
 ### 4.5 执行检查（改 `check.py`）
 - 字面量按词边界匹配，序数词 first…twelfth → 数字。
-- next id 作为隐含字面量，限"可省 ID"的表的主键列（§4.3）；其余表的新 ID 仍必须在 instruction 里。往 `no_insert` 的表 INSERT 算拒绝。
+- **SQLite 会自动分配的新主键算隐含字面量：** 表是"可省 ID"的（`schema.pk_info`，§4.3），INSERT 写的主键正好是 SQLite 会分配的下一个值（多行时依次加一）。这个值在这条 INSERT 和之后引用新行的语句里都不必出现在 instruction 里。其余表的新 ID 仍必须在 instruction 里。往 `no_insert` 的表 INSERT 算拒绝（要档案，计划 2）。
 - 拒绝 `CURRENT_TIMESTAMP`、`CURRENT_DATE`、`date('now')`、`random()`；gold 在两份副本上各跑一遍比整库哈希，不一致拒。
 - 范围 = 档案里出现的表（roots、persons、events 及其 parents、attributes、public）的并集，减去 `exclude`；归属追溯用档案 `persons` 和 `same_as`。
 - **新插入的人物行**不再算"别人"：INSERT 进人物表且不是说话人的行，标 `new_person`，按公共数据处理（v1 里造成 54 条类型不一致，也是 DySQL 被算出 17.6% 第 4 类的来源之一）。

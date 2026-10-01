@@ -186,3 +186,31 @@ def test_literals_next_to_punctuation_still_match():
     assert ok("C00003174", "client C00003174, please", set())
     assert ok("Bozeman", "move him to Bozeman.", set())
     assert ok("$5 million", "set my net worth to '$5 million'", set())
+
+
+# --- v2: keys SQLite would assign need not be spoken ---
+
+def test_auto_assigned_key_need_not_be_spoken(db):
+    # orders are 0..99, so SQLite would give a new order 100; the item that refers to the new order may say 100 too
+    r = check.run_check(db, cand("I am a5 b5. Place a new order of product 7, qty 2, with the note gift.",
+                                 ["INSERT INTO orders (order_id, customer_id, product_id, qty) VALUES (100, 5, 7, 2)",
+                                  "INSERT INTO order_items (order_id, note) VALUES (100, 'gift')"]))
+    assert r["ok"], r["reasons"]
+
+
+def test_a_key_sqlite_would_not_assign_must_be_spoken(db):
+    r = check.run_check(db, cand("I am a5 b5. Place a new order of product 7, qty 2.",
+                                 ["INSERT INTO orders (order_id, customer_id, product_id, qty) VALUES (150, 5, 7, 2)"]))
+    assert r["reasons"] == ["literal_missing: '150' in INSERT orders"]
+
+
+def test_auto_key_lookup_ignores_table_name_case(db):
+    r = check.run_check(db, cand("I am a5 b5. Place a new order of product 7, qty 2.",
+                                 ['INSERT INTO "ORDERS" (order_id, customer_id, product_id, qty) VALUES (100, 5, 7, 2)']))
+    assert r["ok"], r["reasons"]
+
+
+def test_several_new_rows_get_consecutive_auto_keys(db):
+    r = check.run_check(db, cand("I am a5 b5. Add two new orders of product 7 for me.",
+                                 ["INSERT INTO orders (order_id, customer_id, product_id, qty) VALUES (100, 5, 7, 1), (101, 5, 7, 1)"]))
+    assert r["ok"], r["reasons"]
