@@ -41,6 +41,7 @@ def test_allocate_passes_unused_shares_on():
 def test_events_follow_paths_and_parents_nest(shop):
     t = tree(shop, SHOP_PROFILE, SHOP_REC, CUSTOMERS, 5)
     assert t["anchor_name"] == "a5 b5" and t["anchor_row"]["customer_id"] == 5
+    assert t["lookup"] == {"first_name": "a5", "last_name": "b5"}                # no email column; the name is unique
     assert t["profile_version"] == db_profile.version(SHOP_PROFILE) and t["parents"] == [] and t["attributes"] == {}
     orders, items = t["events"]
     assert (orders["table"], orders["count"], [n["row"]["order_id"] for n in orders["rows"]]) == ("orders", 2, [5, 65])
@@ -87,3 +88,20 @@ def test_picked_events_cover_groups_and_put_a_public_one_first(shop):
     assert trees.tables_by_label(t, refs) == {"own": ["customers", "orders", "order_items"], "public": ["products"], "other": []}
     assert trees.has_public(t)
     assert not trees.has_public({**t, "events": [t["events"][1]]})
+
+
+def test_lookup_finds_what_only_this_person_has(tmp_path):
+    conn = sqlite3.connect(make_db(tmp_path, "people", """
+CREATE TABLE people (pid INTEGER PRIMARY KEY, first TEXT, last TEXT, email TEXT, phone TEXT);
+INSERT INTO people VALUES (1, 'Ann', 'Lee', 'ann@x.org', '555'), (2, 'Ann', 'Lee', 'ann2@x.org', '555'),
+                          (3, 'Bo', 'Ng', NULL, '777'), (4, 'Cy', 'Ho', 'cy@x.org', NULL), (5, 'Cy', 'Ho', 'cy@x.org', NULL),
+                          (6, 'Di', 'Wu', 'cy@x.org', NULL);
+"""))
+    person = {"key": "pid", "name_cols": ["first", "last"]}
+
+    def row(pid):
+        return dict(zip(["pid", "first", "last", "email", "phone"], conn.execute("SELECT * FROM people WHERE pid = ?", (pid,)).fetchone()))
+    assert trees.lookup(conn, "people", person, row(1)) == {"email": "ann@x.org"}         # same name as person 2
+    assert trees.lookup(conn, "people", person, row(3)) == {"phone": "777"}               # no email
+    assert trees.lookup(conn, "people", person, row(6)) == {"first": "Di", "last": "Wu"}  # shared email, own name
+    assert trees.lookup(conn, "people", person, row(4)) == {}                             # nothing of their own

@@ -2,12 +2,13 @@
 """Event trees (design §4.2): for one root row, its event records as the profile defines them, each event row with the
 parent rows it actually references nested under it (purchase -> product -> brand), and the root's own parent rows and
 1:1 attributes. Every row carries its owner label (owners.Tracer), the same label the execution check computes."""
-import json, sqlite3
+import json, re, sqlite3
 from taskgen_common.db_select import _q
 from taskgen_v2 import db_profile
 
 MAX_EVENTS = 30   # event rows kept per tree; the prompt shows 3-12 of them
 MAX_DEPTH = 4     # levels of parent rows under an event
+ID_COL = re.compile(r"(?i)e-?mail|phone|ssn|social|passport|licen[cs]e|user.?name|login")   # what people identify by
 
 
 def _safe(v):
@@ -98,6 +99,20 @@ def _cap(groups, rng, k):
     return [sorted(x) for x in keep]
 
 
+def lookup(conn, table, person, row):
+    """Columns that pick out this person's row without the key, for the subquery shape (design D8): an email-, phone-
+    or SSN-like column whose value no other row shares, else the name columns when no one else has the same name.
+    {} when neither holds (movies_4 has 1497 names shared by several people)."""
+    for c in [c for c in row if c != person["key"] and ID_COL.search(c) and row[c] not in (None, "")]:
+        if conn.execute(f"SELECT COUNT(*) FROM {_q(table)} WHERE {_q(c)} = ?", (row[c],)).fetchone()[0] == 1:
+            return {c: row[c]}
+    names = {c: row[c] for c in person["name_cols"] if row.get(c) not in (None, "")}
+    if names and conn.execute(f"SELECT COUNT(*) FROM {_q(table)} WHERE " + " AND ".join(f"{_q(c)} = ?" for c in names),
+                              tuple(names.values())).fetchone()[0] == 1:
+        return names
+    return {}
+
+
 def build_tree(conn, profile, root, key_value, rng, tracer, max_events=MAX_EVENTS):
     """The root row with its parents and attributes, and each of the root's event groups with up to max_events rows
     in all, every event row with its parent rows nested. None when no row has this key."""
@@ -122,7 +137,7 @@ def build_tree(conn, profile, root, key_value, rng, tracer, max_events=MAX_EVENT
                 attrs[a["table"]] = got
     return {"anchor_table": t, "anchor_key": person["key"], "key_value": key_value,
             "anchor_name": " ".join(str(row[c]) for c in person["name_cols"] if row.get(c) not in (None, "")),
-            "anchor_row": row, "profile_version": db_profile.version(profile),
+            "anchor_row": row, "lookup": lookup(conn, t, person, row), "profile_version": db_profile.version(profile),
             "parents": _parents(conn, row, root.get("parents"), tracer, speaker),
             "attributes": attrs,
             "events": [{"table": ev["table"], "label": ev["label"], "count": len(rs),
