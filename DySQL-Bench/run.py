@@ -11,7 +11,7 @@ def parse_args() -> RunConfig:
     parser.add_argument("--num-trials", type=int, default=1)
     parser.add_argument(
         "--env", type=str, default="retail",
-        help="one of the 13 DySQL envs, or gen:<db> for a generated task set (data/taskgen/manifest.json)"
+        help="one of the 13 DySQL envs, or gen:<db> for a generated task set (manifest in TASKGEN_MANIFEST)"
     )
     parser.add_argument(
         "--model",

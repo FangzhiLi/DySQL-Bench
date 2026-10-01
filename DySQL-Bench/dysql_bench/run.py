@@ -142,7 +142,7 @@ DYSQL_ENVS = ["retail", "eu_soccer", "music", "bowling", "entertainment", "pagil
 
 
 def check_config(config) -> None:
-    """The 13 DySQL envs run their test split; generated task sets (gen:<db>, data/taskgen/manifest.json) any split."""
+    """The 13 DySQL envs run their test split; generated task sets (gen:<db>, manifest in TASKGEN_MANIFEST) any split."""
     generated = config.env.startswith("gen:")
     assert generated or config.env in DYSQL_ENVS, f"Only {', '.join(DYSQL_ENVS)} or gen:<db> envs are supported"
     assert config.agent_strategy in ["sql"], "Invalid agent strategy"  # TODO: add other agent strategies in the future

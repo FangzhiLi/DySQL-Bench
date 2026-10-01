@@ -29,5 +29,6 @@ DySQL-Bench/results/
 *.egg-info/
 
 
-# large generated artifacts (regenerate from scripts)
-docs/benchmark_db_catalog.xlsx
+# training-task generation (taskgen/): per-version step files and final tasks stay local, not public
+taskgen/*/results/
+taskgen/*/output/
