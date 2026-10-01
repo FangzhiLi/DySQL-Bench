@@ -72,7 +72,7 @@
    "zip_congress.district stores the representative's cognress_rep_id code (e.g. 'NY-1' or 'PR'), not a district number."
   ],
   "description": "A United States postal geography and demographics reference built around ZIP codes: zip_data records per-ZIP population, housing, income, business and benefit statistics, while alias, area_code, country and avoid map each ZIP to city names, telephone area codes and counties. The only people are the members of Congress in congress, each linked through zip_congress to the ZIP codes of the district they represent.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: roles, edges and every quirk checked against the data; no change"
   ],
@@ -156,7 +156,7 @@
    "Credit card numbers are stored as plain integers in transaction.CreditCardNumber, not text."
   ],
   "description": "A root beer retail tracker: customers buy individual root beer items (a brand in a container sold at a location) recorded as transactions with credit card type and price, and they leave star reviews and comments on brands. Brands carry brewery, ingredient, packaging, social media and pricing details, and selling locations have addresses with coordinates.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: transaction parents trimmed to rootbeer -> rootbeerbrand and location -- the coordinates (geolocation) and the root beer's own stock location add two rows per purchase without helping read it"
   ],
@@ -240,7 +240,7 @@
    "roysched holds several tier rows per title (lorange/hirange brackets), not one row per title."
   ],
   "description": "A book publishing house database: authors write titles that publishers publish, with titleauthor recording each author's order and royalty share on a book and roysched defining royalty tiers per title. Publishers employ staff tracked in employee with job levels from jobs, while stores buy titles through sales orders and discounts on the store side. Requests center on the authors and the books they are credited with.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: quirks checked against the data -- contract is '0' for all 23 authors (the draft implied '1' occurs); pub_info.logo is stored as text, not a binary blob, and nobody edits it, so that quirk is dropped"
   ],
@@ -381,7 +381,7 @@
    "order_line has exactly as many rows as cust_order (7550), so each order currently holds exactly one line."
   ],
   "description": "An online bookstore: customers place orders (cust_order) whose books are recorded one per line in order_line, whose progress is tracked in order_history, and which ship to an address by a shipping method. Customers also keep saved addresses (customer_address) marked active or inactive; books carry a language and publisher and link to authors through book_author.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: author moved from persons to public -- per the hint, authors are catalogue data for a bookstore customer, not people whose rows are private",
    "Claude: dropped the order_line parent book -> book_author -- written backwards (a book has several authors), so the tree would show one author at random",
@@ -486,7 +486,7 @@
    "payments are keyed by customer-supplied check numbers like 'HQ336336', which follow no sequence."
   ],
   "description": "A wholesale distributor of classic model cars. Customers are companies, each with a contact person and a sales representative among the employees, who are assigned to offices. Customers place orders whose line items list products (each belonging to a product line) and make payments by check.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: payments removed from no_insert -- the check number comes from the customer, so recording a new payment is a natural request",
    "Claude: trailing-space quirk made exact (44 of 122 contactFirstName values; checked)"
@@ -570,7 +570,7 @@
    "violation.fine is usually, not always (85%), the cited point's standard fine: Critical 500, Serious 250, Minor 100."
   ],
   "description": "A municipal food-safety program: health-department employees (sanitarians, supervisors and division managers, each reporting to another employee) inspect licensed establishments such as restaurants and cafeterias. Each visit is an inspection with a type and result, possibly following up an earlier inspection, and each citation is a violation tied to a standard inspection point carrying a fine and the inspector's comment.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: fine quirk corrected (85% of violations carry the standard fine, not all) and the space-padded point_level added (checked)"
   ],
@@ -636,7 +636,7 @@
    "current, current-terms and social-media describe different people (sitting legislators, none of them in historical); leave them alone."
   ],
   "description": "A directory of United States members of Congress. The roots are the historical (no longer serving) legislators: each row of historical is a person, and historical-terms records that legislator's term of office with chamber type, state, district, party, and start and end dates. Currently serving legislators live in the separate current table with their terms in current-terms and their accounts in social-media, but they are different people and their records must not be touched.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: quirks checked; dropped the two about the current table's column types (current is never written), tightened the rest"
   ],
@@ -692,7 +692,7 @@
    "movie.\"Release Date\" is text in yyyy-mm-dd form."
   ],
   "description": "A movie database: each actor has a profile (birthplace, gender, ethnicity, net worth) and is cast in movies through the characters table, which records the character name, credit order, pay and screen time for each role. Movies carry budget, box office gross, MPAA rating, genre, runtime, rating and release date.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: quirks checked; column quoting now shows double quotes (the draft used single quotes, which SQLite reads as strings); dropped the naming-style remark"
   ],
@@ -785,7 +785,7 @@
    "A person can have both cast and crew credits, even on the same movie (1076 such person-movie pairs)."
   ],
   "description": "A film catalog modeled on The Movie Database: each movie carries title, budget, revenue, release date, runtime, popularity and vote statistics, and is linked to genres, keywords, languages, production companies and countries. The people are film industry figures in person; movie_cast records the characters they played and movie_crew their departments and jobs.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: quirks checked; movie_status corrected (7 movies are not 'Released'), the others made exact"
   ],
@@ -888,7 +888,7 @@
    "The host city of a games edition is reachable only through games_city, a link table (games_id, city_id) with no primary key; an edition may have several host-city rows."
   ],
   "description": "A history of the modern Olympic Games: each athlete (person) has an entry per edition attended (games_competitor, with their age) and, under it, one row per event entered (competitor_event) recording any medal won. Athletes represent NOC regions through person_region; editions have a year, a season and host cities, and events belong to sports. Everything besides the athletes is reference data: sports, events, medals, cities and regions.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: roles, edges and every quirk checked against the data; no change"
   ],
@@ -986,7 +986,7 @@
    "teams has one row per team per season, keyed by (year, tmID), and covers early leagues (ABA, NBL, ABL1, NPBL, PBLA) besides the NBA."
   ],
   "description": "A historical professional basketball database (NBA, ABA and earlier leagues): players are drafted by teams, record season-by-season and playoff statistics with each team (players_teams), appear in all-star games (player_allstar) and win awards (awards_players). Coaches are tracked with one row per team-season stint (coaches) plus their awards (awards_coaches). Teams are tracked per season with wins, losses, scoring and playoff results (teams, series_post).",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: removed the second root coaches and its awards_coaches event -- the hint names players only, coachID repeats across a coach's stints and coaches have no name columns, so coaches and awards_coaches are excluded",
    "Claude: quirks checked; dropped the coach ones, firstseason/lastseason are 0 in 5046 of 5062 rows (not all)"
@@ -1074,7 +1074,7 @@
    "13 of the 50 \"Customer Names\" values end with a space (\"WakeFern \"): copy the value exactly or compare with trim()."
   ],
   "description": "A retail sales database: customers place sales orders for products through in-store, online, distributor or wholesale channels, each order handled by a salesperson from Sales Team and tied to a store location with regional context. The people are the customers (companies such as Avon Corp) and the sales staff listed by name in Sales Team.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: quirks checked; trailing-space quirk made exact (13 of 50)"
   ],
@@ -1154,7 +1154,7 @@
    "The server column in callcenterlogs holds call-center agents' first names (e.g. MICHAL, TOVA), not ids."
   ],
   "description": "A consumer-complaint call center: clients (customers) lodge complaints by phone, each call logged in callcenterlogs with priority, type, outcome and server handling times, while events records the substance of each complaint (product, issue, narrative, channel) and the company's response. Clients live in districts grouped by state, and reviews logs daily product star ratings per district.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: roles, edges and every quirk checked against the data; no change"
   ],
@@ -1228,7 +1228,7 @@
    "cust_type includes values like 'retailer' beyond the documented 'manufacturer' and 'wholesaler'."
   ],
   "description": "A freight delivery operation: business customers (manufacturers, wholesalers, retailers) send shipments of goods by weight to destination cities, each shipment recording the truck and driver used. Customers are the roots of requests; drivers are the other people in the data, and trucks and cities are reference data.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: dropped the model_year quirk -- it repeats a BIRD column note, not something in the data, and does not matter for writing SQL"
   ],
@@ -1335,7 +1335,7 @@
    "Dates are stored as text: event.event_date like '2020-03-10T12:00:00', expense.expense_date and income.date_received as 'YYYY-MM-DD'."
   ],
   "description": "A student club's administrative system: members (each with a club position, academic major and hometown ZIP code) attend events, incur expenses charged against per-event per-category budgets, and pay dues that are recorded as income. Events belong to the club rather than to any member, and each budget's spent and remaining figures summarize the expenses linked to it.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: quirks checked; approved holds only 'true' and one null (no 'false' yet)"
   ],
@@ -1426,7 +1426,7 @@
    "enlist.organ and enrolled.school hold text codes like 'fire_department' and 'ucb' with no reference table."
   ],
   "description": "A student loan database of 1000 students identified by codes like 'student123'. One-to-one tables record each student's circumstances (disabled, unemployed, male, filed for bankruptcy, longest absence, payment due), while enlist records organizations a student enlisted in and enrolled records the school and month of enrollment.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: roles, edges and every quirk checked against the data; no change"
   ],
@@ -1538,7 +1538,7 @@
    "height_cm and weight_kg of NULL or 0 mean the hero's height or weight is unknown, not that they are actually zero."
   ],
   "description": "A catalog of comic-book superheroes: each hero has a hero name, full name, physical traits (gender, eye/hair/skin colour, race, height, weight) plus a publisher and moral alignment, all described via small lookup tables. hero_attribute rates each hero on traits like intelligence and strength, and hero_power records which superpowers the hero has.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: roles, edges and every quirk checked against the data; no change"
   ],
@@ -1702,7 +1702,7 @@
    "careplans.CODE is stored as a REAL number (e.g. 53950000.0) while code columns in the other clinical tables are integers."
   ],
   "description": "A synthetic electronic health record system: each patient's identity and demographics live in patients, and their medical history is a series of encounters, each of which can carry allergies, care plans, conditions, immunizations, medications, observations, procedures and claims. Claims reference only the patient. all_prevalences is reference data on how common each disease is in the living population.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: quirks checked; passport is 'FALSE' or null for patients without one"
   ],
@@ -1839,7 +1839,7 @@
    "IDs in student, instructor and course are plain digit strings (e.g. '24746', '787'), and sec_id holds plain digits like '1'."
   ],
   "description": "A university database: students and instructors each belong to a department, and advisor links every student to a supervising instructor. Courses are offered as sections in a semester, classroom and time slot; teaches records the instructor leading each section and takes records each student's enrollment and grade, with prereq holding course prerequisites.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: event parents trimmed to section -> course for takes and teaches and to the other person for advisor -- a student has about 15 enrolments, and classroom, time slot and departments added four rows to each; section -> time_slot also led to several rows (one per day)"
   ],
@@ -1930,7 +1930,7 @@
    "Only 7 of the 107 employees have job_history rows."
   ],
   "description": "A human resources database: employees hold jobs, report to managers, and belong to departments at office locations in countries grouped by region. Each employee's past assignments are logged in job_history with the job and department held over a start-to-end date range.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: removed same_as employees.MANAGER_ID and departments.MANAGER_ID -- same_as is for the same person's id in another table; these columns name a manager, and as ownership edges they would make every department the manager's private data",
    "Claude: root parents end at departments -> locations and job_history parents at jobs and departments -- countries and regions add rows without helping",
@@ -2071,7 +2071,7 @@
    "There is no season table; match.season_id is just a season number."
   ],
   "description": "An Indian Premier League (Twenty20 cricket) results database over many seasons: each match between two teams records venue, toss and result, every delivery sits in ball_by_ball, and the runs, extras and wickets off each ball live in separate tables sharing the ball's key. The people are the cricketers in player, linked to the matches they played with a role and team in player_match, and appearing throughout the ball data as striker, non-striker, bowler, dismissed player and man of the match.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: removed same_as -- striker, non_striker, bowler and player_out are references already in the recorded foreign keys, and match.man_of_the_match as an identity column would make every match the man of the match's private data",
    "Claude: dropped the non-striker event group and trimmed parents to the match (plus the player's team and the dismissal ball) -- a player has hundreds of ball rows per role and team rows under each added little"
@@ -2192,7 +2192,7 @@
    "Cards.url, Cards.info_html, Cards.match_html and Tables.html are scraped web artifacts, not data a request should rewrite."
   ],
   "description": "A professional-wrestling results database assembled by scraping profightdb.com. Cards record each event card (date, promotion, location and event name), and Matches record each individual bout with its winner, loser, win type, match type, duration and the championship belt at stake. The only people are the wrestlers, who appear in Matches as the winner and the loser.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: removed same_as Matches.winner_id -- it repeats the 'matches won' path, and same_as is for identity columns, not references",
    "Claude: Cards parents trimmed to Events -- each card row already carries cut-down HTML, Locations and Promotions added two more rows per match"
@@ -2344,7 +2344,7 @@
    "Grades in Student_Schedules and StudGPA in Students are on a 0-100 scale, not 0-4."
   ],
   "description": "A university course scheduling and academic records database: students, each with a major, enroll in class sections (Classes) through Student_Schedules records carrying an enrollment status and grade, while staff members teach those sections via Faculty_Classes and hold subject proficiencies and teaching categories. Classes meet in classrooms grouped by building and teach subjects grouped into categories and departments; some staff carry a Faculty profile (title, status, tenure) sharing the same StaffID, and one staff member chairs each department.",
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: event parents trimmed to class -> subject (plus the enrolment status) -- category, classroom, building and department added up to four rows per record",
    "Claude: quirks checked against the data; no change"

@@ -1,6 +1,6 @@
 # 23 个库的档案：审阅页
 
-GLM-5.3 按 `data/profile_hints.json` 的提示和两份 DySQL 手写示例起草了这些档案，Claude 又对着库逐个预审过。所有档案都通过了 `profile check`，但都还没确认。由 `taskgen.py profile render` 生成，档案原文在 `taskgen/v2/data/db_profiles.json`。
+GLM-5.3 按 `data/profile_hints.json` 的提示和两份 DySQL 手写示例起草了这些档案，Claude 又对着库逐个预审过。所有档案都通过了 `profile check`。用户 2026-10-01 审阅后回复"保持现状"：下面九点都按建议，档案没有再改，23 个库全部确认。由 `taskgen.py profile render` 生成，档案原文在 `taskgen/v2/data/db_profiles.json`。
 
 ## 怎么看
 
@@ -9,9 +9,9 @@ GLM-5.3 按 `data/profile_hints.json` 的提示和两份 DySQL 手写示例起�
 - 预审时，每条数据怪异点都用 SQL 查过。查不实的删了，说法不准的改了，对写 SQL 没用的也删了。
 - **样例树**在本地文件 `taskgen/v2/results/profile_review/sample_trees.md`（含库里的数据行，不进 git）。每个根一棵，就是出题 prompt 里数据块的样子：每行都标了是本人的（own）、公共的（public），还是别人的（another person's data）。看档案时对照着翻几棵，最直观。
 
-## 需要你判断的点
+## 审阅时请用户判断的点
 
-每条附了我的建议。都同意就回复"都可以"；要改哪里，直接说就行。
+每条附了 Claude 的建议。用户的决定：全部保持现状。
 
 1. **books：author 算公共表。**
    - 提示里这么写，草稿把它放进了人物表，我改回了公共表。
@@ -60,7 +60,7 @@ GLM-5.3 按 `data/profile_hints.json` 的提示和两份 DySQL 手写示例起�
 
 ---
 
-## bird:address　未确认　校验通过
+## bird:address　已确认　校验通过
 
 > A United States postal geography and demographics reference built around ZIP codes: zip_data records per-ZIP population, housing, income, business and benefit statistics, while alias, area_code, country and avoid map each ZIP to city names, telephone area codes and counties. The only people are the members of Congress in congress, each linked through zip_congress to the ZIP codes of the district they represent.
 
@@ -91,7 +91,7 @@ Claude 的改动：
 
 起草：glm-5.3，1 轮
 
-## bird:beer_factory　未确认　校验通过
+## bird:beer_factory　已确认　校验通过
 
 > A root beer retail tracker: customers buy individual root beer items (a brand in a container sold at a location) recorded as transactions with credit card type and price, and they leave star reviews and comments on brands. Brands carry brewery, ingredient, packaging, social media and pricing details, and selling locations have addresses with coordinates.
 
@@ -122,7 +122,7 @@ Claude 的改动：
 
 起草：glm-5.3，1 轮
 
-## bird:book_publishing_company　未确认　校验通过
+## bird:book_publishing_company　已确认　校验通过
 
 > A book publishing house database: authors write titles that publishers publish, with titleauthor recording each author's order and royalty share on a book and roysched defining royalty tiers per title. Publishers employ staff tracked in employee with job levels from jobs, while stores buy titles through sales orders and discounts on the store side. Requests center on the authors and the books they are credited with.
 
@@ -150,7 +150,7 @@ Claude 的改动：
 
 起草：glm-5.3，1 轮
 
-## bird:books　未确认　校验通过
+## bird:books　已确认　校验通过
 
 > An online bookstore: customers place orders (cust_order) whose books are recorded one per line in order_line, whose progress is tracked in order_history, and which ship to an address by a shipping method. Customers also keep saved addresses (customer_address) marked active or inactive; books carry a language and publisher and link to authors through book_author.
 
@@ -191,7 +191,7 @@ Claude 的改动：
 
 起草：glm-5.3，2 轮
 
-## bird:car_retails　未确认　校验通过
+## bird:car_retails　已确认　校验通过
 
 > A wholesale distributor of classic model cars. Customers are companies, each with a contact person and a sales representative among the employees, who are assigned to offices. Customers place orders whose line items list products (each belonging to a product line) and make payments by check.
 
@@ -223,7 +223,7 @@ Claude 的改动：
 
 起草：glm-5.3，1 轮
 
-## bird:food_inspection_2　未确认　校验通过
+## bird:food_inspection_2　已确认　校验通过
 
 > A municipal food-safety program: health-department employees (sanitarians, supervisors and division managers, each reporting to another employee) inspect licensed establishments such as restaurants and cafeterias. Each visit is an inspection with a type and result, possibly following up an earlier inspection, and each citation is a violation tied to a standard inspection point carrying a fine and the inspector's comment.
 
@@ -255,7 +255,7 @@ Claude 的改动：
 
 起草：glm-5.3，1 轮
 
-## bird:legislator　未确认　校验通过
+## bird:legislator　已确认　校验通过
 
 > A directory of United States members of Congress. The roots are the historical (no longer serving) legislators: each row of historical is a person, and historical-terms records that legislator's term of office with chamber type, state, district, party, and start and end dates. Currently serving legislators live in the separate current table with their terms in current-terms and their accounts in social-media, but they are different people and their records must not be touched.
 
@@ -277,7 +277,7 @@ Claude 的改动：
 
 起草：glm-5.3，3 轮
 
-## bird:movie　未确认　校验通过
+## bird:movie　已确认　校验通过
 
 > A movie database: each actor has a profile (birthplace, gender, ethnicity, net worth) and is cast in movies through the characters table, which records the character name, credit order, pay and screen time for each role. Movies carry budget, box office gross, MPAA rating, genre, runtime, rating and release date.
 
@@ -304,7 +304,7 @@ Claude 的改动：
 
 起草：glm-5.3，1 轮
 
-## bird:movies_4　未确认　校验通过
+## bird:movies_4　已确认　校验通过
 
 > A film catalog modeled on The Movie Database: each movie carries title, budget, revenue, release date, runtime, popularity and vote statistics, and is linked to genres, keywords, languages, production companies and countries. The people are film industry figures in person; movie_cast records the characters they played and movie_crew their departments and jobs.
 
@@ -335,7 +335,7 @@ Claude 的改动：
 
 起草：glm-5.3，1 轮
 
-## bird:olympics　未确认　校验通过
+## bird:olympics　已确认　校验通过
 
 > A history of the modern Olympic Games: each athlete (person) has an entry per edition attended (games_competitor, with their age) and, under it, one row per event entered (competitor_event) recording any medal won. Athletes represent NOC regions through person_region; editions have a year, a season and host cities, and events belong to sports. Everything besides the athletes is reference data: sports, events, medals, cities and regions.
 
@@ -368,7 +368,7 @@ Claude 的改动：
 
 起草：glm-5.3，1 轮
 
-## bird:professional_basketball　未确认　校验通过
+## bird:professional_basketball　已确认　校验通过
 
 > A historical professional basketball database (NBA, ABA and earlier leagues): players are drafted by teams, record season-by-season and playoff statistics with each team (players_teams), appear in all-star games (player_allstar) and win awards (awards_players). Coaches are tracked with one row per team-season stint (coaches) plus their awards (awards_coaches). Teams are tracked per season with wins, losses, scoring and playoff results (teams, series_post).
 
@@ -398,7 +398,7 @@ Claude 的改动：
 
 起草：glm-5.3，3 轮，没改掉的问题 1 条
 
-## bird:regional_sales　未确认　校验通过
+## bird:regional_sales　已确认　校验通过
 
 > A retail sales database: customers place sales orders for products through in-store, online, distributor or wholesale channels, each order handled by a salesperson from Sales Team and tied to a store location with regional context. The people are the customers (companies such as Avon Corp) and the sales staff listed by name in Sales Team.
 
@@ -428,7 +428,7 @@ Claude 的改动：
 
 起草：glm-5.3，1 轮
 
-## bird:retail_complains　未确认　校验通过
+## bird:retail_complains　已确认　校验通过
 
 > A consumer-complaint call center: clients (customers) lodge complaints by phone, each call logged in callcenterlogs with priority, type, outcome and server handling times, while events records the substance of each complaint (product, issue, narrative, channel) and the company's response. Clients live in districts grouped by state, and reviews logs daily product star ratings per district.
 
@@ -456,7 +456,7 @@ Claude 的改动：
 
 起草：glm-5.3，1 轮
 
-## bird:shipping　未确认　校验通过
+## bird:shipping　已确认　校验通过
 
 > A freight delivery operation: business customers (manufacturers, wholesalers, retailers) send shipments of goods by weight to destination cities, each shipment recording the truck and driver used. Customers are the roots of requests; drivers are the other people in the data, and trucks and cities are reference data.
 
@@ -485,7 +485,7 @@ Claude 的改动：
 
 起草：glm-5.3，1 轮
 
-## bird:student_club　未确认　校验通过
+## bird:student_club　已确认　校验通过
 
 > A student club's administrative system: members (each with a club position, academic major and hometown ZIP code) attend events, incur expenses charged against per-event per-category budgets, and pay dues that are recorded as income. Events belong to the club rather than to any member, and each budget's spent and remaining figures summarize the expenses linked to it.
 
@@ -518,7 +518,7 @@ Claude 的改动：
 
 起草：glm-5.3，1 轮
 
-## bird:student_loan　未确认　校验通过
+## bird:student_loan　已确认　校验通过
 
 > A student loan database of 1000 students identified by codes like 'student123'. One-to-one tables record each student's circumstances (disabled, unemployed, male, filed for bankruptcy, longest absence, payment due), while enlist records organizations a student enlisted in and enrolled records the school and month of enrollment.
 
@@ -540,7 +540,7 @@ Claude 的改动：
 
 起草：glm-5.3，1 轮
 
-## bird:superhero　未确认　校验通过
+## bird:superhero　已确认　校验通过
 
 > A catalog of comic-book superheroes: each hero has a hero name, full name, physical traits (gender, eye/hair/skin colour, race, height, weight) plus a publisher and moral alignment, all described via small lookup tables. hero_attribute rates each hero on traits like intelligence and strength, and hero_power records which superpowers the hero has.
 
@@ -577,7 +577,7 @@ Claude 的改动：
 
 起草：glm-5.3，1 轮
 
-## bird:synthea　未确认　校验通过
+## bird:synthea　已确认　校验通过
 
 > A synthetic electronic health record system: each patient's identity and demographics live in patients, and their medical history is a series of encounters, each of which can carry allergies, care plans, conditions, immunizations, medications, observations, procedures and claims. Claims reference only the patient. all_prevalences is reference data on how common each disease is in the living population.
 
@@ -616,7 +616,7 @@ Claude 的改动：
 
 起草：glm-5.3，1 轮
 
-## spider1:college_2　未确认　校验通过
+## spider1:college_2　已确认　校验通过
 
 > A university database: students and instructors each belong to a department, and advisor links every student to a supervising instructor. Courses are offered as sections in a semester, classroom and time slot; teaches records the instructor leading each section and takes records each student's enrollment and grade, with prereq holding course prerequisites.
 
@@ -655,7 +655,7 @@ Claude 的改动：
 
 起草：glm-5.3，1 轮
 
-## spider1:hr_1　未确认　校验通过
+## spider1:hr_1　已确认　校验通过
 
 > A human resources database: employees hold jobs, report to managers, and belong to departments at office locations in countries grouped by region. Each employee's past assignments are logged in job_history with the job and department held over a start-to-end date range.
 
@@ -690,7 +690,7 @@ Claude 的改动：
 
 起草：glm-5.3，1 轮
 
-## spider2:IPL　未确认　校验通过
+## spider2:IPL　已确认　校验通过
 
 > An Indian Premier League (Twenty20 cricket) results database over many seasons: each match between two teams records venue, toss and result, every delivery sits in ball_by_ball, and the runs, extras and wickets off each ball live in separate tables sharing the ball's key. The people are the cricketers in player, linked to the matches they played with a role and team in player_match, and appearing throughout the ball data as striker, non-striker, bowler, dismissed player and man of the match.
 
@@ -730,7 +730,7 @@ Claude 的改动：
 
 起草：glm-5.3，1 轮
 
-## spider2:WWE　未确认　校验通过
+## spider2:WWE　已确认　校验通过
 
 > A professional-wrestling results database assembled by scraping profightdb.com. Cards record each event card (date, promotion, location and event name), and Matches record each individual bout with its winner, loser, win type, match type, duration and the championship belt at stake. The only people are the wrestlers, who appear in Matches as the winner and the loser.
 
@@ -768,7 +768,7 @@ Claude 的改动：
 
 起草：glm-5.3，1 轮
 
-## spider2:school_scheduling　未确认　校验通过
+## spider2:school_scheduling　已确认　校验通过
 
 > A university course scheduling and academic records database: students, each with a major, enroll in class sections (Classes) through Student_Schedules records carrying an enrollment status and grade, while staff members teach those sections via Faculty_Classes and hold subject proficiencies and teaching categories. Classes meet in classrooms grouped by building and teach subjects grouped into categories and departments; some staff carry a Faculty profile (title, status, tenure) sharing the same StaffID, and one staff member chairs each department.
 
