@@ -4,6 +4,7 @@ v2 从 v1 原样复制起步（tag `taskgen-v1`，61c8133）。复制的那个 c
 
 - **设计：** [docs/2026-10-01-taskgen-v2-design.md](docs/2026-10-01-taskgen-v2-design.md)
 - **实施计划 1（骨架、任务集统计、执行检查）：** [docs/2026-10-01-taskgen-v2-plan-1.md](docs/2026-10-01-taskgen-v2-plan-1.md)
+- **实施计划 2（库档案、嵌套建树、检查读档案）：** [docs/2026-10-01-taskgen-v2-plan-2.md](docs/2026-10-01-taskgen-v2-plan-2.md)
 - **怎么跑：** 和 v1 相同（[../v1/README.md](../v1/README.md) §3），命令在 `taskgen/v2/` 下运行。中间文件写到 `taskgen/v2/results/`，最终任务写到 `taskgen/v2/output/`，都不进 git。
 - **测试：** `cd taskgen/v2 && ~/miniconda3/envs/dysql/bin/python -m pytest -q`
 
@@ -18,3 +19,4 @@ v2 从 v1 原样复制起步（tag `taskgen-v1`，61c8133）。复制的那个 c
 | 执行检查：读时钟或随机数的 gold 间隔 1.1 秒执行两遍，评测会比较的列不一致就拒 | §4.5 |
 | 执行检查：说话人登记的新人物行标 `new_person`，算类型时按公共数据 | §4.5 |
 | 执行检查重新校准：v1 和 v2 的检查在 DySQL 金标准和 v1 全部候选上逐条对比（`scripts/check_diff.py`），报告 `docs/2026-10-01-check-recalibration.md` | §5 E |
+| 库档案：`taskgen_v2/db_profile.py`（格式、校验、写入范围、审阅页）；测试夹具 `tests/v2_fixtures.py` | §4.1 |

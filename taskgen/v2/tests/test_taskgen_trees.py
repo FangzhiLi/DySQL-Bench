@@ -1,22 +1,9 @@
 # tests/test_taskgen_trees.py
 import random, sqlite3
 import pytest
-from taskgen_common.testing import make_db, rows, SHOP
+from taskgen_common.testing import make_db
+from v2_fixtures import SHOP2, FKS, CUSTOMER, STAFF   # noqa: F401 (the older test modules import them from here)
 from taskgen_v2 import trees
-
-SHOP2 = SHOP + """
-CREATE TABLE order_items (item_id INTEGER PRIMARY KEY, order_id INTEGER REFERENCES orders(order_id), note TEXT);
-CREATE TABLE staff (staff_id INTEGER PRIMARY KEY, name TEXT);
-""" + rows("order_items", 300, lambda i: f"{i},{i%100},'n{i}'") + rows("staff", 5, lambda i: f"{i},'s{i}'")
-
-FKS = [{"table": "orders", "col": "customer_id", "ref_table": "customers", "ref_col": "customer_id", "hit": 1.0, "source": "declared"},
-       {"table": "orders", "col": "product_id", "ref_table": "products", "ref_col": "product_id", "hit": 1.0, "source": "declared"},
-       {"table": "order_items", "col": "order_id", "ref_table": "orders", "ref_col": "order_id", "hit": 1.0, "source": "declared"}]
-CUSTOMER = {"table": "customers", "key": "customer_id", "kind": "person_named", "rows": 60,
-            "names": ["first_name", "last_name"], "down": ["orders", "order_items"], "up": ["products"],
-            "update_targets": ["customers", "orders", "order_items", "products"]}
-STAFF = {"table": "staff", "key": "staff_id", "kind": "person_named", "rows": 5, "names": ["name"],
-         "down": [], "up": [], "update_targets": ["staff"]}
 
 
 @pytest.fixture
