@@ -84,7 +84,9 @@ MONTHS = {m: i + 1 for i, m in enumerate(["january", "february", "march", "april
 MONTHS.update({m[:3]: i for m, i in list(MONTHS.items())})
 WORDS = {w: str(i) for i, w in enumerate(["zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
                                           "nine", "ten", "eleven", "twelve"])}
-_MDY = re.compile(r"\b([a-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b")
+ORDINALS = {w: str(i + 1) for i, w in enumerate(["first", "second", "third", "fourth", "fifth", "sixth", "seventh",
+                                                 "eighth", "ninth", "tenth", "eleventh", "twelfth"])}
+_MDY =re.compile(r"\b([a-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b")
 _DMY = re.compile(r"\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?([a-z]{3,9})\.?,?\s+(\d{4})\b")
 
 
@@ -98,8 +100,14 @@ def text_forms(instruction):
     for d, mo, y in _DMY.findall(text):
         if mo in MONTHS:
             extra.append(f"{y}-{MONTHS[mo]:02d}-{int(d):02d}")
-    extra += [WORDS[w] for w in re.findall(r"[a-z]+", text) if w in WORDS]
+    words = re.findall(r"[a-z]+", text)
+    extra += [WORDS[w] for w in words if w in WORDS] + [ORDINALS[w] for w in words if w in ORDINALS]
     return text + " " + " ".join(extra)
+
+
+def _contains(text, n):
+    """n occurs in text as a whole token: '203' is not in '2030', 'ann' is not in 'joanna'."""
+    return re.search(r"(?<!\w)" + re.escape(n) + r"(?!\w)", text) is not None
 
 
 def literal_ok(lit, instruction, allowed):
@@ -107,10 +115,10 @@ def literal_ok(lit, instruction, allowed):
     if not n or n in allowed or n in IMPLIED or "%" in n:   # '%Y' etc. are strftime/LIKE patterns, not values
         return True
     text = text_forms(instruction)
-    if n in text:
+    if _contains(text, n):
         return True
     m = re.match(r"^(\d{4}-\d{2}-\d{2})[ t]\d{2}:\d{2}(:\d{2})?(\.\d+)?$", n)   # datetime: the date part suffices
-    if m and m.group(1) in text:
+    if m and _contains(text, m.group(1)):
         return True
     v = _num(lit)
     if v is not None:

@@ -161,3 +161,28 @@ def test_insert_values_with_subquery_is_not_archive(db):
     r = check.run_check(db, cand("I am a5 b5. Copy order item 5, keep the original.",
                                  ["INSERT INTO order_items (order_id, note) SELECT order_id, note FROM order_items WHERE item_id = 5"]))
     assert not r["difficulty"]["features"]["archive"]     # nothing changed in the source afterwards
+
+
+# --- v2: whole-token literals, ordinal words ---
+
+def test_literal_must_be_a_whole_token():
+    ok = check.literal_ok
+    assert not ok("203", "card 2030 has the wrong date", set())
+    assert not ok("2", "in the 2016 season", set())
+    assert not ok("ann", "my name is joanna", set())
+    assert ok("2030", "card 2030 has the wrong date", set())
+
+
+def test_ordinal_words_count_as_numbers():
+    ok = check.literal_ok
+    assert ok("2", "the run out in the second innings", set())
+    assert ok("3", "my third order", set())
+    assert ok("3", "the 3rd over", set())          # a digit with a suffix was already read as a number
+
+
+def test_literals_next_to_punctuation_still_match():
+    ok = check.literal_ok
+    assert ok("o'brien", "change the owner to O'Brien's brother", set())
+    assert ok("C00003174", "client C00003174, please", set())
+    assert ok("Bozeman", "move him to Bozeman.", set())
+    assert ok("$5 million", "set my net worth to '$5 million'", set())
