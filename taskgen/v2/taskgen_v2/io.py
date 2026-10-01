@@ -1,6 +1,6 @@
 # taskgen/v2/taskgen_v2/io.py
 """JSONL records, resume bookkeeping, .env loading, and the anchors JSON (db_rec) for the task-generation pipeline."""
-import json, os
+import json, os, re
 from taskgen_common import paths
 
 V2 = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))                     # taskgen/v2/
@@ -51,3 +51,22 @@ def resolve_db_path(p):
 def load_db_recs(path=ANCHORS_JSON):
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def json_candidates(text):
+    """Strings that may hold the JSON object of a model answer, most likely first: the <answer> body, then {...} spans."""
+    m = re.search(r"<answer>(.*?)(</answer>|$)", text, re.S)
+    body = m.group(1) if m else text
+    body = re.sub(r"^\s*```(?:json)?\s*|\s*```\s*$", "", body.strip(), flags=re.S)
+    yield body
+    for mm in reversed(list(re.finditer(r"\{.*\}", text, re.S))):   # greedy last {...}
+        yield mm.group(0)
+    depth, start = 0, None                                             # balanced scan for the last object
+    for i, ch in enumerate(text):
+        if ch == "{":
+            if depth == 0: start = i
+            depth += 1
+        elif ch == "}" and depth:
+            depth -= 1
+            if depth == 0 and start is not None:
+                yield text[start:i + 1]

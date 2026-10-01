@@ -14,9 +14,10 @@ Usage (from taskgen/v2/), pilot on beer_factory (its profile in data/db_profiles
 Files: data/db_profiles.json; results/<db>/{trees,candidates,check,verify,selected}.jsonl; output/<db>/tasks.jsonl,
 output/manifest.json."""
 import argparse, glob, json, os, random, sys, time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 V2 = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [V2, os.path.join(os.path.dirname(V2), "common")]   # taskgen_v2, taskgen_common
-from taskgen_v2 import io, trees, schema, llm, prompt, generate, check, verify, dedup, convert, stats, db_profile, owners
+from taskgen_v2 import io, trees, schema, llm, prompt, generate, check, verify, dedup, convert, stats, db_profile, owners, profile_draft
 
 DESC_PATH = os.path.join(io.DATA, "db_descriptions.json")
 
@@ -152,6 +153,91 @@ def cmd_stats(a):
     print(stats.render(d))
 
 
+def draft_profiles(a):
+    hints, recs = json.load(open(a.hints, encoding="utf-8")), io.load_db_recs(a.anchors)
+    have = db_profile.load(a.profiles)
+    todo = [k for k in ([a.db] if a.db else sorted(hints)) if a.redo or k not in have]
+    desc = json.load(open(DESC_PATH, encoding="utf-8")) if os.path.exists(DESC_PATH) else {}
+    client, examples = llm.client_from_env("GEN"), profile_draft.load_examples()
+
+    def one(k):   # each thread opens its own connection
+        rec = recs[k]
+        path = io.resolve_db_path(rec["path"])
+        try:
+            return k, profile_draft.draft(client, k, trees.open_ro(path), rec, path, hints[k], desc.get(k, ""), examples), None
+        except Exception as e:
+            return k, None, f"{type(e).__name__}: {e}"
+    with ThreadPoolExecutor(max_workers=max(1, a.workers)) as ex:
+        for f in as_completed([ex.submit(one, k) for k in todo]):
+            k, prof, err = f.result()
+            if err:
+                print(f"{k}: FAILED {err}")
+                continue
+            profiles = db_profile.load(a.profiles)   # saved after every database: an interrupted run keeps what it has
+            profiles[k] = prof
+            db_profile.save(profiles, a.profiles)
+            print(f"{k}: {prof['draft']['rounds']} round(s), {len(prof['draft']['errors'])} problem(s) left")
+
+
+def sample_trees(entries, recs, seed, n):
+    """Prompt-style data blocks of n trees per root of every valid profile, for the reviewer (rows of the database,
+    so the file stays out of git)."""
+    parts = []
+    for x in entries:
+        if x["errors"]:
+            continue
+        rec, prof = recs[x["key"]], x["profile"]
+        c = trees.open_ro(io.resolve_db_path(rec["path"]))
+        tracer = owners.Tracer.from_profile(prof, rec, c)
+        for r in prof["roots"]:
+            rng = random.Random(f"{seed}:{r['table']}")
+            for kv in trees.root_key_values(c, prof, r, rng, n):
+                t = trees.build_tree(c, prof, r, kv, rng, tracer)
+                refs = [[gi, j] for gi, g in enumerate(t["events"]) for j in range(len(g["rows"]))]
+                parts.append(f"# {x['key']} · {r['table']} {kv}\n\n" + prompt.data_blocks(t, refs, "the speaker's own row"))
+    return "\n\n".join(parts)
+
+
+def cmd_profile(a):
+    if a.action == "draft":
+        return draft_profiles(a)
+    profiles, recs = db_profile.load(a.profiles), io.load_db_recs(a.anchors)
+    keys = [a.db] if a.db else sorted(profiles)
+    missing = [k for k in keys if k not in profiles]
+    if missing:
+        sys.exit(f"no profile for {', '.join(missing)} in {a.profiles}")
+    entries = []
+    for k in keys:
+        rec = recs[k]
+        c = trees.open_ro(io.resolve_db_path(rec["path"]))
+        entries.append({"key": k, "profile": profiles[k], "pk": schema.pk_info(c),
+                        "errors": db_profile.validate(profiles[k], c, rec["fks"], rec.get("fks_composite", ()))})
+    bad = [x["key"] for x in entries if x["errors"]]
+    if a.action == "check":
+        for x in entries:
+            print(f"{x['key']}: " + (f"{len(x['errors'])} problems" if x["errors"] else "ok")
+                  + (", confirmed" if x["profile"].get("confirmed") is True else ", not confirmed"))
+            for e in x["errors"]:
+                print(f"  - {e}")
+        sys.exit(1 if bad else 0)
+    if a.action == "render":
+        with open(a.out, "w", encoding="utf-8") as f:
+            f.write(db_profile.render_md(entries) + "\n")
+        print(f"wrote {a.out}: {len(entries)} profiles, {len(bad)} with problems")
+        if a.trees_out:
+            with open(a.trees_out, "w", encoding="utf-8") as f:
+                f.write(sample_trees(entries, recs, a.seed, a.sample_trees) + "\n")
+            print(f"wrote {a.trees_out}")
+    if a.action == "confirm":
+        if not a.db:
+            sys.exit("confirm needs --db")
+        if bad:
+            sys.exit(f"{a.db} has problems; run `profile check --db {a.db}`")
+        profiles[a.db]["confirmed"] = True
+        db_profile.save(profiles, a.profiles)
+        print(f"{a.db}: confirmed")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -159,6 +245,13 @@ def main():
         p.add_argument("--db", required=True); p.add_argument("--anchors", default=io.ANCHORS_JSON)
         p.add_argument("--out-dir"); p.add_argument("--seed", type=int, default=0)
         p.add_argument("--profiles", default=db_profile.PROFILES_JSON)
+    p = sub.add_parser("profile"); p.add_argument("action", choices=["draft", "check", "render", "confirm"])
+    p.add_argument("--db", help="one database (default: all in the hints for draft, all in the profiles file otherwise)")
+    p.add_argument("--anchors", default=io.ANCHORS_JSON); p.add_argument("--profiles", default=db_profile.PROFILES_JSON)
+    p.add_argument("--hints", default=profile_draft.HINTS_JSON); p.add_argument("--redo", action="store_true", help="draft again even if a profile exists")
+    p.add_argument("--workers", type=int, default=5, help="GLM plan limit: 5 concurrent requests")
+    p.add_argument("--out", help="render: the review page to write"); p.add_argument("--trees-out", help="render: sample trees for the reviewer (results/, not git)")
+    p.add_argument("--sample-trees", type=int, default=1); p.add_argument("--seed", type=int, default=0); p.set_defaults(f=cmd_profile)
     p = sub.add_parser("trees"); common(p); p.add_argument("--n", type=int, default=50); p.add_argument("--anchor", help="one root table only"); p.set_defaults(f=cmd_trees)
     p = sub.add_parser("describe"); common(p); p.set_defaults(f=cmd_describe)
     p = sub.add_parser("generate"); common(p); p.add_argument("--workers", type=int, default=5, help="GLM plan limit: 5 concurrent requests"); p.add_argument("--per-tree", type=int, default=1); p.add_argument("--retry-errors", action="store_true", help="regenerate candidates whose API call failed (e.g. 429)"); p.set_defaults(f=cmd_generate)

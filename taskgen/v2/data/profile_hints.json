@@ -1,0 +1,201 @@
+{
+ "bird:address": {
+  "roots": [
+   "congress"
+  ],
+  "notes": [
+   "congress.first_name and congress.last_name are swapped in the data: first_name holds the surname ('Young', 'Don').",
+   "The key column of congress is spelled cognress_rep_id.",
+   "zip_congress is keyed by (zip_code, district)."
+  ]
+ },
+ "bird:beer_factory": {
+  "roots": [
+   "customers"
+  ],
+  "notes": []
+ },
+ "bird:book_publishing_company": {
+  "roots": [
+   "authors"
+  ],
+  "notes": [
+   "employee holds publisher staff, people who are not roots."
+  ]
+ },
+ "bird:books": {
+  "roots": [
+   "customer"
+  ],
+  "notes": [
+   "author is reference data about books for a customer, not a person who makes requests."
+  ]
+ },
+ "bird:car_retails": {
+  "roots": [
+   "customers"
+  ],
+  "notes": [
+   "customers are companies; contactFirstName and contactLastName name the person who speaks for the company.",
+   "employees are the companies' sales representatives (customers.salesRepEmployeeNumber): other people."
+  ]
+ },
+ "bird:food_inspection_2": {
+  "roots": [
+   "employee"
+  ],
+  "notes": [
+   "employee are health inspectors; employee.supervisor refers to another employee."
+  ]
+ },
+ "bird:legislator": {
+  "roots": [
+   "historical"
+  ],
+  "notes": [
+   "historical-terms rows are the terms each historical legislator served (bioguide -> historical.bioguide_id): events, not separate people.",
+   "current, current-terms and social-media describe current legislators, who are not rows of historical."
+  ]
+ },
+ "bird:movie": {
+  "roots": [
+   "actor"
+  ],
+  "notes": [
+   "characters links an actor to a movie: the actor's roles."
+  ]
+ },
+ "bird:movies_4": {
+  "roots": [
+   "person"
+  ],
+  "notes": [
+   "movie_cast and movie_crew are a person's credits."
+  ]
+ },
+ "bird:olympics": {
+  "roots": [
+   "person"
+  ],
+  "notes": [
+   "games_competitor is a person's entry in one Games; competitor_event hangs under it."
+  ]
+ },
+ "bird:professional_basketball": {
+  "roots": [
+   "players"
+  ],
+  "notes": [
+   "draft rows are draft picks; draft.playerID links a pick to players, so draft is an event of players, not a separate person.",
+   "teams, players_teams and coaches use the composite key (tmID, year)."
+  ]
+ },
+ "bird:regional_sales": {
+  "roots": [
+   "Customers"
+  ],
+  "notes": [
+   "Table and column names contain spaces (\"Sales Orders\", \"Customer Names\")."
+  ]
+ },
+ "bird:retail_complains": {
+  "roots": [
+   "client"
+  ],
+  "notes": []
+ },
+ "bird:shipping": {
+  "roots": [
+   "customer"
+  ],
+  "notes": [
+   "driver holds people other than the roots; truck and city are reference data."
+  ]
+ },
+ "bird:student_club": {
+  "roots": [
+   "member"
+  ],
+  "notes": [
+   "Keys such as member_id and event_id are text codes like 'rec1x5zBFIqoOuPW8': there is no next value for new rows."
+  ]
+ },
+ "bird:student_loan": {
+  "roots": [
+   "person"
+  ],
+  "notes": [
+   "bool holds only 'neg' and 'pos': exclude it.",
+   "Every table is keyed by the text name ('student123').",
+   "disabled, filed_for_bankrupcy, male, unemployed, longest_absense_from_school and no_payment_due are one-to-one facts about a person."
+  ]
+ },
+ "bird:superhero": {
+  "roots": [
+   "superhero"
+  ],
+  "notes": [
+   "hero_attribute and hero_power are a hero's own rows."
+  ]
+ },
+ "bird:synthea": {
+  "roots": [
+   "patients"
+  ],
+  "notes": [
+   "patients.patient and encounters.ID are text UUIDs: there is no next value for new rows.",
+   "The clinical tables reference both the patient and the encounter."
+  ]
+ },
+ "spider1:college_2": {
+  "roots": [
+   "student",
+   "instructor"
+  ],
+  "notes": [
+   "Two roots: students and instructors.",
+   "section, teaches and takes share the composite key (course_id, sec_id, semester, year).",
+   "advisor links a student (s_ID) to an instructor (i_ID)."
+  ]
+ },
+ "spider1:hr_1": {
+  "roots": [
+   "employees"
+  ],
+  "notes": [
+   "Keys are DECIMAL, so new rows need an explicit id.",
+   "employees.MANAGER_ID refers to another employee.",
+   "Only 7 employees have job_history rows."
+  ]
+ },
+ "spider2:IPL": {
+  "roots": [
+   "player"
+  ],
+  "notes": [
+   "player_match is keyed by (match_id, player_id).",
+   "ball_by_ball.striker, non_striker, bowler and wicket_taken.player_out hold player ids without a declared foreign key."
+  ]
+ },
+ "spider2:WWE": {
+  "roots": [
+   "Wrestlers"
+  ],
+  "notes": [
+   "Matches.winner_id and Matches.loser_id (TEXT) both hold Wrestlers.id.",
+   "Wrestlers.name, Belts.name and the other name columns are UNIQUE.",
+   "sqlite_sequence is ahead of MAX(id) in 8 tables, so new rows there need an explicit id."
+  ]
+ },
+ "spider2:school_scheduling": {
+  "roots": [
+   "Students",
+   "Staff"
+  ],
+  "notes": [
+   "Two roots: students and staff.",
+   "Faculty is the teaching profile of a Staff member (same StaffID).",
+   "Student_Schedules are a student's class enrolments; Faculty_Classes, Faculty_Subjects and Faculty_Categories are a staff member's teaching records."
+  ]
+ }
+}

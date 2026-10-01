@@ -1,7 +1,7 @@
 # taskgen/v2/taskgen_v2/generate.py
 """Call the generation model once per (tree, plan) and write candidate tasks. Parse failures and API failures are
 recorded as candidates with instruction=None so the batch never stops and the failure rate is visible."""
-import json, os, re
+import json, os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from taskgen_v2 import io, llm, prompt
 
@@ -12,27 +12,9 @@ class ParseError(ValueError):
     pass
 
 
-def _json_candidates(text):
-    m = re.search(r"<answer>(.*?)(</answer>|$)", text, re.S)
-    body = m.group(1) if m else text
-    body = re.sub(r"^\s*```(?:json)?\s*|\s*```\s*$", "", body.strip(), flags=re.S)
-    yield body
-    for mm in reversed(list(re.finditer(r"\{.*\}", text, re.S))):   # greedy last {...}
-        yield mm.group(0)
-    depth, start = 0, None                                             # balanced scan for the last object
-    for i, ch in enumerate(text):
-        if ch == "{":
-            if depth == 0: start = i
-            depth += 1
-        elif ch == "}" and depth:
-            depth -= 1
-            if depth == 0 and start is not None:
-                yield text[start:i + 1]
-
-
 def parse_answer(text):
     last = None
-    for cand in _json_candidates(text or ""):
+    for cand in io.json_candidates(text or ""):
         try:
             obj = json.loads(cand)
         except json.JSONDecodeError as e:

@@ -1,0 +1,215 @@
+[
+ {
+  "db": "chinook (DySQL)",
+  "env": "chinook",
+  "schema": "TABLE albums -- 347 rows; key AlbumId (INTEGER; a new row may leave it out)\n  columns: AlbumId INTEGER, Title NVARCHAR(160), ArtistId INTEGER\n  references: ArtistId -> artists.ArtistId\nTABLE artists -- 275 rows; key ArtistId (INTEGER; a new row may leave it out)\n  columns: ArtistId INTEGER, Name NVARCHAR(120)\nTABLE customers -- 59 rows; key CustomerId (INTEGER; a new row may leave it out)\n  columns: CustomerId INTEGER, FirstName NVARCHAR(40), LastName NVARCHAR(20), Company NVARCHAR(80), Address NVARCHAR(70), City NVARCHAR(40), State NVARCHAR(40), Country NVARCHAR(40), PostalCode NVARCHAR(10), Phone NVARCHAR(24), Fax NVARCHAR(24), Email NVARCHAR(60), SupportRepId INTEGER\n  references: SupportRepId -> employees.EmployeeId\nTABLE employees -- 8 rows; key EmployeeId (INTEGER; a new row may leave it out)\n  columns: EmployeeId INTEGER, LastName NVARCHAR(20), FirstName NVARCHAR(20), Title NVARCHAR(30), ReportsTo INTEGER, BirthDate DATETIME, HireDate DATETIME, Address NVARCHAR(70), City NVARCHAR(40), State NVARCHAR(40), Country NVARCHAR(40), PostalCode NVARCHAR(10), Phone NVARCHAR(24), Fax NVARCHAR(24), Email NVARCHAR(60)\n  references: ReportsTo -> employees.EmployeeId\nTABLE genres -- 25 rows; key GenreId (INTEGER; a new row may leave it out)\n  columns: GenreId INTEGER, Name NVARCHAR(120)\nTABLE invoice_items -- 2240 rows; key InvoiceLineId (INTEGER; a new row may leave it out)\n  columns: InvoiceLineId INTEGER, InvoiceId INTEGER, TrackId INTEGER, UnitPrice NUMERIC(10,2), Quantity INTEGER\n  references: TrackId -> tracks.TrackId; InvoiceId -> invoices.InvoiceId\nTABLE invoices -- 412 rows; key InvoiceId (INTEGER; a new row may leave it out)\n  columns: InvoiceId INTEGER, CustomerId INTEGER, InvoiceDate DATETIME, BillingAddress NVARCHAR(70), BillingCity NVARCHAR(40), BillingState NVARCHAR(40), BillingCountry NVARCHAR(40), BillingPostalCode NVARCHAR(10), Total NUMERIC(10,2)\n  references: CustomerId -> customers.CustomerId\nTABLE media_types -- 5 rows; key MediaTypeId (INTEGER; a new row may leave it out)\n  columns: MediaTypeId INTEGER, Name NVARCHAR(120)\nTABLE playlist_track -- 8715 rows; key (PlaylistId, TrackId)\n  columns: PlaylistId INTEGER, TrackId INTEGER\n  references: TrackId -> tracks.TrackId; PlaylistId -> playlists.PlaylistId\nTABLE playlists -- 18 rows; key PlaylistId (INTEGER; a new row may leave it out)\n  columns: PlaylistId INTEGER, Name NVARCHAR(120)\nTABLE tracks -- 3503 rows; key TrackId (INTEGER; a new row may leave it out)\n  columns: TrackId INTEGER, Name NVARCHAR(200), AlbumId INTEGER, MediaTypeId INTEGER, GenreId INTEGER, Composer NVARCHAR(220), Milliseconds INTEGER, Bytes INTEGER, UnitPrice NUMERIC(10,2)\n  references: MediaTypeId -> media_types.MediaTypeId; GenreId -> genres.GenreId; AlbumId -> albums.AlbumId",
+  "profile": {
+   "roots": [
+    {
+     "table": "customers",
+     "label": "customer",
+     "parents": [
+      {
+       "table": "employees",
+       "via": "customers.SupportRepId -> employees.EmployeeId",
+       "parents": []
+      }
+     ]
+    }
+   ],
+   "persons": {
+    "customers": {
+     "key": "CustomerId",
+     "name_cols": [
+      "FirstName",
+      "LastName"
+     ],
+     "same_as": []
+    },
+    "employees": {
+     "key": "EmployeeId",
+     "name_cols": [
+      "FirstName",
+      "LastName"
+     ],
+     "same_as": []
+    }
+   },
+   "events": [
+    {
+     "table": "invoices",
+     "label": "invoices",
+     "path": [
+      "invoices.CustomerId -> customers.CustomerId"
+     ],
+     "parents": []
+    },
+    {
+     "table": "invoice_items",
+     "label": "invoice lines",
+     "path": [
+      "invoices.CustomerId -> customers.CustomerId",
+      "invoice_items.InvoiceId -> invoices.InvoiceId"
+     ],
+     "parents": [
+      {
+       "table": "tracks",
+       "via": "invoice_items.TrackId -> tracks.TrackId",
+       "parents": [
+        {
+         "table": "albums",
+         "via": "tracks.AlbumId -> albums.AlbumId",
+         "parents": [
+          {
+           "table": "artists",
+           "via": "albums.ArtistId -> artists.ArtistId",
+           "parents": []
+          }
+         ]
+        },
+        {
+         "table": "genres",
+         "via": "tracks.GenreId -> genres.GenreId",
+         "parents": []
+        },
+        {
+         "table": "media_types",
+         "via": "tracks.MediaTypeId -> media_types.MediaTypeId",
+         "parents": []
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "attributes": [],
+   "public": [
+    "tracks",
+    "albums",
+    "artists",
+    "genres",
+    "media_types",
+    "playlists",
+    "playlist_track"
+   ],
+   "exclude": [],
+   "no_insert": [],
+   "quirks": [],
+   "description": "A digital music store: customers buy tracks, recorded on invoices with one line per track, and each customer has a support representative among the employees. Tracks belong to albums, artists, genres and playlists.",
+   "confirmed": false
+  }
+ },
+ {
+  "db": "entertainment (DySQL)",
+  "env": "entertainment",
+  "schema": "TABLE Agents -- 9 rows; key AgentID (INT)\n  columns: AgentID INT, AgtFirstName nvarchar (25), AgtLastName nvarchar (25), AgtStreetAddress nvarchar (50), AgtCity nvarchar (30), AgtState nvarchar (2), AgtZipCode nvarchar (10), AgtPhoneNumber nvarchar (15), DateHired date, Salary decimal(15, 2), CommissionRate float(24)\nTABLE Customers -- 15 rows; key CustomerID (INT)\n  columns: CustomerID INT, CustFirstName nvarchar (25), CustLastName nvarchar (25), CustStreetAddress nvarchar (50), CustCity nvarchar (30), CustState nvarchar (2), CustZipCode nvarchar (10), CustPhoneNumber nvarchar (15)\nTABLE Engagements -- 111 rows; key EngagementNumber (INT)\n  columns: EngagementNumber INT, StartDate date, EndDate date, StartTime time, StopTime time, ContractPrice decimal(15, 2), CustomerID INT, AgentID INT, EntertainerID INT\n  references: EntertainerID -> Entertainers.EntertainerID; CustomerID -> Customers.CustomerID; AgentID -> Agents.AgentID\nTABLE Entertainer_Members -- 40 rows; key (EntertainerID, MemberID)\n  columns: EntertainerID INT, MemberID INT, Status smallint\n  references: MemberID -> Members.MemberID; EntertainerID -> Entertainers.EntertainerID\nTABLE Entertainer_Styles -- 32 rows; key (EntertainerID, StyleID)\n  columns: EntertainerID INT, StyleID smallint, StyleStrength smallint\n  references: StyleID -> Musical_Styles.StyleID; EntertainerID -> Entertainers.EntertainerID\nTABLE Entertainers -- 13 rows; key EntertainerID (INT)\n  columns: EntertainerID INT, EntStageName nvarchar (50), EntSSN nvarchar (12), EntStreetAddress nvarchar (50), EntCity nvarchar (30), EntState nvarchar (2), EntZipCode nvarchar (10), EntPhoneNumber nvarchar (15), EntWebPage nvarchar (50), EntEMailAddress nvarchar (50), DateEntered date\nTABLE Members -- 25 rows; key MemberID (INT)\n  columns: MemberID INT, MbrFirstName nvarchar (25), MbrLastName nvarchar (25), MbrPhoneNumber nvarchar (15), Gender nvarchar (2)\nTABLE Musical_Preferences -- 36 rows; key (CustomerID, StyleID)\n  columns: CustomerID INT, StyleID smallint, PreferenceSeq smallint\n  references: StyleID -> Musical_Styles.StyleID; CustomerID -> Customers.CustomerID\nTABLE Musical_Styles -- 25 rows; key StyleID (smallint)\n  columns: StyleID smallint, StyleName nvarchar (75)\nTABLE ztblDays -- 1096 rows; key DateField (date)\n  columns: DateField date\nTABLE ztblMonths -- 36 rows; key (YearNumber, MonthNumber)\n  columns: MonthYear nvarchar (15), YearNumber smallint, MonthNumber smallint, MonthStart date, MonthEnd date, January smallint, February smallint, March smallint, April smallint, May smallint, June smallint, July smallint, August smallint, September smallint, October smallint, November smallint, December smallint\nTABLE ztblSkipLabels -- 60 rows; key LabelCount (INT)\n  columns: LabelCount INT\nTABLE ztblWeeks -- 156 rows; key WeekStart (date)\n  columns: WeekStart date, WeekEnd date",
+  "profile": {
+   "roots": [
+    {
+     "table": "Entertainers",
+     "label": "entertainer (an act)",
+     "parents": []
+    }
+   ],
+   "persons": {
+    "Entertainers": {
+     "key": "EntertainerID",
+     "name_cols": [
+      "EntStageName"
+     ],
+     "same_as": []
+    },
+    "Customers": {
+     "key": "CustomerID",
+     "name_cols": [
+      "CustFirstName",
+      "CustLastName"
+     ],
+     "same_as": []
+    },
+    "Agents": {
+     "key": "AgentID",
+     "name_cols": [
+      "AgtFirstName",
+      "AgtLastName"
+     ],
+     "same_as": []
+    },
+    "Members": {
+     "key": "MemberID",
+     "name_cols": [
+      "MbrFirstName",
+      "MbrLastName"
+     ],
+     "same_as": []
+    }
+   },
+   "events": [
+    {
+     "table": "Engagements",
+     "label": "bookings",
+     "path": [
+      "Engagements.EntertainerID -> Entertainers.EntertainerID"
+     ],
+     "parents": [
+      {
+       "table": "Customers",
+       "via": "Engagements.CustomerID -> Customers.CustomerID",
+       "parents": []
+      },
+      {
+       "table": "Agents",
+       "via": "Engagements.AgentID -> Agents.AgentID",
+       "parents": []
+      }
+     ]
+    },
+    {
+     "table": "Entertainer_Members",
+     "label": "members",
+     "path": [
+      "Entertainer_Members.EntertainerID -> Entertainers.EntertainerID"
+     ],
+     "parents": [
+      {
+       "table": "Members",
+       "via": "Entertainer_Members.MemberID -> Members.MemberID",
+       "parents": []
+      }
+     ]
+    },
+    {
+     "table": "Entertainer_Styles",
+     "label": "styles",
+     "path": [
+      "Entertainer_Styles.EntertainerID -> Entertainers.EntertainerID"
+     ],
+     "parents": [
+      {
+       "table": "Musical_Styles",
+       "via": "Entertainer_Styles.StyleID -> Musical_Styles.StyleID",
+       "parents": []
+      }
+     ]
+    }
+   ],
+   "attributes": [],
+   "public": [
+    "Musical_Styles"
+   ],
+   "exclude": [
+    "Musical_Preferences",
+    "ztblDays",
+    "ztblMonths",
+    "ztblSkipLabels",
+    "ztblWeeks"
+   ],
+   "no_insert": [],
+   "quirks": [
+    "Entertainers are acts (bands, duos), not single people; EntStageName is the act's name."
+   ],
+   "description": "An entertainment agency: agents book entertainers (bands and solo acts) for customers' events. Each entertainer has members and musical styles; customers have style preferences.",
+   "confirmed": false
+  }
+ }
+]

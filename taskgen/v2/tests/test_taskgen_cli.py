@@ -51,3 +51,23 @@ def test_trees_and_check_refuse_an_unconfirmed_profile(tmp_path):
     for cmd in ("trees", "check"):
         r = run(cmd, *args, check=False)
         assert r.returncode == 1 and "not confirmed" in r.stderr
+
+
+def test_profile_check_render_and_confirm(tmp_path):
+    args = setup(tmp_path, confirmed=False)
+    db, anchors, profiles = args[1], args[3], args[5]
+    common = ["--anchors", anchors, "--profiles", profiles]
+    r = run("profile", "check", *common)
+    assert r.returncode == 0 and "test:shop2: ok, not confirmed" in r.stdout
+    page, sample = tmp_path / "review.md", tmp_path / "trees.md"
+    run("profile", "render", *common, "--out", str(page), "--trees-out", str(sample))
+    assert "## test:shop2　未确认　校验通过" in page.read_text()
+    assert sample.read_text().startswith("# test:shop2 · customers ") and "## orders: orders records" in sample.read_text()
+    run("profile", "confirm", *common, "--db", db)
+    assert db_profile.load(profiles)[db]["confirmed"] is True
+    broken = {**SHOP_PROFILE, "public": [], "confirmed": False}                      # products hangs under orders, now without a role
+    db_profile.save({db: broken}, profiles)
+    r = run("profile", "check", *common, check=False)
+    assert r.returncode == 1 and "products hangs under orders but is not public" in r.stdout
+    r = run("profile", "confirm", *common, "--db", db, check=False)
+    assert r.returncode == 1 and db_profile.load(profiles)[db]["confirmed"] is False

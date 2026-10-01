@@ -24,3 +24,4 @@ v2 从 v1 原样复制起步（tag `taskgen-v1`，61c8133）。复制的那个 c
 | 执行检查读档案：范围按档案，往 `no_insert` 表 INSERT 拒，算出第 4 类拒（`other_person`）；REPLACE/UPSERT 覆盖已有人物行不算新人，自动主键按每条 INSERT 前现算，重跑时 Ctrl-C 不被吞；`check_diff.py --profiles` | §4.5、D6 |
 | 建树：按档案嵌套事件树（事件行挂实际引用的父行，带归属标签，≤30 条事件，先抽有事件的根行，双根按可用行数分）；`trees` 命令要已确认的档案，不再写 `others.json` | §4.2、D3 |
 | 出题读新树：按难度展示 3–5/5–8/8–12 条事件，数据块 ≤16000 字符，长文本截到 200 字符，每行注明归属；不出第 4 类；`generate`、`check` 命令读档案 | §4.2、§4.4、D6 |
+| 档案起草：`taskgen_v2/profile_draft.py`（GLM 看每表的键、列、外键、BIRD 列说明和 3 行样例，加 `data/profile_hints.json` 的根和已知怪异点、两份手写 DySQL 示例；校验不过带着问题重写，最多 2 次）；`profile draft/check/render/confirm` 命令 | §4.1、D1 |
