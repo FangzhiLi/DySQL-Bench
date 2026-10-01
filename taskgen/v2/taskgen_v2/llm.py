@@ -32,25 +32,33 @@ class ChatClient:
                 last = f"request error: {e}"
             else:
                 if r.status_code == 200:
-                    body = r.json()
-                    msg = body["choices"][0]["message"]
-                    return {"content": msg.get("content") or "", "reasoning": msg.get("reasoning_content") or msg.get("reasoning") or "",
-                            "usage": body.get("usage") or {}, "model": body.get("model") or self.model}
-                last = f"HTTP {r.status_code}: {r.text[:300]}"
-                if r.status_code not in RETRY_STATUS:
-                    raise LLMError(last)
+                    try:
+                        body = r.json()
+                        choice = body["choices"][0]
+                        msg = choice["message"]
+                    except (ValueError, KeyError, IndexError, TypeError) as e:   # a cut-off or empty body: ask again
+                        last = f"HTTP 200 without a message ({type(e).__name__}): {r.text[:300]}"
+                    else:
+                        return {"content": msg.get("content") or "", "reasoning": msg.get("reasoning_content") or msg.get("reasoning") or "",
+                                "usage": body.get("usage") or {}, "model": body.get("model") or self.model,
+                                "finish_reason": choice.get("finish_reason")}
+                else:
+                    last = f"HTTP {r.status_code}: {r.text[:300]}"
+                    if r.status_code not in RETRY_STATUS:
+                        raise LLMError(last)
             if attempt < self.max_retries:
                 time.sleep(min(60.0, self.backoff * (2 ** attempt)) * (1 + random.random() * 0.25))
         raise LLMError(f"gave up after {self.max_retries + 1} attempts; last: {last}")
 
 
-def client_from_env(role):
+def client_from_env(role, model=None):
+    """A client for TASKGEN_<ROLE>_BASE_URL / _API_KEY and the given model, or TASKGEN_<ROLE>_MODEL."""
     io.load_dotenv()
     p = f"TASKGEN_{role.upper()}_"
-    missing = [k for k in ("BASE_URL", "API_KEY", "MODEL") if not os.environ.get(p + k)]
+    missing = [k for k in ("BASE_URL", "API_KEY") + (() if model else ("MODEL",)) if not os.environ.get(p + k)]
     if missing:
         raise LLMError(f"missing env {', '.join(p + k for k in missing)} (see .env)")
-    return ChatClient(os.environ[p + "BASE_URL"], os.environ[p + "API_KEY"], os.environ[p + "MODEL"])
+    return ChatClient(os.environ[p + "BASE_URL"], os.environ[p + "API_KEY"], model or os.environ[p + "MODEL"])
 
 
 def pmap(fn, items, workers):

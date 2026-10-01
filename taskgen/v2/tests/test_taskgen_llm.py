@@ -26,7 +26,8 @@ def client(responses, **kw):
 def test_chat_parses_content_reasoning_usage_and_sends_auth():
     c = client([OK])
     r = c.chat([{"role": "user", "content": "q"}], temperature=0.5, max_tokens=99)
-    assert r == {"content": "hi", "reasoning": "think", "usage": {"prompt_tokens": 5, "completion_tokens": 7}, "model": "glm-5.3"}
+    assert r == {"content": "hi", "reasoning": "think", "usage": {"prompt_tokens": 5, "completion_tokens": 7}, "model": "glm-5.3",
+                 "finish_reason": "stop"}
     call = c.session.calls[0]
     assert call["url"] == "https://x/v4/chat/completions" and call["headers"]["Authorization"] == "Bearer k"
     assert call["json"]["temperature"] == 0.5 and call["json"]["max_tokens"] == 99 and call["json"]["model"] == "glm-5.3"
@@ -48,6 +49,29 @@ def test_client_error_is_not_retried():
     with pytest.raises(llm.LLMError, match="400"):
         c.chat([{"role": "user", "content": "q"}])
     assert len(c.session.calls) == 1
+
+
+class BadJSON(FakeResp):
+    def json(self): raise ValueError("Expecting value: line 1 column 1")
+
+
+def test_a_200_without_a_message_is_asked_again():
+    c = client([BadJSON(200, "<html>gateway</html>"), FakeResp(200, {"choices": []}), OK])
+    assert c.chat([{"role": "user", "content": "q"}])["content"] == "hi" and len(c.session.calls) == 3
+    c = client([FakeResp(200, {"error": "overloaded"})] * 2, max_retries=1)
+    with pytest.raises(llm.LLMError, match="HTTP 200 without a message"):
+        c.chat([{"role": "user", "content": "q"}])
+
+
+def test_client_from_env_takes_another_model(monkeypatch):
+    monkeypatch.setattr(llm.io, "load_dotenv", lambda *a, **k: None)
+    for k, v in {"TASKGEN_VERIFY_BASE_URL": "https://v/1", "TASKGEN_VERIFY_API_KEY": "k", "TASKGEN_VERIFY_MODEL": "m0"}.items():
+        monkeypatch.setenv(k, v)
+    assert llm.client_from_env("VERIFY").model == "m0" and llm.client_from_env("VERIFY", model="m1").model == "m1"
+    monkeypatch.delenv("TASKGEN_VERIFY_MODEL")
+    assert llm.client_from_env("VERIFY", model="m1").model == "m1"
+    with pytest.raises(llm.LLMError, match="TASKGEN_VERIFY_MODEL"):
+        llm.client_from_env("VERIFY")
 
 
 def test_pmap_keeps_order_and_captures_exceptions():

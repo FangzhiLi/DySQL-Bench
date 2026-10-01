@@ -133,6 +133,18 @@ def test_an_empty_answer_is_retried(tmp_path):
     assert s["written"] == 1 and io.read_jsonl(out)[0]["instruction"].startswith("I am a5 b5")
 
 
+def test_an_answer_cut_off_at_max_tokens_is_retried(tmp_path):
+    class Cut(FakeClient):
+        def chat(self, messages, **kw):
+            return {"content": GOOD[:60], "usage": {"completion_tokens": 16384}, "model": "fake", "finish_reason": "length"}
+    out = str(tmp_path / "c.jsonl")
+    generate.run(DB, ANCHOR, [TREE], Cut([]), out, random.Random(0))
+    r = io.read_jsonl(out)[0]
+    assert r["instruction"] is None and r["error"] == "Truncated: answer cut off after 16384 completion tokens"
+    s = generate.run(DB, ANCHOR, [TREE], FakeClient([GOOD]), out, random.Random(0), retry_errors=True)
+    assert s["written"] == 1 and io.read_jsonl(out)[0]["instruction"].startswith("I am a5 b5")
+
+
 def test_an_archive_copies_only_into_tables_whose_copies_differ_from_the_originals(tmp_path):
     # a copy keeps every column but a key SQLite assigns: without one, a later write hits the copy too; a key that is
     # a foreign key or a UNIQUE column would make a copy an orphan or a collision

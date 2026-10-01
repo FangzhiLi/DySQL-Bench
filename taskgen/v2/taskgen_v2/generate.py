@@ -80,7 +80,7 @@ def make_candidate(db_rec, anchor, tree, plan, idx, resp, parsed, error):
             "raw": (resp or {}).get("content"), "error": error}
 
 
-RETRYABLE = ("LLMError", "RuntimeError", "ConnectionError", "EmptyAnswer")
+RETRYABLE = ("LLMError", "RuntimeError", "ConnectionError", "EmptyAnswer", "Truncated")
 
 
 def _drop_api_failures(out_path):
@@ -139,6 +139,8 @@ def run(db_rec, anchor, trees_list, client, out_path, rng, workers=8, per_tree=1
                     parsed = parse_answer(resp["content"])
                 except ParseError as e:
                     error = f"ParseError: {e}"
+                    if resp.get("finish_reason") == "length":   # the answer was cut off at max_tokens: ask again
+                        error = f"Truncated: answer cut off after {(resp.get('usage') or {}).get('completion_tokens')} completion tokens"
                 except Exception as e:
                     error = f"{type(e).__name__}: {e}"
             stats["errors"] += bool(error)
