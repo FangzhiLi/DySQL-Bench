@@ -17,3 +17,4 @@ v2 从 v1 原样复制起步（tag `taskgen-v1`，61c8133）。复制的那个 c
 | 执行检查：SQLite 会自动分配的新主键不必出现在 instruction 里；`schema.pk_info` 给每张表的主键分类 | D9、§4.3、§4.5 |
 | 执行检查：读时钟或随机数的 gold 间隔 1.1 秒执行两遍，评测会比较的列不一致就拒 | §4.5 |
 | 执行检查：说话人登记的新人物行标 `new_person`，算类型时按公共数据 | §4.5 |
+| 执行检查重新校准：v1 和 v2 的检查在 DySQL 金标准和 v1 全部候选上逐条对比（`scripts/check_diff.py`），报告 `docs/2026-10-01-check-recalibration.md` | §5 E |
