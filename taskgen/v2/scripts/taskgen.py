@@ -59,6 +59,7 @@ def cmd_describe(a):
 
 def cmd_generate(a):
     rec, out = rec_and_dir(a)
+    prof = profile_of(a)
     path = io.resolve_db_path(rec["path"])
     desc = json.load(open(DESC_PATH)).get(a.db, "") if os.path.exists(DESC_PATH) else ""
     if not desc:
@@ -66,7 +67,6 @@ def cmd_generate(a):
     client = llm.client_from_env("GEN")
     next_ids = schema.next_ids(path)
     all_trees = io.read_jsonl(f"{out}/trees.jsonl")
-    others = json.load(open(f"{out}/others.json"))
     if a.retry_errors:   # their check results are stale once the candidates are regenerated
         failed = {c["id"] for c in io.read_jsonl(f"{out}/candidates.jsonl")
                   if c.get("instruction") is None and (c.get("error") or "").startswith(("LLMError", "RuntimeError", "ConnectionError"))}
@@ -75,10 +75,11 @@ def cmd_generate(a):
             os.remove(f"{out}/check.jsonl")
         io.append_jsonl(f"{out}/check.jsonl", chk)
     t0, total = time.time(), {"written": 0, "errors": 0, "skipped": 0}
-    for anchor in io.person_anchors(rec):
+    for r in prof["roots"]:
+        anchor = db_profile.root_anchor(prof, r["table"])
         ts = [t for t in all_trees if t["anchor_table"] == anchor["table"]]
-        s = generate.run(rec, anchor, ts, others.get(anchor["table"], []), client, f"{out}/candidates.jsonl",
-                         random.Random(f"{a.seed}:{anchor['table']}"),   # per anchor: two anchors must not draw the same plans
+        s = generate.run(rec, anchor, ts, client, f"{out}/candidates.jsonl",
+                         random.Random(f"{a.seed}:{anchor['table']}"),   # per root: two roots must not draw the same plans
                          workers=a.workers, per_tree=a.per_tree, db_description=desc, schema_text=schema.schema_block(path),
                          retry_errors=a.retry_errors, next_ids=next_ids)
         total = {k: total[k] + s[k] for k in total}
@@ -88,11 +89,12 @@ def cmd_generate(a):
 
 def cmd_check(a):
     rec, out = rec_and_dir(a)
+    prof = profile_of(a)
     done = io.done_ids(f"{out}/check.jsonl")
     todo = [c for c in io.read_jsonl(f"{out}/candidates.jsonl") if c["id"] not in done]
     n = ok = 0
     for c in todo:   # one line per candidate: a crash or a kill keeps everything checked so far
-        r = check.run_check_safe(rec, c)
+        r = check.run_check_safe(rec, c, profile=prof)
         io.append_jsonl(f"{out}/check.jsonl", [r])
         n += 1; ok += r["ok"]
     print(f"checked {n}, passed {ok}")

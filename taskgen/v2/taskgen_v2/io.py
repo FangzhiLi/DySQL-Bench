@@ -51,7 +51,3 @@ def resolve_db_path(p):
 def load_db_recs(path=ANCHORS_JSON):
     with open(path, encoding="utf-8") as f:
         return json.load(f)
-
-
-def person_anchors(db_rec):
-    return [a for a in db_rec["anchors"] if a["kind"] == "person_named"]

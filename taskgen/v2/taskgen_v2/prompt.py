@@ -1,16 +1,19 @@
 # taskgen/v2/taskgen_v2/prompt.py
 """Task plan sampling (type x difficulty x shape) and the generation prompt.
 SYSTEM is DySQL's generation prompt (data_pipeline_shell/generate_sqlbench_multiTurn_qa.py) with one example
-instruction chosen by task type; the USER message is built from the anchor tree, so the data blocks are named after
-the real tables instead of the hand-edited 'User Data / Trading Data' headings."""
+instruction chosen by task type; the USER message is built from the event tree (trees.py): the root row, then 3-12 of
+its events with their parent rows nested, every row tagged with whose data it is."""
 import json, os, random
-from taskgen_common.db_select import _q
+from taskgen_v2 import trees
 
 CFG = {
     "TYPE_MIX": {"1_self": 0.46, "2_self_and_public": 0.12, "3_public_only": 0.05, "4_other_person": 0.08, "5_proxy": 0.29},
     "DIFFICULTY_MIX": {"easy": 0.26, "medium": 0.45, "hard": 0.29},
     "FREE_TABLE_SHARE": 0.30,
     "MAX_ROWS_PER_STMT": 50,
+    "EVENTS_SHOWN": {"easy": (3, 5), "medium": (5, 8), "hard": (8, 12)},   # design §4.2: 3-12 events, more when harder
+    "DATA_CHARS": 16000,      # data blocks longer than this lose events from the end (about 4k tokens)
+    "MAX_VALUE_CHARS": 200,   # longer text values are cut in the prompt
 }
 # style pools: the pilot reused the same invented names ("Priya Raghavan" x6), roles ("records coordinator") and
 # openers ("Hi, this is ..."), so the plan now hands the model a sampled name, role and opening manner
@@ -125,20 +128,14 @@ def _weighted(rng, weights):
     return rng.choices(keys, weights=w, k=1)[0]
 
 
-def feasible_types(tree, anchor, others):
-    out = ["1_self"]
-    if tree["up"]:
-        out += ["2_self_and_public", "3_public_only"]
-    if others:
-        out.append("4_other_person")
-    out.append("5_proxy")
-    return out
+def feasible_types(tree):
+    """Types this tree can carry. Never 4_other_person (design D6); 2 and 3 need a public row to write."""
+    return ["1_self"] + (["2_self_and_public", "3_public_only"] if trees.has_public(tree) else []) + ["5_proxy"]
 
 
-def _shape(rng, difficulty, task_type, tree):
+def _shape(rng, difficulty, task_type, n_scope, has_events):
     s = {"n_writes": 1, "n_tables": 1, "ownership_subquery": False, "archive": False,
          "public_table": task_type in ("2_self_and_public", "3_public_only")}
-    n_scope = 1 + len(tree["down"]) + len(tree["up"])
     if difficulty == "medium":
         pick = rng.choice(["two_writes", "two_tables", "subquery"])
         if pick == "two_writes" or (pick == "two_tables" and n_scope < 2):
@@ -149,68 +146,88 @@ def _shape(rng, difficulty, task_type, tree):
             s["ownership_subquery"] = True
     elif difficulty == "hard":
         s.update(n_writes=rng.choice([2, 3]), n_tables=2 if n_scope >= 2 else 1, ownership_subquery=True)
-        if rng.random() < 0.25 and tree["down"]:
+        if rng.random() < 0.25 and has_events:
             s["archive"] = True
     if s["public_table"] and s["n_tables"] < 2 and task_type == "2_self_and_public":
         s.update(n_writes=max(s["n_writes"], 2), n_tables=2)
     return s
 
 
-def sample_plan(rng, tree, anchor, others, cfg=CFG):
-    ok = feasible_types(tree, anchor, others)
-    task_type = _weighted(rng, {k: v for k, v in cfg["TYPE_MIX"].items() if k in ok})
+def _who(task_type):
+    return "the speaker's own row" if task_type != "5_proxy" else "the person the request is about"
+
+
+def sample_plan(rng, tree, anchor, cfg=CFG):
+    task_type = _weighted(rng, {k: v for k, v in cfg["TYPE_MIX"].items() if k in feasible_types(tree)})
     difficulty = _weighted(rng, cfg["DIFFICULTY_MIX"])
-    shape = _shape(rng, difficulty, task_type, tree)
-    scope = [anchor["table"]] + list(tree["down"]) + list(tree["up"])
-    if task_type == "3_public_only":
-        pool = list(tree["up"])
-    elif task_type == "2_self_and_public":
-        pool = [anchor["table"]] + list(tree["down"])
-    else:
-        pool = [anchor["table"]] + list(tree["down"])
+    lo, hi = cfg["EVENTS_SHOWN"][difficulty]
+    refs = trees.pick_events(tree, rng, rng.randint(lo, hi), need_public=task_type in ("2_self_and_public", "3_public_only"))
+    while len(refs) > 1 and len(data_blocks(tree, refs, _who(task_type), cfg)) > cfg["DATA_CHARS"]:
+        refs.pop()                                           # the event a public type needs is first, so it stays
+    tabs = trees.tables_by_label(tree, refs)
+    shape = _shape(rng, difficulty, task_type, len(tabs["own"]) + len(tabs["public"]), bool(refs))
+    pool = tabs["public"] if task_type == "3_public_only" else tabs["own"]
     free = rng.random() < cfg["FREE_TABLE_SHARE"]
     write_tables = None
     if not free:
         k = min(shape["n_tables"], len(pool)) if task_type != "2_self_and_public" else min(shape["n_tables"] - 1, len(pool))
         write_tables = rng.sample(pool, max(1, k))
         if task_type == "2_self_and_public":
-            write_tables.append(rng.choice(list(tree["up"])))
-    other = rng.choice(others) if task_type == "4_other_person" else None
+            write_tables.append(rng.choice(tabs["public"]))
     style = {"opener": rng.choice(OPENERS), "name": None, "role": None}
     if task_type == "5_proxy":
         style.update(name=f"{rng.choice(FIRST_NAMES)} {rng.choice(LAST_NAMES)}", role=rng.choice(ROLES))
     return {"task_type": task_type, "difficulty": difficulty, "shape": shape, "write_tables": write_tables,
-            "other": other, "example": rng.choice(load_examples()[task_type]), "scope": scope, "style": style}
+            "events": refs, "tables": tabs, "example": rng.choice(load_examples()[task_type]),
+            "scope": tabs["own"] + tabs["public"], "style": style}
 
 
-def _block(title, rows):
-    return f"## {title}\n" + "\n".join(json.dumps(r, ensure_ascii=False, default=str) for r in rows)
+def _short(row, cfg):
+    """Long text (WWE keeps whole HTML pages in Cards) is cut for the prompt; nobody edits it by quoting it."""
+    n = cfg["MAX_VALUE_CHARS"]
+    return {k: (v[:n] + f"... ({len(v)} chars)" if isinstance(v, str) and len(v) > n else v) for k, v in row.items()}
 
 
-def data_blocks(anchor, tree, plan):
-    who = "the speaker's own row" if plan["task_type"] != "5_proxy" else "the person the request is about"
-    blocks = [_block(f"{anchor['table']} record ({who})", [tree["anchor_row"]])]
-    blocks += [_block(f"{t} records", rs) for t, rs in tree["down"].items()]
-    blocks += [_block(f"{t} records (shared reference data, owned by nobody)", rs) for t, rs in tree["up"].items()]
-    if plan.get("other"):
-        blocks.append(_block(f"Another person in {anchor['table']}", [{anchor["key"]: plan["other"]["key_value"], "name": plan["other"]["name"]}]))
+def _label_text(label):
+    if label.startswith("other:"):
+        return f"another person's data: {label[6:]}"
+    return {"own": "own", "public": "public, shared reference data owned by nobody"}.get(label, label)
+
+
+def data_blocks(tree, refs, who, cfg=CFG):
+    """The root row with its attributes and parent rows, then each shown event group; parent rows are indented under
+    the row that references them, and every row says whose data it is."""
+    def js(row):
+        return json.dumps(_short(row, cfg), ensure_ascii=False, default=str)
+
+    def lines(node, depth):
+        out = [f"{'  ' * depth}- {node['table']} ({_label_text(node['label'])}): {js(node['row'])}"]
+        for p in node["parents"]:
+            out += lines(p, depth + 1)
+        return out
+    head = [f"## {tree['anchor_table']} record ({who})", js(tree["anchor_row"])]
+    head += [f"- {t} (own): {js(r)}" for t, rs in tree["attributes"].items() for r in rs]
+    head += [x for p in tree["parents"] for x in lines(p, 0)]
+    blocks = ["\n".join(head)]
+    for g in trees.shown(tree, refs):
+        blocks.append(f"## {g['label']}: {g['table']} records ({len(g['rows'])} of {g['count']} shown)\n"
+                      + "\n".join(x for n in g["rows"] for x in lines(n, 0)))
     return "\n\n".join(blocks)
 
 
-def shape_text(anchor, tree, plan):
-    s, lines = plan["shape"], []
+def shape_text(anchor, plan):
+    s, lines, tabs = plan["shape"], [], plan["tables"]
     lines.append(f"- Use exactly {s['n_writes']} write statement{'s' if s['n_writes'] > 1 else ''} (INSERT/UPDATE/DELETE) touching {s['n_tables']} distinct table{'s' if s['n_tables'] > 1 else ''}.")
     if s["ownership_subquery"]:
         lines.append(f"- Locate the rows to change through their owner with a subquery on {anchor['table']} (e.g. WHERE {anchor['key']} = (SELECT {anchor['key']} FROM {anchor['table']} WHERE ...)) instead of hard-coding the {anchor['key']}.")
     if s["archive"]:
         lines.append("- First copy the affected row(s) into another table in scope with INSERT ... SELECT, then change or delete the original row(s).")
     if s["public_table"]:
-        lines.append(f"- At least one write must change a shared table: {', '.join(tree['up'])}.")
-    scope = [anchor["table"]] + list(tree["down"]) + list(tree["up"])
+        lines.append(f"- At least one write must change a shared table: {', '.join(tabs['public'])}.")
     if plan["write_tables"]:
         lines.append(f"- Write to these tables: {', '.join(plan['write_tables'])}.")
     else:
-        lines.append(f"- Choose freely which tables in scope to write ({', '.join(scope)}); prefer a combination that is not the obvious one.")
+        lines.append(f"- Choose freely which tables in scope to write ({', '.join(plan['scope'])}); prefer a combination that is not the obvious one.")
     lines.append(f"- Target difficulty: {plan['difficulty']}. Read-only questions (if any) go into 'outputs', not 'actions'.")
     return "\n".join(lines)
 
@@ -224,23 +241,23 @@ def style_text(plan):
     return "\n".join(lines)
 
 
-def next_ids_block(anchor, tree, next_ids):
-    """next_ids: schema.next_ids() output, {table: (pk_column, next value)}; only the tables in scope are listed."""
-    scope = [anchor["table"]] + list(tree["down"]) + list(tree["up"])
-    items = [(t, *next_ids[t]) for t in scope if t in (next_ids or {})]
+def next_ids_block(plan, next_ids):
+    """next_ids: schema.next_ids() output, {table: (pk_column, next value)}; only the tables the prompt shows."""
+    items = [(t, *next_ids[t]) for t in plan["scope"] if t in (next_ids or {})]
     if not items:
         return ""
     return "\n## Next unused primary keys (use these for new rows)\n" + "\n".join(f"- {t}.{c} = {v}" for t, c, v in items) + "\n"
 
 
 def build_messages(db_rec, anchor, tree, plan, db_description, schema_text, cfg=CFG, next_ids=None):
+    tabs = plan["tables"]
     fmt = {"name": tree["anchor_name"] or f"the row with {anchor['key']} = {tree['key_value']}", "key": anchor["key"],
-           "kv": tree["key_value"], "t": anchor["table"], "down": ", ".join(tree["down"]) or "(none)",
-           "up": ", ".join(tree["up"]) or "(none)",
-           "other_name": (plan.get("other") or {}).get("name", ""), "other_kv": (plan.get("other") or {}).get("key_value", "")}
-    user = USER.format(db_description=db_description, data_blocks=data_blocks(anchor, tree, plan), schema=schema_text,
-                       next_ids_block=next_ids_block(anchor, tree, next_ids),
-                       type_text=TYPE_TEXT[plan["task_type"]].format(**fmt), shape_text=shape_text(anchor, tree, plan),
+           "kv": tree["key_value"], "t": anchor["table"],
+           "down": ", ".join(t for t in tabs["own"] if t != anchor["table"]) or "(none)",
+           "up": ", ".join(tabs["public"]) or "(none)", "other_name": "", "other_kv": ""}
+    user = USER.format(db_description=db_description, data_blocks=data_blocks(tree, plan["events"], _who(plan["task_type"]), cfg),
+                       schema=schema_text, next_ids_block=next_ids_block(plan, next_ids),
+                       type_text=TYPE_TEXT[plan["task_type"]].format(**fmt), shape_text=shape_text(anchor, plan),
                        style_text=style_text(plan),
                        id_fields=", ".join(anchor["names"] + [anchor["key"]]), max_rows=cfg["MAX_ROWS_PER_STMT"])
     system = SYSTEM.format(example_instruction=plan["example"], max_rows=cfg["MAX_ROWS_PER_STMT"])

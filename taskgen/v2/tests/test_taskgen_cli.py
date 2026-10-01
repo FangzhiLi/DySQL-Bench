@@ -46,6 +46,8 @@ def test_trees_check_dedup_convert_without_a_model(tmp_path):
     assert "n_selected" in run("stats", *args).stdout
 
 
-def test_trees_refuse_an_unconfirmed_profile(tmp_path):
-    r = run("trees", *setup(tmp_path, confirmed=False), check=False)
-    assert r.returncode == 1 and "not confirmed" in r.stderr
+def test_trees_and_check_refuse_an_unconfirmed_profile(tmp_path):
+    args = setup(tmp_path, confirmed=False)
+    for cmd in ("trees", "check"):
+        r = run(cmd, *args, check=False)
+        assert r.returncode == 1 and "not confirmed" in r.stderr

@@ -57,7 +57,8 @@ def parse_answer(text):
 def make_candidate(db_rec, anchor, tree, plan, idx, resp, parsed, error):
     return {"id": f"{db_rec['source']}:{db_rec['db']}:{anchor['table']}:{tree['key_value']}:{idx}",
             "db": db_rec["db"], "source": db_rec["source"], "anchor_table": anchor["table"], "anchor_key": anchor["key"],
-            "key_value": tree["key_value"], "anchor_name": tree["anchor_name"], "plan": plan,
+            "key_value": tree["key_value"], "anchor_name": tree["anchor_name"], "profile_version": tree.get("profile_version"),
+            "plan": plan,
             "instruction": parsed["instruction"] if parsed else None, "actions": parsed["actions"] if parsed else None,
             "outputs": parsed["outputs"] if parsed else None,
             "gen_model": (resp or {}).get("model"), "usage": (resp or {}).get("usage"),
@@ -78,7 +79,7 @@ def _drop_api_failures(out_path):
     return {r["id"] for r in rows} - {r["id"] for r in keep}
 
 
-def run(db_rec, anchor, trees_list, others, client, out_path, rng, workers=8, per_tree=1, cfg=prompt.CFG,
+def run(db_rec, anchor, trees_list, client, out_path, rng, workers=8, per_tree=1, cfg=prompt.CFG,
         db_description="", schema_text="", retry_errors=False, next_ids=None):
     if retry_errors:
         _drop_api_failures(out_path)
@@ -89,7 +90,7 @@ def run(db_rec, anchor, trees_list, others, client, out_path, rng, workers=8, pe
             cid = f"{db_rec['source']}:{db_rec['db']}:{anchor['table']}:{tree['key_value']}:{idx}"
             if cid in done:
                 continue
-            plan = prompt.sample_plan(rng, tree, anchor, [o for o in others if o["key_value"] != tree["key_value"]], cfg)
+            plan = prompt.sample_plan(rng, tree, anchor, cfg)
             jobs.append((tree, idx, plan))
 
     def one(job):
