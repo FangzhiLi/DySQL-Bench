@@ -52,9 +52,9 @@ fall right. Use ≥ 0.46 for this model; 0.50 gives 53k tokens.
 
 ## Verifier (task generation, 2026-09-29)
 
-- Model `nvidia/Qwen3.8-27B-NVFP4` (21 GB on disk, includes the vision tower), served as `qwen3.8-27b-nvfp4` on :8003 by `DySQL-Bench/scripts/serve_verifier.sh`.
+- Model `nvidia/Qwen3.8-27B-NVFP4` (21 GB on disk, includes the vision tower), served as `qwen3.8-27b-nvfp4` on :8003 by `taskgen/v1/scripts/serve_verifier.sh`.
 - **Needs a newer vLLM than the eval image.** `cu130-nightly` (vLLM 0.19.2rc1, built 2026-04-23) fails with `no module or parameter named 'lm_head.input_scale'`: NVIDIA quantized `lm_head` to NVFP4 and that vLLM cannot load it. The script uses `vllm/vllm-openai:v0.30.0-aarch64` (torch 2.13+cu130, runs on driver 580 / CUDA 13.0). Do not use `v0.30.0-aarch64-cu129`: its torch 2.14 and torchvision 0.28+cu129 do not match, and startup dies with `operator torchvision::nms does not exist`.
-- vLLM 0.30 returns thinking under `message.reasoning`, not `reasoning_content` (GLM still uses `reasoning_content`); `taskgen/llm.py` reads both.
+- vLLM 0.30 returns thinking under `message.reasoning`, not `reasoning_content` (GLM still uses `reasoning_content`); `taskgen/v1/taskgen_v1/llm.py` reads both.
 - GPU_UTIL 0.30 = 36.5 GiB: weights + non-torch 19.4 GiB, activations 2.6 GiB, KV cache 14.5 GiB. Startup about 2.5 minutes.
 - Had to stop `dysql-agent-1.7b` first (free memory was about 30 GiB with the 4B agent and the 72B user simulator running). With all three up, host free memory drops to 1–2 GiB; do not start anything else.
 - Single request: about 11 tokens/s decode.

@@ -1,5 +1,7 @@
 # 训练数据生成：候选库筛选条件
 
+> 2026-10-01 目录重组后，文中的代码、脚本和文档路径都是重组前的旧路径，新旧对照见 [taskgen/README.md](../../README.md)。正文保持原样，作为当时的记录。
+
 目标：从 BIRD 1.0、Spider2.0-lite（仅 SQLite 任务用到的 30 个库）、Spider 1.0、SynSQL-2.5M 中选库，生成 DySQL-Bench 风格（多轮、以写操作为主）的训练任务，用于 GRPO。DySQL 的 13 个库的统计见 `docs/dysql_db_info.md`。
 
 ## 原则：对齐结构特征，而不是尺寸统计

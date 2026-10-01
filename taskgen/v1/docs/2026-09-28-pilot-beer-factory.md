@@ -1,5 +1,7 @@
 # 训练任务生成 pipeline：实现回顾与 beer_factory 试点报告
 
+> 2026-10-01 目录重组后，文中的代码、脚本和文档路径都是重组前的旧路径，新旧对照见 [taskgen/README.md](../../README.md)。正文保持原样，作为当时的记录。试点的 82 条最终任务现在在 `taskgen/v1/output/`（本地，不进 git）；用 `gen:<db>` 评测时要设 `TASKGEN_MANIFEST=taskgen/v1/output/manifest.json`。
+
 日期：2026-09-29。分支 `isa/data-gen`，提交范围 `cad65d5..HEAD`（本地，未 push）。
 设计：`docs/2026-09-28-task-gen-design.md`。计划：`docs/data_gen/2026-09-28-task-gen-plan.md`。
 

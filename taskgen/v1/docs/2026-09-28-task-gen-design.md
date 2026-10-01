@@ -1,5 +1,7 @@
 # 训练任务生成：设计（2026-09-28）
 
+> 2026-10-01 目录重组后，文中的代码、脚本和文档路径都是重组前的旧路径，新旧对照见 [taskgen/README.md](../../README.md)。正文保持原样，作为当时的记录。
+
 目标：用筛选出来的候选库（`docs/data_gen/candidate_dbs.md`，55 个）生成 DySQL-Bench 风格的多轮写操作任务，作为 GRPO 的训练数据。选库规则见 `docs/2026-09-24-data-gen-db-selection.md`，DySQL 任务的实测分类见 `docs/data_gen/dysql_task_types.md`。本文记录 2026-09-28 讨论定下的设计，实现计划另见 `docs/data_gen/2026-09-28-task-gen-plan.md`。
 
 ## 1. 范围

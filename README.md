@@ -1,5 +1,11 @@
 <h1 align="center">Rethinking Text-to-SQL: Dynamic Multi-turn SQL Interaction for Real-world Database Exploration</h1>
 
+> **About this fork.** Besides the upstream benchmark, it holds two pieces of our own work:
+> - Evaluation changes inside `DySQL-Bench/` (logging, resumable runs, `gen:<db>` task sets), documented in [docs/](docs/README.md).
+> - A generator of DySQL-style training tasks in [taskgen/](taskgen/README.md).
+>
+> The official task-generation scripts in `data_pipeline_shell/` are unchanged.
+
 This repository contains the official implementation of our paper, **"Rethinking Text-to-SQL: Dynamic Multi-turn SQL Interaction for Real-world Database Exploration"**.
 
 <div style="width:100%; overflow-x:auto;">

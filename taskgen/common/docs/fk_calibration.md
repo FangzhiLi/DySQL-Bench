@@ -48,4 +48,4 @@ complex_oracle 的 products 表只保留了 72 个产品中的 24 个，但 DySQ
 
 所以按取值推断额外要求：子表的不同值至少覆盖被引用表键的 10%（`min_coverage=0.1`）。真正以角色命名的外键（`winner_id → Wrestlers`）会覆盖被引用键的大部分。加上这条后，DySQL 13 个库只剩最后一条真外键，验收测试仍然 13/13 通过。
 
-代价：如果某个真外键的子表只覆盖被引用键的不到 10%，这条规则会漏掉它；这种情况用 `docs/data_gen/fk_extra.json` 人工补。
+代价：如果某个真外键的子表只覆盖被引用键的不到 10%，这条规则会漏掉它；这种情况用 `taskgen/common/data/fk_extra.json` 人工补。

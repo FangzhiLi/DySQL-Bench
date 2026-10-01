@@ -1,6 +1,6 @@
 # DySQL-Bench 任务类型（1062 个任务实测）
 
-逐任务结果：`docs/data_gen/dysql_task_types.csv`，由 `DySQL-Bench/scripts/classify_dysql_tasks.py` 生成（2026-09-25）。
+逐任务结果：`taskgen/common/data/dysql_task_types.csv`，由 `taskgen/common/scripts/classify_dysql_tasks.py` 生成（2026-09-25）。
 
 ## 方法
 

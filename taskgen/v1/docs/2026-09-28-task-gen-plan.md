@@ -1,5 +1,7 @@
 # 训练任务生成 pipeline：实施计划
 
+> 2026-10-01 目录重组后，文中的代码、脚本和文档路径都是重组前的旧路径，新旧对照见 [taskgen/README.md](../../README.md)。正文保持原样，作为当时的记录。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 用 `candidate_anchors.json` 驱动一条通用 pipeline，从候选库生成 DySQL 风格的多轮写操作任务：建树 → 出题（GLM-5.3）→ 执行检查 → LLM 校验（Qwen3.8-27B-NVFP4）→ 去重 → 转成 `Task` 并接入通用 `GenEnv`。先在 beer_factory 上试点，再跑 23 个有名字的人物库。

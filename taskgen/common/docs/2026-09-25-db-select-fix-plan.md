@@ -1,5 +1,7 @@
 # 选库筛选器修复：实施计划
 
+> 2026-10-01 目录重组后，文中的代码、脚本和文档路径都是重组前的旧路径，新旧对照见 [taskgen/README.md](../../README.md)。正文保持原样，作为当时的记录。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把选库规则从"必须有人物表"改成"有锚点实体，且锚点范围内有可更新的表"。外键一律先用真实数据验证再使用。然后重跑，得到新的候选库清单，以及给建树脚本用的锚点记录。

@@ -1,13 +1,13 @@
 # 候选库变化（旧 34 → 新 55）
 
-旧清单：commit 4bdf1cd 生成的 34 个候选（规则：必须有人物表）。新清单：`docs/data_gen/candidate_dbs.csv`（2026-09-25 重跑，用时 3 分 37 秒），逐库锚点记录见 `docs/data_gen/candidate_anchors.json`。
+旧清单：commit 4bdf1cd 生成的 34 个候选（规则：必须有人物表）。新清单：`taskgen/common/data/candidate_dbs.csv`（2026-09-25 重跑，用时 3 分 37 秒），逐库锚点记录见 `taskgen/common/data/candidate_anchors.json`。
 
 新清单按来源：BIRD 41、Spider2-lite 8、Spider 1.0 6、SynSQL 0。按锚点类型：有带名字的人物锚点 23 个，只有 ID 的人物锚点 10 个，只有实体锚点 22 个。
 
 规则变化：
 - 人物表硬条件改为"锚点 + 范围内有更新目标"。
 - 外键按命中率验证，阈值 0.3；没有值可查的外键记为未验证并保留。
-- 推断修正：guid 列、通用 id、复合主键成员、1:1 扩展表、按取值推断。按取值推断额外要求子表的不同值覆盖被引用键的 10% 以上（执行时补充，依据见 `docs/data_gen/fk_calibration.md`）。
+- 推断修正：guid 列、通用 id、复合主键成员、1:1 扩展表、按取值推断。按取值推断额外要求子表的不同值覆盖被引用键的 10% 以上（执行时补充，依据见 `taskgen/common/docs/fk_calibration.md`）。
 - 新增复合键识别。
 - activity_1 和 college_3 按名字排除（用户 2026-09-25 决定）：它们的 Student 表和 CoSQL/SParC 评测库 pets_1 同模板，包含度 0.57。
 
