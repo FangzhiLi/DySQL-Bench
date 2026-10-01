@@ -214,3 +214,60 @@ def test_several_new_rows_get_consecutive_auto_keys(db):
     r = check.run_check(db, cand("I am a5 b5. Add two new orders of product 7 for me.",
                                  ["INSERT INTO orders (order_id, customer_id, product_id, qty) VALUES (100, 5, 7, 1), (101, 5, 7, 1)"]))
     assert r["ok"], r["reasons"]
+
+
+# --- v2: gold that reads the clock or random() ---
+
+RENTAL = """
+CREATE TABLE customers (customer_id INTEGER PRIMARY KEY, first_name TEXT, last_name TEXT);
+CREATE TABLE rental (rental_id INTEGER PRIMARY KEY, customer_id INTEGER REFERENCES customers(customer_id),
+                     return_date TEXT, last_update TEXT);
+""" + rows("customers", 10, lambda i: f"{i},'a{i}','b{i}'") + rows("rental", 20, lambda i: f"{i},{i % 10},NULL,'2006-02-15'")
+RENTAL_FKS = [{"table": "rental", "col": "customer_id", "ref_table": "customers", "ref_col": "customer_id", "hit": 1.0, "source": "declared"}]
+RENTAL_CUSTOMER = {**CUSTOMER, "rows": 10, "down": ["rental"], "up": [], "update_targets": ["customers", "rental"]}
+
+
+@pytest.fixture
+def rental(tmp_path):
+    return {"source": "test", "db": "rental", "path": make_db(tmp_path, "rental", RENTAL), "anchors": [RENTAL_CUSTOMER], "fks": RENTAL_FKS}
+
+
+def test_clock_value_in_a_compared_column_is_rejected(rental):
+    r = check.run_check(rental, cand("I am a5 b5. Mark my rental 5 as returned right now.",
+                                     ["UPDATE rental SET return_date = CURRENT_TIMESTAMP WHERE rental_id = 5"]))
+    assert r["reasons"] == ["nondeterministic: rental"]
+
+
+def test_clock_value_in_a_volatile_column_passes(rental):     # the eval hash skips last_update (pagila)
+    r = check.run_check(rental, cand("I am a5 b5. Set the return date of my rental 5 to 2024-01-02.",
+                                     ["UPDATE rental SET return_date = '2024-01-02', last_update = CURRENT_TIMESTAMP WHERE rental_id = 5"]))
+    assert r["ok"], r["reasons"]
+
+
+def test_date_only_clock_value_passes(rental):                # same value all day (fails only across UTC midnight)
+    r = check.run_check(rental, cand("I am a5 b5. Mark my rental 5 as returned today.",
+                                     ["UPDATE rental SET return_date = CURRENT_DATE WHERE rental_id = 5"]))
+    assert r["ok"], r["reasons"]
+
+
+def test_random_value_is_rejected(rental):
+    r = check.run_check(rental, cand("I am a5 b5. Give my rental 5 a random return code.",
+                                     ["UPDATE rental SET return_date = abs(random()) WHERE rental_id = 5"]))
+    assert r["reasons"] == ["nondeterministic: rental"]
+
+
+def test_clock_value_with_a_failing_statement_is_not_rerun(rental):
+    r = check.run_check(rental, cand("I am a5 b5. Mark my rental 5 as returned right now.",
+                                     ["UPDATE rental SET return_date = CURRENT_TIMESTAMP WHERE rental_id = 5", "UPDATE nope SET a = 1"]))
+    assert any(x.startswith("sql_error") for x in r["reasons"]) and not any(x.startswith("nondeterministic") for x in r["reasons"])
+
+
+def test_snapshot_quotes_names_and_skips_volatile_columns(tmp_path):
+    c = sqlite3.connect(make_db(tmp_path, "s", 'CREATE TABLE "Sales Orders" (id INTEGER PRIMARY KEY, "Order Date" TEXT, last_update TEXT);'
+                                              "INSERT INTO \"Sales Orders\" VALUES (2, 'b', 'x'), (1, 'a', 'y');"))
+    assert check.snapshot(c, {"Sales Orders"}) == {"Sales Orders": [(1, "a"), (2, "b")]}
+
+
+def test_volatile_columns_match_the_eval():
+    from dysql_bench.envs.base import VOLATILE_COL_RE
+    assert check.VOLATILE_COL_RE.pattern == VOLATILE_COL_RE.pattern

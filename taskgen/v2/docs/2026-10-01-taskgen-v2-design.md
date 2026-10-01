@@ -16,7 +16,7 @@
 | D2 | 根默认一个，college_2 和 school_scheduling 双根；hr_1、address 保留；23 个库的根见 §4.1 | 论文每库一个主实体；DySQL 两群人都会来的库有例外 |
 | D3 | 树以事件记录为单位嵌套，父行取被抽中事件实际引用的；出题时再抽事件 | 论文 Fig. 14 的 `build_info_tree`；v1 兄弟表对不上、两跳公共表看不到 |
 | D4 | 校验先用**一个模型**：`deepseek-v4.1-flash`，走 ollama.com 的 OpenAI 兼容接口（`.env` 已配好）；代码按"模型列表 + 每模型票数"设计；要不要加第二个由校准决定 | 官方实际是两模型串跑各过多数；我们有执行检查在前、GRPO 奖励统计在后兜底 |
-| D5 | 校验模型先做**校准**，三组样本：①正样本 = 过了 v2 执行检查的 DySQL gold（原样 gold 的通过率单独报告，不设门槛）；②负样本 = 程序化改坏的 gold，只算改坏后库哈希确实变了、且仍过执行检查的；③人工标注的真实候选 100–150 条（v1 试点的 93 条起步），覆盖 instruction 一侧的错误。漏的类别补进执行检查，而不是加模型 | 单模型的风险是系统性盲点。DySQL gold 本身有坏题（47 条全 0 行、42 条缺字面量、13 条用了时间函数、retail 按不唯一邮箱定位），而且被 DeepSeek-R1 筛过，用同系模型校准会偏高 |
+| D5 | 校验模型先做**校准**，三组样本：①正样本 = 过了 v2 执行检查的 DySQL gold（原样 gold 的通过率单独报告，不设门槛）；②负样本 = 程序化改坏的 gold，只算改坏后库哈希确实变了、且仍过执行检查的；③人工标注的真实候选 100–150 条（v1 试点的 93 条起步），覆盖 instruction 一侧的错误。漏的类别补进执行检查，而不是加模型 | 单模型的风险是系统性盲点。DySQL gold 本身有坏题（47 条全 0 行、42 条缺字面量、约 3 条把当前时间写进评测会比较的列、retail 按不唯一邮箱定位），而且被 DeepSeek-R1 筛过，用同系模型校准会偏高 |
 | D6 | **这一轮不出第 4 类**（库内的人改别人的数据），也不为此加 staff 根；类型只抽 1、2、3、5。备注见 §4.8 | agent policy 写明 "must deny any requests for tasks related to any other user"（v1 试点 4B 在第 4 类 0/6）。DySQL 按 check 规则的 17.6% 是假象：186 条里 retail 占 100（不唯一邮箱把同邮箱的别人算进来）、eu_soccer 35（分析员被当成库内人）、38 条写入是新插入的人物行被算成"别人"；真实的约 5% |
 | D7 | gold 里不放 SELECT；prompt 去掉 `outputs` 和只读提问 | 奖励只看库哈希；v1 73% 的题带只读提问，DySQL 4% |
 | D8 | 说话人"名字 + ID/邮箱"一起给，被改的记录直接给 ID；按归属子查询的形状降到 10% 左右 | DySQL 70% 前 25 词内给 ID，子查询 6%；v1 28% / 45% |
@@ -41,7 +41,7 @@ v2 试点和全量都用 `task_stats.py`（§5 G）和 DySQL 比，目标区间�
 | 每题改动 >10 行 | 6.2% | 0.7% | 3–8% |
 | 类型 1/2/3/5 | 分类脚本：本人 40、本人+公共 15、只改公共 5、库外代办 23（另有改别人 5、改实体 8、无改动 5） | 46/9/3/30（另有第 4 类 12） | 50 / 13 / 6 / 31 左右；不抽第 4 类 |
 | 难度 easy/medium/hard | 26/45/28 | 21/43/36 | 25–30 / 40–50 / 25–30，且"难"主要来自多语句多表 |
-| 执行检查通过率 | 85.5%（gold，908/1062，分母含 47 条无改动题） | 91.8% | ≥92%；在 DySQL gold 上，新增的拒绝只来自列出的原因（时间函数约 13 条等），逐条看过 |
+| 执行检查通过率 | 85.5%（gold，908/1062，分母含 47 条无改动题） | 91.8% | ≥92%；在 DySQL gold 上，新增的拒绝只来自列出的原因（时间函数约 3 条等），逐条看过 |
 | 校验：正样本通过率 | — | 未校准 | 过了 v2 执行检查的 DySQL gold ≥95% |
 | 校验：负样本被拒率 | — | — | 按改坏类别报告，整体 ≥80%；人工标注集上报告精度和召回 |
 | 要求类型 = 算出类型 | — | 92% | ≥97% |
@@ -101,10 +101,10 @@ confirmed: false → 人工过后改 true
 ### 4.5 执行检查（改 `check.py`）
 - 字面量按词边界匹配，序数词 first…twelfth → 数字。
 - **SQLite 会自动分配的新主键算隐含字面量：** 表是"可省 ID"的（`schema.pk_info`，§4.3），INSERT 写的主键正好是 SQLite 会分配的下一个值（多行时依次加一）。这个值在这条 INSERT 和之后引用新行的语句里都不必出现在 instruction 里。其余表的新 ID 仍必须在 instruction 里。往 `no_insert` 的表 INSERT 算拒绝（要档案，计划 2）。
-- 拒绝 `CURRENT_TIMESTAMP`、`CURRENT_DATE`、`date('now')`、`random()`；gold 在两份副本上各跑一遍比整库哈希，不一致拒。
+- **非确定性：** gold 里有读时钟或随机数的函数（`CURRENT_TIMESTAMP`、`'now'`、`random()` 等）时，间隔 1.1 秒执行两遍，比较评测哈希会比较的列（去掉 `last_update` 这类 volatile 列，正则和评测一致）；不一致就拒（`nondeterministic`）。只精确到日的值（`CURRENT_DATE`、`date('now')`）同一天内一致，放行；写进 volatile 列的时间也放行（pagila 的 `last_update = CURRENT_TIMESTAMP`）。不含这些函数的 gold 不重跑：同一个库上执行同样的语句，SQLite 的结果是确定的。
 - 范围 = 档案里出现的表（roots、persons、events 及其 parents、attributes、public）的并集，减去 `exclude`；归属追溯用档案 `persons` 和 `same_as`。
 - **新插入的人物行**不再算"别人"：INSERT 进人物表且不是说话人的行，标 `new_person`，按公共数据处理（v1 里造成 54 条类型不一致，也是 DySQL 被算出 17.6% 第 4 类的来源之一）。
-- 其余规则不变（noop、bulk 50、txn、out_of_scope）。在 DySQL gold 上重新校准：相对 v1 新增的拒绝只应来自上面列出的原因（时间函数约 13 条：pagila 10、retail_world 2、entertainment 1），逐条看过。
+- 其余规则不变（noop、bulk 50、txn、out_of_scope）。在 DySQL gold 上重新校准：相对 v1 新增的拒绝只应来自上面列出的原因（时间函数里会被拒的约 3 条：pagila 把 `CURRENT_TIMESTAMP` 写进 return_date、payment_date；其余写的是 last_update，或只精确到日），逐条看过。
 
 ### 4.6 校验（改 `verify.py`、`llm.py` 配置）
 - 配置：`TASKGEN_VERIFY_MODELS="deepseek-v4.1-flash:2"`（模型:票数，逗号分隔多个；端点和 key 沿用 `TASKGEN_VERIFY_BASE_URL`、`TASKGEN_VERIFY_API_KEY`）；每个模型 Yes 严格多于 No 才过（2 票即两票都要 Yes），全部模型通过才通过。

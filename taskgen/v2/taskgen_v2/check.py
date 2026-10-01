@@ -1,7 +1,7 @@
 # taskgen/v2/taskgen_v2/check.py
 """Execution check of a candidate task on an in-memory copy of its database, plus the derived labels
 (task type, difficulty, template) that dedup and the pilot statistics use. Nothing here calls a model."""
-import json, re, sqlite3, unicodedata
+import json, re, sqlite3, time, unicodedata
 import sqlparse
 from sqlparse import tokens as T
 from taskgen_common.db_select import _q
@@ -15,6 +15,12 @@ TXN = re.compile(r"(?is)^\s*(begin|commit|end|rollback|savepoint|release)\b")
 _NAME = r'(?:"([^"]+)"|\[([^\]]+)\]|`([^`]+)`|([\w$]+))'
 # archive = INSERT whose source is a SELECT (not a subquery inside VALUES) ...
 ARCHIVE_SRC = re.compile(r"(?is)^\s*insert\b(?:(?!\bvalues\b).)*?\bselect\b.*?\bfrom\s+" + _NAME)
+# gold that reads the clock or random(): run it twice and compare what the eval hash compares
+NONDET = re.compile(r"(?i)\bcurrent_(?:timestamp|time|date)\b|'now'|\brandom(?:blob)?\s*\(|\bunixepoch\s*\(")
+# columns the eval hash skips, copied from DySQL-Bench/dysql_bench/envs/base.py (test_volatile_columns_match_the_eval)
+VOLATILE_COL_RE = re.compile(
+    r"(?i)^(last_?update|updated_?at|update_?time|modified(_at)?|modification_?time|create(d)?_?at|timestamp)$")
+RERUN_GAP_S = 1.1   # CURRENT_TIMESTAMP has one-second resolution; date-only values agree within a day and pass
 
 
 def split_statements(sql):
@@ -181,6 +187,31 @@ def difficulty(writes, task_type, stmts):
     return {"score": score, "level": "easy" if score == 0 else "medium" if score <= 2 else "hard", "features": f}
 
 
+def snapshot(db, tables):
+    """Per table, what the eval hash compares: the non-volatile columns of every row, in a stable order."""
+    out = {}
+    for t in sorted(tables):
+        cols = [r[1] for r in db.execute(f"PRAGMA table_info({_q(t)})")]
+        keep = ", ".join(_q(c) for c in cols if not VOLATILE_COL_RE.match(c))
+        out[t] = (db.execute(f"SELECT {keep} FROM {_q(t)} ORDER BY {keep}").fetchall() if keep
+                  else db.execute(f"SELECT COUNT(*) FROM {_q(t)}").fetchone())
+    return out
+
+
+def rerun_changes(db, stmts, tables):
+    """Run the write statements again, RERUN_GAP_S later, from the same starting state. The caller's open
+    transaction holds the first run. Returns the tables whose compared columns differ, '' when the runs agree."""
+    first = snapshot(db, tables)
+    db.execute("ROLLBACK"); time.sleep(RERUN_GAP_S); db.execute("BEGIN")
+    try:
+        for s in stmts:
+            db.execute(s).fetchall()
+    except sqlite3.Error as e:
+        return f"rerun failed: {e}"
+    second = snapshot(db, tables)
+    return ", ".join(t for t in sorted(tables) if first[t] != second[t])
+
+
 def _memory_copy(path):
     src = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     db = sqlite3.connect(":memory:", isolation_level=None)
@@ -272,6 +303,10 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG):
                     out["reasons"].append(f"bulk: {len(rs)} rows in {op} {table}")
                 labels.append(lab)
                 out["writes"].append({"op": op, "table": table, "rows": len(rs), "label": lab})
+        if any(NONDET.search(s) for s in stmts) and not any(x.startswith("sql_error") for x in out["reasons"]):
+            changed = rerun_changes(db, stmts, {tracer.canon(write_target(s)[1]) for s in stmts})
+            if changed:
+                out["reasons"].append("nondeterministic: " + changed)
     finally:
         db.execute("ROLLBACK"); db.close()
     if not out["writes"] or (all(w["rows"] == 0 for w in out["writes"])
