@@ -24,7 +24,9 @@ def test_trees_check_dedup_convert_without_a_model(tmp_path):
     all_trees = io.read_jsonl(out / "trees.jsonl")
     assert len(all_trees) == 6                                   # a rerun adds nothing
     trees = [t for t in all_trees if t["anchor_table"] == "customers"]
-    assert len(trees) == 3 and all(t["down"].get("orders") for t in trees) and len(json.load(open(out / "others.json"))["customers"]) >= 3
+    assert len(trees) == 3 and all(t["down"].get("orders") for t in trees)
+    others = json.load(open(out / "others.json"))["customers"]
+    assert len(others) >= 3 and not ({o["key_value"] for o in others} & {t["key_value"] for t in trees})   # not the speakers
     # a hand-written candidate stands in for the model
     t = trees[0]
     io.append_jsonl(out / "candidates.jsonl", [{"id": "test:shop2:customers:%s:0" % t["key_value"], "db": "shop2", "source": "test",

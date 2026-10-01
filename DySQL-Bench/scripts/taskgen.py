@@ -39,9 +39,11 @@ def cmd_trees(a):
         built = [t for kv in kvs[:a.n] if (anchor["table"], str(kv)) not in done
                  and (t := trees.build_tree(c, anchor, rec["fks"], kv, rng))]
         io.append_jsonl(f"{out}/trees.jsonl", built)
-        # candidate 'other people' for type 4: the 20 rows after the sampled ones, names only
+        # candidate 'other people' for type 4: the 20 rows after the sampled ones (not speakers of other tasks), names only;
+        # a database whose anchor has fewer rows than --n falls back to the sampled rows
         extra = [trees.build_tree(c, anchor, rec["fks"], kv, rng, max_down=0, max_up=0) for kv in kvs[a.n:]]
-        others[anchor["table"]] = [{"key_value": t["key_value"], "name": t["anchor_name"]} for t in built + extra if t][:20]
+        pool = [t for t in extra if t] or [t for t in built if t]
+        others[anchor["table"]] = [{"key_value": t["key_value"], "name": t["anchor_name"]} for t in pool][:20]
         print(f"{anchor['table']}: {len(built)} trees written")
     json.dump(others, open(f"{out}/others.json", "w"), ensure_ascii=False, default=str)
 
@@ -72,9 +74,9 @@ def cmd_generate(a):
     for anchor in io.person_anchors(rec):
         ts = [t for t in all_trees if t["anchor_table"] == anchor["table"]]
         s = generate.run(rec, anchor, ts, others.get(anchor["table"], []), client, f"{out}/candidates.jsonl",
-                         random.Random(a.seed), workers=a.workers, per_tree=a.per_tree,
-                         db_description=desc, schema_text=schema.schema_block(path), retry_errors=a.retry_errors,
-                         next_ids=next_ids)
+                         random.Random(f"{a.seed}:{anchor['table']}"),   # per anchor: two anchors must not draw the same plans
+                         workers=a.workers, per_tree=a.per_tree, db_description=desc, schema_text=schema.schema_block(path),
+                         retry_errors=a.retry_errors, next_ids=next_ids)
         total = {k: total[k] + s[k] for k in total}
     usage = sum((c.get("usage") or {}).get("total_tokens", 0) for c in io.read_jsonl(f"{out}/candidates.jsonl"))
     print(f"{total} in {time.time() - t0:.0f}s; total tokens so far {usage}")
