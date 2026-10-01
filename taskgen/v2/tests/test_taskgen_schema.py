@@ -1,14 +1,7 @@
 # tests/test_taskgen_schema.py
-import json, os, sqlite3
+import sqlite3
 from taskgen_common.testing import make_db, rows, SHOP
 from taskgen_v2 import schema
-
-
-class FakeClient:
-    def __init__(self): self.calls = 0
-    def chat(self, messages, **kw):
-        self.calls += 1
-        return {"content": "A small web shop: customers place orders for products.", "usage": {}}
 
 
 def test_ddl_lists_every_user_table(tmp_path):
@@ -42,24 +35,6 @@ def test_ddl_and_notes_of_the_tables_in_scope_only(tmp_path):
 
 def test_column_descriptions_absent_for_spider(tmp_path):
     assert schema.column_descriptions(make_db(tmp_path, "shop", SHOP)) == {}
-
-
-def test_describe_db_calls_llm_once_and_caches(tmp_path):
-    db = make_db(tmp_path, "shop", SHOP); cache = tmp_path / "desc.json"; client = FakeClient()
-    a = schema.describe_db("test:shop", db, client, str(cache))
-    b = schema.describe_db("test:shop", db, client, str(cache))
-    assert a == b == "A small web shop: customers place orders for products." and client.calls == 1
-    assert json.load(open(cache)) == {"test:shop": a}
-
-
-def test_next_ids_for_integer_primary_keys(tmp_path):
-    db = make_db(tmp_path, "shop", SHOP)
-    assert schema.next_ids(db) == {"customers": ("customer_id", 60), "products": ("product_id", 60), "orders": ("order_id", 100)}
-    # a table without an integer primary key is left out
-    import sqlite3
-    c = sqlite3.connect(db); c.execute("CREATE TABLE tags (name TEXT PRIMARY KEY)"); c.execute("CREATE TABLE empty (id INTEGER PRIMARY KEY)"); c.commit(); c.close()
-    n = schema.next_ids(db)
-    assert "tags" not in n and n["empty"] == ("id", 1)
 
 
 def test_pk_info_classifies_primary_keys(tmp_path):

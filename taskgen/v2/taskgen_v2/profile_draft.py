@@ -42,7 +42,6 @@ SYSTEM = """You write the profile of a SQLite database for a task generator. The
 {examples}"""
 
 USER = """# Database {key}
-{description}
 
 ## Hints from the person who will review the profile
 Roots: {roots}
@@ -113,9 +112,9 @@ def _examples_text(examples):
                        for x in examples)
 
 
-def messages(db_key, conn, rec, db_path, hints, description, examples):
+def messages(db_key, conn, rec, db_path, hints, examples):
     notes = "\n".join(f"- {n}" for n in hints.get("notes") or []) or "(no notes)"
-    user = USER.format(key=db_key, description=description or "", roots=", ".join(hints["roots"]), notes=notes,
+    user = USER.format(key=db_key, roots=", ".join(hints["roots"]), notes=notes,
                        schema=compact_schema(conn, rec["fks"], rec.get("fks_composite", ()), schema.column_descriptions(db_path)))
     return [{"role": "system", "content": SYSTEM.format(examples=_examples_text(examples))}, {"role": "user", "content": user}]
 
@@ -134,9 +133,9 @@ def parse(text):
     raise ValueError(f"no profile JSON in the answer: {last}")
 
 
-def draft(client, db_key, conn, rec, db_path, hints, description, examples):
+def draft(client, db_key, conn, rec, db_path, hints, examples):
     """A profile draft with confirmed=false and a 'draft' record {model, rounds, errors}; errors is [] when it validates."""
-    msgs = messages(db_key, conn, rec, db_path, hints, description, examples)
+    msgs = messages(db_key, conn, rec, db_path, hints, examples)
     prof, errs, rounds, model = None, [], 0, None
     for rounds in range(1, REPAIR_ROUNDS + 2):
         resp = client.chat(msgs, temperature=DRAFT_TEMPERATURE, max_tokens=DRAFT_MAX_TOKENS)

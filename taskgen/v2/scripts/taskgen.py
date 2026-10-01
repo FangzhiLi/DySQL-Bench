@@ -4,7 +4,6 @@ Usage (from taskgen/v2/), pilot on beer_factory (its profile in data/db_profiles
   P=~/miniconda3/envs/dysql/bin/python; DB=bird:beer_factory
   $P scripts/taskgen.py profile  check --db $DB
   $P scripts/taskgen.py trees    --db $DB --n 50 --seed 0
-  $P scripts/taskgen.py describe --db $DB
   $P scripts/taskgen.py generate --db $DB --workers 5
   $P scripts/taskgen.py check    --db $DB
   $P scripts/taskgen.py verify   --db $DB --votes 3 --workers 3
@@ -18,8 +17,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 V2 = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [V2, os.path.join(os.path.dirname(V2), "common")]   # taskgen_v2, taskgen_common
 from taskgen_v2 import io, trees, schema, llm, prompt, generate, check, verify, dedup, convert, stats, db_profile, owners, profile_draft
-
-DESC_PATH = os.path.join(io.DATA, "db_descriptions.json")
 
 
 def rec_and_dir(a):
@@ -63,11 +60,6 @@ def cmd_trees(a):
         print(f"{t}: {len(built)} trees written")
 
 
-def cmd_describe(a):
-    rec, _ = rec_and_dir(a)
-    print(schema.describe_db(a.db, io.resolve_db_path(rec["path"]), llm.client_from_env("GEN"), DESC_PATH))
-
-
 def cmd_generate(a):
     rec, out = rec_and_dir(a)
     prof = profile_of(a)
@@ -78,7 +70,7 @@ def cmd_generate(a):
     all_trees = io.read_jsonl(f"{out}/trees.jsonl")
     if a.retry_errors:   # their check results are stale once the candidates are regenerated
         failed = {c["id"] for c in io.read_jsonl(f"{out}/candidates.jsonl")
-                  if c.get("instruction") is None and (c.get("error") or "").startswith(("LLMError", "RuntimeError", "ConnectionError"))}
+                  if c.get("instruction") is None and (c.get("error") or "").startswith(generate.RETRYABLE)}
         chk = [r for r in io.read_jsonl(f"{out}/check.jsonl") if r["id"] not in failed]
         if os.path.exists(f"{out}/check.jsonl"):
             os.remove(f"{out}/check.jsonl")
@@ -165,14 +157,13 @@ def draft_profiles(a):
     hints, recs = json.load(open(a.hints, encoding="utf-8")), io.load_db_recs(a.anchors)
     have = db_profile.load(a.profiles)
     todo = [k for k in ([a.db] if a.db else sorted(hints)) if a.redo or k not in have]
-    desc = json.load(open(DESC_PATH, encoding="utf-8")) if os.path.exists(DESC_PATH) else {}
     client, examples = llm.client_from_env("GEN"), profile_draft.load_examples()
 
     def one(k):   # each thread opens its own connection
         rec = recs[k]
         path = io.resolve_db_path(rec["path"])
         try:
-            return k, profile_draft.draft(client, k, trees.open_ro(path), rec, path, hints[k], desc.get(k, ""), examples), None
+            return k, profile_draft.draft(client, k, trees.open_ro(path), rec, path, hints[k], examples), None
         except Exception as e:
             return k, None, f"{type(e).__name__}: {e}"
     with ThreadPoolExecutor(max_workers=max(1, a.workers)) as ex:
@@ -261,7 +252,6 @@ def main():
     p.add_argument("--out", help="render: the review page to write"); p.add_argument("--trees-out", help="render: sample trees for the reviewer (results/, not git)")
     p.add_argument("--sample-trees", type=int, default=1); p.add_argument("--seed", type=int, default=0); p.set_defaults(f=cmd_profile)
     p = sub.add_parser("trees"); common(p); p.add_argument("--n", type=int, default=50); p.add_argument("--anchor", help="one root table only"); p.set_defaults(f=cmd_trees)
-    p = sub.add_parser("describe"); common(p); p.set_defaults(f=cmd_describe)
     p = sub.add_parser("generate"); common(p); p.add_argument("--workers", type=int, default=5, help="GLM plan limit: 5 concurrent requests"); p.add_argument("--per-tree", type=int, default=1); p.add_argument("--retry-errors", action="store_true", help="regenerate candidates whose API call failed (e.g. 429)"); p.set_defaults(f=cmd_generate)
     p = sub.add_parser("check"); common(p); p.set_defaults(f=cmd_check)
     p = sub.add_parser("verify"); common(p); p.add_argument("--votes", type=int, default=3); p.add_argument("--workers", type=int, default=3, help="Ollama Pro plan limit: 3 concurrent requests"); p.add_argument("--all-dbs", action="store_true"); p.set_defaults(f=cmd_verify)

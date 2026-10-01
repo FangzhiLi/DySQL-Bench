@@ -46,7 +46,7 @@ def parse_answer(text):
     last = None
     for cand in io.json_candidates(text or ""):
         try:
-            obj = json.loads(cand)
+            obj = json.loads(cand, strict=False)   # a raw tab or newline inside a string is fine
         except json.JSONDecodeError as e:
             last = e; continue
         if not isinstance(obj, dict):
@@ -62,7 +62,7 @@ def parse_answer(text):
             if not isinstance(sql, str) or not sql.strip():
                 raise ParseError("action without sql")
             norm.append({"sql": sql.strip()})
-        return {"instruction": ins, "actions": norm, "outputs": obj.get("outputs") or []}
+        return {"instruction": ins, "actions": norm}
     raise ParseError(f"no JSON object with instruction/actions: {last}")
 
 
@@ -72,16 +72,18 @@ def make_candidate(db_rec, anchor, tree, plan, idx, resp, parsed, error):
             "key_value": tree["key_value"], "anchor_name": tree["anchor_name"], "profile_version": tree.get("profile_version"),
             "plan": plan,
             "instruction": parsed["instruction"] if parsed else None, "actions": parsed["actions"] if parsed else None,
-            "outputs": parsed["outputs"] if parsed else None,
             "gen_model": (resp or {}).get("model"), "usage": (resp or {}).get("usage"),
             "raw": (resp or {}).get("content"), "error": error}
 
 
+RETRYABLE = ("LLMError", "RuntimeError", "ConnectionError", "EmptyAnswer")
+
+
 def _drop_api_failures(out_path):
-    """Remove records whose model call failed (HTTP/network), so they are generated again. Parse failures stay:
-    the model answered, and asking again would just resample."""
+    """Remove records whose model call failed (HTTP/network) or came back without an answer, so they are generated
+    again. Parse failures stay: the model answered, and asking again would just resample."""
     rows = io.read_jsonl(out_path)
-    keep = [r for r in rows if not (r.get("instruction") is None and (r.get("error") or "").startswith(("LLMError", "RuntimeError", "ConnectionError")))]
+    keep = [r for r in rows if not (r.get("instruction") is None and (r.get("error") or "").startswith(RETRYABLE))]
     if len(keep) != len(rows):
         tmp = out_path + ".tmp"
         if os.path.exists(tmp):
@@ -126,6 +128,8 @@ def run(db_rec, anchor, trees_list, client, out_path, rng, workers=8, per_tree=1
             resp, parsed, error = f.result(), None, None
             if isinstance(resp, Exception):
                 error, resp = f"{type(resp).__name__}: {resp}", None
+            elif not (resp.get("content") or "").strip():   # GLM once spent all 16384 tokens thinking
+                error = f"EmptyAnswer: no answer after {(resp.get('usage') or {}).get('completion_tokens')} completion tokens"
             else:
                 try:
                     parsed = parse_answer(resp["content"])

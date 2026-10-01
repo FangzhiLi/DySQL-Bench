@@ -37,7 +37,7 @@ def test_trees_check_dedup_convert_without_a_model(tmp_path):
         "anchor_table": "customers", "anchor_key": "customer_id", "key_value": t["key_value"], "anchor_name": t["anchor_name"],
         "profile_version": t["profile_version"], "plan": {"task_type": "1_self", "difficulty": "easy"},
         "instruction": f"I am {t['anchor_name']}. Set qty of my order {oid} to 3.",
-        "actions": [{"sql": f"UPDATE orders SET qty = 3 WHERE order_id = {oid}"}], "outputs": [], "error": None}])
+        "actions": [{"sql": f"UPDATE orders SET qty = 3 WHERE order_id = {oid}"}], "error": None}])
     run("check", *args)
     chk = io.read_jsonl(out / "check.jsonl")
     assert len(chk) == 1 and chk[0]["ok"] and chk[0]["template"] == "1_self|UPDATE orders"

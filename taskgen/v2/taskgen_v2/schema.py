@@ -1,13 +1,8 @@
 # taskgen/v2/taskgen_v2/schema.py
-"""What the generation prompt says about a database: DDL, BIRD's per-column notes, and a one-paragraph description."""
-import csv, glob, json, os, re, sqlite3
+"""What the generation prompt says about a database's tables: their DDL and BIRD's per-column notes, and how a new
+row gets its key (design §4.3). The description and the data quirks come from the confirmed profile."""
+import csv, glob, os, re, sqlite3
 from taskgen_common.db_select import _q
-
-DESCRIBE_PROMPT = """Below is the DDL of a SQLite database{notes}. In two or three English sentences, say what this
-database is about, who the people in it are (which tables hold persons, e.g. customers, employees, players) and what
-the main transactional or fact tables record. Plain prose, no bullet points, no table names in quotes.
-
-{ddl}"""
 
 
 def ddl(db_path, tables=None):
@@ -46,39 +41,6 @@ def schema_block(db_path, tables=None):
     if notes:
         text += "\n\n## Column notes\n" + "\n".join(notes)
     return text
-
-
-def describe_db(db_key, db_path, client, cache_path):
-    cache = json.load(open(cache_path, encoding="utf-8")) if os.path.exists(cache_path) else {}
-    if db_key in cache:
-        return cache[db_key]
-    cd = column_descriptions(db_path)
-    notes = " and the column notes that follow it" if cd else ""
-    body = schema_block(db_path)
-    text = client.chat([{"role": "user", "content": DESCRIBE_PROMPT.format(notes=notes, ddl=body)}],
-                       temperature=0.3, max_tokens=1024)["content"].strip()
-    cache[db_key] = text
-    os.makedirs(os.path.dirname(os.path.abspath(cache_path)), exist_ok=True)
-    with open(cache_path, "w", encoding="utf-8") as f:
-        json.dump(cache, f, ensure_ascii=False, indent=1)
-    return text
-
-
-def next_ids(db_path):
-    """{table: (pk_column, MAX(pk) + 1)} for every table whose primary key is one INTEGER column (1 when empty).
-    The generation prompt lists these so new rows do not collide with existing keys."""
-    c = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-    out = {}
-    try:
-        for (t,) in c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").fetchall():
-            pk = [r for r in c.execute(f'PRAGMA table_info("{t}")') if r[5]]
-            if len(pk) != 1 or (pk[0][2] or "").upper() not in ("INTEGER", "INT"):
-                continue
-            (m,) = c.execute(f'SELECT MAX("{pk[0][1]}") FROM "{t}"').fetchone()
-            out[t] = (pk[0][1], (m or 0) + 1)
-    finally:
-        c.close()
-    return out
 
 
 def pk_info(conn):

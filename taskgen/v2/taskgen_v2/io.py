@@ -5,7 +5,7 @@ from taskgen_common import paths
 
 V2 = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))                     # taskgen/v2/
 REPO = paths.REPO                                                                     # repo root (.env)
-DATA = os.path.join(V2, "data")                                                       # db_descriptions.json
+DATA = os.path.join(V2, "data")                                                       # db_profiles.json, profile_hints.json
 RESULTS = os.path.join(V2, "results")                                                 # step files per database, not in git
 OUTPUT = os.path.join(V2, "output")                                                   # final tasks + manifest, not in git
 ANCHORS_JSON = paths.ANCHORS_JSON                                                     # shared step-0 output (taskgen/common)

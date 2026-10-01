@@ -6,7 +6,7 @@ from v2_fixtures import SHOP2, FKS, SHOP_PROFILE
 from taskgen_v2 import generate, io
 from test_taskgen_prompt import ANCHOR, DB, TREE
 
-GOOD = '<thought>t</thought><answer>{"instruction": "I am a5 b5. Set qty of order 5 to 3.", "actions": [{"sql": "UPDATE orders SET qty = 3 WHERE order_id = 5"}], "outputs": []}</answer>'
+GOOD = '<thought>t</thought><answer>{"instruction": "I am a5 b5. Set qty of order 5 to 3.", "actions": [{"sql": "UPDATE orders SET qty = 3 WHERE order_id = 5"}]}</answer>'
 
 
 class FakeClient:
@@ -18,9 +18,12 @@ class FakeClient:
 
 
 def test_parse_answer_variants():
-    base = {"instruction": "x", "actions": [{"sql": "UPDATE a SET b = 1"}], "outputs": []}
+    base = {"instruction": "x", "actions": [{"sql": "UPDATE a SET b = 1"}]}
     js = json.dumps(base)
     assert generate.parse_answer(f"<answer>{js}</answer>") == base
+    assert generate.parse_answer(f'<answer>{json.dumps({**base, "outputs": ["old"]})}</answer>') == base   # D7: no outputs kept
+    raw_tab = '<answer>{"instruction": "a\tb", "actions": [{"sql": "UPDATE a SET b = 1"}]}</answer>'   # GLM once wrote one
+    assert generate.parse_answer(raw_tab)["instruction"] == "a\tb"
     assert generate.parse_answer(f"<answer>```json\n{js}\n```</answer> trailing words") == base
     assert generate.parse_answer(f"blah {js}") == base                         # no tag: last JSON object
     assert generate.parse_answer('<answer>{"instruction": "x", "actions": ["UPDATE a SET b = 1"]}</answer>') == base   # bare strings
@@ -116,3 +119,15 @@ def test_context_gathers_what_every_prompt_of_a_database_shares(tmp_path):
     assert ctx["keys"]["orders"] == "- orders: a new row may leave order_id out (SQLite assigns 100)"
     assert ctx["fixed"]["orders"] == {"order_id", "customer_id", "product_id"} and ctx["fixed"]["order_items"] == {"item_id", "order_id"}
     assert "CREATE TABLE orders" in ctx["schema"] and ctx["copyable"] == {"customers", "orders", "order_items", "staff"}
+
+
+def test_an_empty_answer_is_retried(tmp_path):
+    class Silent(FakeClient):
+        def chat(self, messages, **kw):
+            return {"content": "", "usage": {"completion_tokens": 16384}, "model": "fake"}
+    out = str(tmp_path / "c.jsonl")
+    generate.run(DB, ANCHOR, [TREE], Silent([]), out, random.Random(0))
+    r = io.read_jsonl(out)[0]
+    assert r["instruction"] is None and r["error"] == "EmptyAnswer: no answer after 16384 completion tokens"
+    s = generate.run(DB, ANCHOR, [TREE], FakeClient([GOOD]), out, random.Random(0), retry_errors=True)
+    assert s["written"] == 1 and io.read_jsonl(out)[0]["instruction"].startswith("I am a5 b5")

@@ -40,10 +40,10 @@ def test_compact_schema_shows_keys_references_and_rows(school):
 
 def test_messages_carry_examples_hints_and_schema(school):
     conn, path = school
-    msgs = profile_draft.messages("test:school", conn, REC, path, HINTS, "A school.", profile_draft.load_examples())
+    msgs = profile_draft.messages("test:school", conn, REC, path, HINTS, profile_draft.load_examples())
     assert "### chinook (DySQL)" in msgs[0]["content"] and "### entertainment (DySQL)" in msgs[0]["content"]
     u = msgs[1]["content"]
-    assert "# Database test:school\nA school." in u and "Roots: Student List\n- dept names are codes." in u
+    assert "# Database test:school\n\n## Hints from the person who will review the profile\nRoots: Student List\n- dept names are codes." in u
     assert "TABLE takes -- 16 rows; no primary key" in u
 
 
@@ -60,7 +60,7 @@ def test_draft_repairs_until_valid(school):
     conn, path = school
     first = {**SCHOOL_PROFILE, "public": ["section"]}                         # dept loses its role
     client = FakeClient([answer(first), answer(SCHOOL_PROFILE)])
-    p = profile_draft.draft(client, "test:school", conn, REC, path, HINTS, "", profile_draft.load_examples())
+    p = profile_draft.draft(client, "test:school", conn, REC, path, HINTS, profile_draft.load_examples())
     assert p["draft"] == {"model": "fake", "rounds": 2, "errors": []} and p["confirmed"] is False and p["notes"] == []
     assert {k: p[k] for k in ("roots", "events", "public")} == {k: SCHOOL_PROFILE[k] for k in ("roots", "events", "public")}
     repair = client.seen[1][-1]["content"]
@@ -71,6 +71,6 @@ def test_draft_keeps_the_hinted_roots_and_gives_up_after_the_repairs(school):
     conn, path = school
     wrong = {**SCHOOL_PROFILE, "roots": SCHOOL_PROFILE["roots"] + [{"table": "teacher", "label": "teacher", "parents": []}]}
     client = FakeClient([answer(wrong), "no json here", answer(wrong)])
-    p = profile_draft.draft(client, "test:school", conn, REC, path, HINTS, "", profile_draft.load_examples())
+    p = profile_draft.draft(client, "test:school", conn, REC, path, HINTS, profile_draft.load_examples())
     assert p["draft"]["rounds"] == 3 and p["draft"]["errors"] == ["roots: must be exactly Student List, as the hints say"]
     assert "no profile JSON in the answer" in client.seen[2][-1]["content"]
