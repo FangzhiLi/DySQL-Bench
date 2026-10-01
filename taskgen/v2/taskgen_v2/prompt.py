@@ -12,13 +12,13 @@ CFG = {
     # write statements per task; type 2 never writes once, so overall this lands near DySQL's 33/45/13/6/3 (§4.4)
     "WRITES_MIX": {1: 0.37, 2: 0.41, 3: 0.13, 4: 0.06, 5: 0.03},
     # shape shares, set so the task-level rates over the 23 databases match DySQL's gold (simulated on the plan-2
-    # trees): two tables 58%, subquery 12%, archive 6.5%, batch 6%
+    # trees): two tables 56%, subquery 12%, archive 6.3%, batch 6.5%
     "TWO_TABLES": 0.85,      # multi-write tasks that write two tables, when two are in scope
     "SUBQUERY": 0.13,        # tasks that find the person through a subquery (D8), when the tree has a lookup
     "BATCH": 0.12,           # tasks with one UPDATE/DELETE over 2-50 of the person's rows, when a group has 2 to 50
     "BATCH_ALL": 0.6,        # ... of which change all of the group's rows (DySQL: "all my invoices"), the rest by a condition
-    "ARCHIVE": 0.40,         # tasks that copy rows with INSERT ... SELECT before changing them, when a table can and
-                             # there is a write left for each other table (the copy and the change take two)
+    "ARCHIVE": 0.70,         # tasks that copy rows with INSERT ... SELECT before changing them, when a table can, no
+                             # batch is drawn and there is a write left for each other table (copy and change take two)
     "FREE_TABLE_SHARE": 0.30,
     "MAX_ROWS_PER_STMT": 50,
     "WORDS": (40, 80),       # instruction length asked for (DySQL: mean 57, p90 80)
@@ -175,7 +175,7 @@ def level(features):
 
 def sample_plan(rng, tree, anchor, cfg=CFG, ctx=None):
     """ctx: generate.context() of the database -- "fixed" {table: key and foreign-key columns}, never a change target,
-    and "copyable", the tables an archive may copy rows into (keys SQLite fills in, open to INSERT)."""
+    "copyable", the tables an archive may copy rows into (keys SQLite fills in, open to INSERT), and "pk" {table: key columns}."""
     ctx = ctx or {}
     fixed, copyable = ctx.get("fixed") or {}, set(ctx.get("copyable") or ())
     task_type = _weighted(rng, {k: v for k, v in cfg["TYPE_MIX"].items() if k in feasible_types(tree)})
@@ -188,6 +188,8 @@ def sample_plan(rng, tree, anchor, cfg=CFG, ctx=None):
         refs.pop()                                           # the event a public type needs is first, so it stays
     tabs = trees.tables_by_label(tree, refs)
     pool = {"3_public_only": tabs["public"], "2_self_and_public": tabs["own"] + tabs["public"]}.get(task_type, tabs["own"])
+    if not refs:   # no events: one row per table to write (hr_1's employees), so no more statements than tables
+        n_writes = min(n_writes, len(pool))
     events = {g["table"] for g in tree["events"]}
 
     batch = None   # one statement over 2-50 of the person's rows of one event group: all of them, or by a condition
@@ -200,10 +202,11 @@ def sample_plan(rng, tree, anchor, cfg=CFG, ctx=None):
         n_tables = 2
     elif n_writes >= 2 and len(pool) >= 2 and rng.random() < cfg["TWO_TABLES"]:
         n_tables = 2
-    archive = None   # copy rows as new rows of the same table, then change the originals; with a batch, its table
+    archive = None   # copy rows as new rows of the same table, then change the originals by key; never with a batch,
+    # whose condition or whole group would match the copies too
     sources = [t for t in pool if t in copyable and t != anchor["table"] and (t in events or task_type == "3_public_only")]
-    if n_writes >= n_tables + 1 and sources and rng.random() < cfg["ARCHIVE"]:   # copy + change, one more per other table
-        archive = rng.choice(sources) if not batch else batch["table"] if batch["table"] in sources else None
+    if not batch and n_writes >= n_tables + 1 and sources and rng.random() < cfg["ARCHIVE"]:   # copy + change, one more per other table
+        archive = rng.choice(sources)
     subquery = bool(tree.get("lookup")) and task_type != "3_public_only" and rng.random() < cfg["SUBQUERY"]
 
     must = archive or (batch and batch["table"])   # the one table a batch or an archive needs written
@@ -216,6 +219,8 @@ def sample_plan(rng, tree, anchor, cfg=CFG, ctx=None):
             write_tables = ([must] if must else []) + rng.sample(rest, n_tables - bool(must))
     shape = {"n_writes": n_writes, "n_tables": n_tables, "ownership_subquery": subquery, "archive": archive,
              "batch": batch, "public_table": task_type in PUBLIC_TYPES}
+    if archive:
+        shape["archive_key"] = ((ctx.get("pk") or {}).get(archive) or [None])[0]
     difficulty = level([n_writes >= 2, n_tables >= 2, subquery, archive, task_type == "2_self_and_public"])
     style = {"tone": rng.choice(TONES), "name": None, "role": None}
     if task_type == "5_proxy":
@@ -280,7 +285,9 @@ def shape_text(anchor, tree, plan, cfg=CFG):
                      f"instruction exactly as the SQL uses it, not by listing ids; it changes between 2 and {b['count'] - 1} rows.")
     if s["archive"]:
         lines.append(f"- First copy the {s['archive']} rows you will change as new rows with INSERT INTO \"{s['archive']}\" ... "
-                     f"SELECT ... FROM \"{s['archive']}\", then UPDATE or DELETE the original rows.")
+                     f"SELECT ... FROM \"{s['archive']}\", then UPDATE or DELETE the original rows by their "
+                     + (f"{s['archive_key']} values; the copies get new {s['archive_key']} values and stay as they are."
+                        if s.get("archive_key") else "keys; the copies get new keys and stay as they are."))
     if s["ownership_subquery"]:
         cond = " AND ".join(f"{c} = {sql_value(v)}" for c, v in tree["lookup"].items())
         lines.append(f"- Find the person's rows through a subquery on {anchor['table']}, e.g. WHERE {anchor['key']} = "

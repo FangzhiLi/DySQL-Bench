@@ -32,14 +32,18 @@ def context(db_rec, profile):
     try:
         keys = schema.key_notes(conn, sorted(scope), set(profile["no_insert"]), fks)
         pk = {t: v for t, v in schema.pk_info(conn).items() if t in scope}
+        unique = {t for t in pk if schema.unique_columns(conn, t)}
     finally:
         conn.close()
     fixed = {t: set(v["cols"]) | all_fks.get(t, set()) for t, v in pk.items()}
-    # an archive copies rows into the same table, so the copies need keys SQLite fills in (or no key at all);
-    # school_scheduling's Student_Schedules (StudentID, ClassID) would only collide with itself
-    copyable = {t for t, v in pk.items() if (v["omittable"] or not v["cols"]) and t not in profile["no_insert"]}
+    # an archive copies rows into the same table, so a copy differs from its original only by a key SQLite fills in.
+    # Without one a later write by any condition hits the copy too (olympics person_region); a key that is a foreign
+    # key (beer_factory location) or a UNIQUE column would make the copy an orphan or a collision
+    copyable = {t for t, v in pk.items() if v["omittable"] and not set(v["cols"]) & fks.get(t, set())
+                and t not in unique and t not in profile["no_insert"]}
     return {"description": profile["description"], "quirks": profile["quirks"], "schema": schema.schema_block(path, scope),
-            "keys": keys, "no_insert": set(profile["no_insert"]), "fixed": fixed, "copyable": copyable}
+            "keys": keys, "no_insert": set(profile["no_insert"]), "fixed": fixed, "copyable": copyable,
+            "pk": {t: v["cols"] for t, v in pk.items()}}
 
 
 def parse_answer(text):

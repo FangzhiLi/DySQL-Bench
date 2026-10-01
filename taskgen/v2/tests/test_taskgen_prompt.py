@@ -5,7 +5,7 @@ from taskgen_v2 import metrics, prompt
 
 ANCHOR = {"table": "customers", "key": "customer_id", "names": ["first_name", "last_name"]}
 DB = {"source": "test", "db": "shop", "path": "x", "anchors": [], "fks": []}
-CTX = {"no_insert": {"reviews"}, "copyable": {"orders", "products"}, "fixed": {"orders": {"order_id", "customer_id", "product_id"}, "products": {"product_id"},
+CTX = {"no_insert": {"reviews"}, "copyable": {"orders", "products"}, "pk": {"orders": ["order_id"], "products": ["product_id"]}, "fixed": {"orders": {"order_id", "customer_id", "product_id"}, "products": {"product_id"},
                                            "customers": {"customer_id"}, "reviews": {"review_id", "customer_id"}}}
 MATERIALS = {**CTX, "description": "A small shop.", "quirks": ["qty is never 0."], "schema": "CREATE TABLE customers (...)",
              "keys": {"orders": "- orders: a new row may leave order_id out (SQLite assigns 101)",
@@ -174,3 +174,22 @@ def test_an_archive_leaves_a_write_for_every_other_table():
     arch = [p for p in plans(6000) if p["shape"]["archive"]]
     assert arch and all(p["shape"]["n_writes"] >= p["shape"]["n_tables"] + 1 for p in arch)
     assert any(p["shape"]["n_tables"] == 2 for p in arch)
+
+
+def test_an_archive_never_comes_with_a_batch_and_changes_the_originals_by_key():
+    # a batch picks rows by a condition or takes the whole group, which matches the fresh copies as well
+    ps = plans(6000)
+    assert any(p["shape"]["archive"] for p in ps) and any(p["shape"]["batch"] for p in ps)
+    assert not any(p["shape"]["archive"] and p["shape"]["batch"] for p in ps)
+    p = plan_for("1_self", archive="orders")
+    u = prompt.build_messages(DB, ANCHOR, TREE, p, MATERIALS)[1]["content"]
+    assert ("then UPDATE or DELETE the original rows by their order_id values; the copies get new order_id values "
+            "and stay as they are.") in u
+
+
+def test_a_tree_without_events_asks_for_no_more_writes_than_it_has_tables():
+    # hr_1: 100 of 107 employees have no events, so the speaker's row and its attributes are all there is to write;
+    # "3 statements on 1 table" became three UPDATEs of the same row
+    ps = plans(1000, NO_EVENTS)
+    assert all(p["shape"]["n_writes"] <= len(p["scope"]) for p in ps)
+    assert Counter(p["shape"]["n_writes"] for p in ps)[2] > 0          # the root and its vip attribute: two writes fit

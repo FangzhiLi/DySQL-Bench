@@ -2,7 +2,7 @@
 import json, random
 import pytest
 from taskgen_common.testing import make_db
-from v2_fixtures import SHOP2, FKS, SHOP_PROFILE
+from v2_fixtures import SHOP2, FKS, SHOP_PROFILE, SCHOOL, SCHOOL_FKS, SCHOOL_COMPOSITE, SCHOOL_PROFILE
 from taskgen_v2 import generate, io
 from test_taskgen_prompt import ANCHOR, DB, TREE
 
@@ -131,3 +131,15 @@ def test_an_empty_answer_is_retried(tmp_path):
     assert r["instruction"] is None and r["error"] == "EmptyAnswer: no answer after 16384 completion tokens"
     s = generate.run(DB, ANCHOR, [TREE], FakeClient([GOOD]), out, random.Random(0), retry_errors=True)
     assert s["written"] == 1 and io.read_jsonl(out)[0]["instruction"].startswith("I am a5 b5")
+
+
+def test_an_archive_copies_only_into_tables_whose_copies_differ_from_the_originals(tmp_path):
+    # a copy keeps every column but a key SQLite assigns: without one, a later write hits the copy too; a key that is
+    # a foreign key or a UNIQUE column would make a copy an orphan or a collision
+    rec = {"source": "test", "db": "school", "path": make_db(tmp_path, "school", SCHOOL), "anchors": [],
+           "fks": SCHOOL_FKS, "fks_composite": SCHOOL_COMPOSITE}
+    copyable = generate.context(rec, SCHOOL_PROFILE)["copyable"]
+    assert not copyable & {"takes", "advisor", "flags"}                       # no key, no key, key is a foreign key
+    rec = {"source": "test", "db": "shop2", "path": make_db(tmp_path, "shop2u", SHOP2 + "CREATE UNIQUE INDEX u ON staff(name);"),
+           "anchors": [], "fks": FKS}
+    assert generate.context(rec, SHOP_PROFILE)["copyable"] == {"customers", "orders", "order_items", "products"}   # not staff
