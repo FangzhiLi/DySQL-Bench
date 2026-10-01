@@ -170,7 +170,7 @@ class Tracer:
 
 
 def task_group(speaker_in_db, labels):
-    core = sorted({x for x in labels if x not in ("noop",)})
+    core = sorted({"public" if x == "new_person" else x for x in labels if x != "noop"})
     if not core:
         return "7_no_change"
     pattern = "+".join(core)
@@ -296,7 +296,12 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG):
                     if op != "INSERT":
                         out["reasons"].append(f"noop_write: {op} {table}")
                 elif speaker_in_db:
-                    lab = "own" if owners & speaker_ids else ("other" if owners else "public")
+                    if owners & speaker_ids:
+                        lab = "own"
+                    elif op == "INSERT" and table in tracer.persons:
+                        lab = "new_person"   # a person row that did not exist before is nobody else's data yet
+                    else:
+                        lab = "other" if owners else "public"
                 else:
                     lab = "person_obj" if owners else "public"
                 if len(rs) > cfg["MAX_ROWS_PER_STMT"]:

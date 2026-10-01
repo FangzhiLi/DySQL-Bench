@@ -103,7 +103,7 @@ confirmed: false → 人工过后改 true
 - **SQLite 会自动分配的新主键算隐含字面量：** 表是"可省 ID"的（`schema.pk_info`，§4.3），INSERT 写的主键正好是 SQLite 会分配的下一个值（多行时依次加一）。这个值在这条 INSERT 和之后引用新行的语句里都不必出现在 instruction 里。其余表的新 ID 仍必须在 instruction 里。往 `no_insert` 的表 INSERT 算拒绝（要档案，计划 2）。
 - **非确定性：** gold 里有读时钟或随机数的函数（`CURRENT_TIMESTAMP`、`'now'`、`random()` 等）时，间隔 1.1 秒执行两遍，比较评测哈希会比较的列（去掉 `last_update` 这类 volatile 列，正则和评测一致）；不一致就拒（`nondeterministic`）。只精确到日的值（`CURRENT_DATE`、`date('now')`）同一天内一致，放行；写进 volatile 列的时间也放行（pagila 的 `last_update = CURRENT_TIMESTAMP`）。不含这些函数的 gold 不重跑：同一个库上执行同样的语句，SQLite 的结果是确定的。
 - 范围 = 档案里出现的表（roots、persons、events 及其 parents、attributes、public）的并集，减去 `exclude`；归属追溯用档案 `persons` 和 `same_as`。
-- **新插入的人物行**不再算"别人"：INSERT 进人物表且不是说话人的行，标 `new_person`，按公共数据处理（v1 里造成 54 条类型不一致，也是 DySQL 被算出 17.6% 第 4 类的来源之一）。
+- **新插入的人物行**不再算"别人"：说话人在库里时，INSERT 进人物表、又追不到说话人的行标 `new_person`，算类型时按公共数据处理（v1 里造成 54 条类型不一致，也是 DySQL 被算出 17.6% 第 4 类的来源之一）。库外说话人（第 5 类）登记新的人，仍算 `person_obj`，不变。
 - 其余规则不变（noop、bulk 50、txn、out_of_scope）。在 DySQL gold 上重新校准：相对 v1 新增的拒绝只应来自上面列出的原因（时间函数里会被拒的约 3 条：pagila 把 `CURRENT_TIMESTAMP` 写进 return_date、payment_date；其余写的是 last_update，或只精确到日），逐条看过。
 
 ### 4.6 校验（改 `verify.py`、`llm.py` 配置）
