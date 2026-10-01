@@ -3,6 +3,7 @@
 这里的代码为 GRPO 训练生成 DySQL-Bench 风格的多轮写操作任务。它不属于上游的 DySQL-Bench，所以和评测代码（`DySQL-Bench/`）、官方出题脚本（`data_pipeline_shell/`）分开放。
 
 - **v1（通用规则版）的全流程：** 见 [v1/README.md](v1/README.md)。
+- **v2（论文做法 + v1 的规则，进行中）：** 见 [v2/README.md](v2/README.md)。
 
 ## 目录
 
@@ -22,7 +23,10 @@ taskgen/
     data/             db_descriptions.json
     results/          每个库的中间文件（不进 git）
     output/           最终任务和 manifest（不进 git）
-  v2/                 之后从 v1 复制起步
+  v2/                 从 v1 复制起步，进行中
+    README.md         起点说明和改动记录
+    taskgen_v2/  scripts/  tests/  docs/  data/
+    results/  output/ （不进 git）
 ```
 
 ## 约定
@@ -35,7 +39,7 @@ taskgen/
   - 仓库是公开的。
   - 中间文件放 `results/`，最终任务放 `output/`，都只在本机。
 - **和评测的接口只有 manifest。** `DySQL-Bench` 的 `GenEnv` 读 `TASKGEN_MANIFEST` 指向的 manifest，不 import 这里的代码。所以任何版本的输出都能用 `gen:<db>` 评测。
-- **测试按目录跑：** `cd taskgen/common && pytest`，`cd taskgen/v1 && pytest`。
+- **测试按目录跑：** `cd taskgen/common && pytest`，`cd taskgen/v1 && pytest`，`cd taskgen/v2 && pytest`。
   - 每个目录有自己的 `conftest.py` 设好 import 路径，不用安装。
   - 不要在 `taskgen/` 下一次跑全部：v1 和 v2 的测试文件同名。
 - **文档：** 用中文。设计、计划、报告放各自目录的 `docs/`，文件名带日期。
