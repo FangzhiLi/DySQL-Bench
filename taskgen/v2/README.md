@@ -22,3 +22,4 @@ v2 从 v1 原样复制起步（tag `taskgen-v1`，61c8133）。复制的那个 c
 | 库档案：`taskgen_v2/db_profile.py`（格式、校验、写入范围、审阅页）；测试夹具 `tests/v2_fixtures.py` | §4.1 |
 | 归属追溯挪到 `taskgen_v2/owners.py`（支持复合外键和档案里的边），执行检查改用它，行为不变（校准报告逐字不变） | §4.5 |
 | 执行检查读档案：范围按档案，往 `no_insert` 表 INSERT 拒，算出第 4 类拒（`other_person`）；REPLACE/UPSERT 覆盖已有人物行不算新人，自动主键按每条 INSERT 前现算，重跑时 Ctrl-C 不被吞；`check_diff.py --profiles` | §4.5、D6 |
+| 建树：按档案嵌套事件树（事件行挂实际引用的父行，带归属标签，≤30 条事件，先抽有事件的根行，双根按可用行数分）；`trees` 命令要已确认的档案，不再写 `others.json` | §4.2、D3 |

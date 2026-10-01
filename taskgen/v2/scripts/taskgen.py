@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Task-generation pipeline, one sub-command per step; every step resumes by record id.
-Usage (from taskgen/v2/), pilot on beer_factory:
+Usage (from taskgen/v2/), pilot on beer_factory (its profile in data/db_profiles.json must be confirmed):
   P=~/miniconda3/envs/dysql/bin/python; DB=bird:beer_factory
+  $P scripts/taskgen.py profile  check --db $DB
   $P scripts/taskgen.py trees    --db $DB --n 50 --seed 0
   $P scripts/taskgen.py describe --db $DB
   $P scripts/taskgen.py generate --db $DB --workers 5
@@ -10,11 +11,12 @@ Usage (from taskgen/v2/), pilot on beer_factory:
   $P scripts/taskgen.py dedup    --db $DB
   $P scripts/taskgen.py convert  --db $DB
   $P scripts/taskgen.py stats    --db $DB
-Files: results/<db>/{trees,candidates,check,verify,selected}.jsonl, others.json; output/<db>/tasks.jsonl, output/manifest.json."""
+Files: data/db_profiles.json; results/<db>/{trees,candidates,check,verify,selected}.jsonl; output/<db>/tasks.jsonl,
+output/manifest.json."""
 import argparse, glob, json, os, random, sys, time
 V2 = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [V2, os.path.join(os.path.dirname(V2), "common")]   # taskgen_v2, taskgen_common
-from taskgen_v2 import io, trees, schema, llm, prompt, generate, check, verify, dedup, convert, stats
+from taskgen_v2 import io, trees, schema, llm, prompt, generate, check, verify, dedup, convert, stats, db_profile, owners
 
 DESC_PATH = os.path.join(io.DATA, "db_descriptions.json")
 
@@ -26,27 +28,28 @@ def rec_and_dir(a):
     return rec, out
 
 
+def profile_of(a):
+    try:
+        return db_profile.get(a.db, a.profiles)
+    except ValueError as e:
+        sys.exit(str(e))
+
+
 def cmd_trees(a):
     rec, out = rec_and_dir(a)
+    prof = profile_of(a)
     c = trees.open_ro(io.resolve_db_path(rec["path"]))
+    tracer = owners.Tracer.from_profile(prof, rec, c)
     done = {(t["anchor_table"], str(t["key_value"])) for t in io.read_jsonl(f"{out}/trees.jsonl")}
-    others = json.load(open(f"{out}/others.json")) if os.path.exists(f"{out}/others.json") else {}
-    for anchor in io.person_anchors(rec):
-        if a.anchor and anchor["table"] != a.anchor:
-            continue
-        trees.check_scope(anchor, rec["fks"], rec.get("fks_composite", ()))
-        rng = random.Random(f"{a.seed}:{anchor['table']}")   # per anchor, so a rerun reproduces the same sample
-        kvs = trees.anchor_key_values(c, anchor, rec["fks"], rng, a.n + 20)
-        built = [t for kv in kvs[:a.n] if (anchor["table"], str(kv)) not in done
-                 and (t := trees.build_tree(c, anchor, rec["fks"], kv, rng))]
+    roots = [r for r in prof["roots"] if not a.anchor or r["table"] == a.anchor]
+    rngs = {r["table"]: random.Random(f"{a.seed}:{r['table']}") for r in roots}   # per root: a rerun draws the same sample
+    keys = {r["table"]: trees.root_key_values(c, prof, r, rngs[r["table"]]) for r in roots}
+    for r, n in zip(roots, trees.allocate(a.n, [len(keys[r["table"]]) for r in roots])):
+        t, rng = r["table"], rngs[r["table"]]
+        built = [tr for kv in keys[t][:n] if (t, str(kv)) not in done
+                 and (tr := trees.build_tree(c, prof, r, kv, rng, tracer))]
         io.append_jsonl(f"{out}/trees.jsonl", built)
-        # candidate 'other people' for type 4: the 20 rows after the sampled ones (not speakers of other tasks), names only;
-        # a database whose anchor has fewer rows than --n falls back to the sampled rows
-        extra = [trees.build_tree(c, anchor, rec["fks"], kv, rng, max_down=0, max_up=0) for kv in kvs[a.n:]]
-        pool = [t for t in extra if t] or [t for t in built if t]
-        others[anchor["table"]] = [{"key_value": t["key_value"], "name": t["anchor_name"]} for t in pool][:20]
-        print(f"{anchor['table']}: {len(built)} trees written")
-    json.dump(others, open(f"{out}/others.json", "w"), ensure_ascii=False, default=str)
+        print(f"{t}: {len(built)} trees written")
 
 
 def cmd_describe(a):
@@ -153,7 +156,8 @@ def main():
     def common(p):
         p.add_argument("--db", required=True); p.add_argument("--anchors", default=io.ANCHORS_JSON)
         p.add_argument("--out-dir"); p.add_argument("--seed", type=int, default=0)
-    p = sub.add_parser("trees"); common(p); p.add_argument("--n", type=int, default=50); p.add_argument("--anchor"); p.set_defaults(f=cmd_trees)
+        p.add_argument("--profiles", default=db_profile.PROFILES_JSON)
+    p = sub.add_parser("trees"); common(p); p.add_argument("--n", type=int, default=50); p.add_argument("--anchor", help="one root table only"); p.set_defaults(f=cmd_trees)
     p = sub.add_parser("describe"); common(p); p.set_defaults(f=cmd_describe)
     p = sub.add_parser("generate"); common(p); p.add_argument("--workers", type=int, default=5, help="GLM plan limit: 5 concurrent requests"); p.add_argument("--per-tree", type=int, default=1); p.add_argument("--retry-errors", action="store_true", help="regenerate candidates whose API call failed (e.g. 429)"); p.set_defaults(f=cmd_generate)
     p = sub.add_parser("check"); common(p); p.set_defaults(f=cmd_check)
