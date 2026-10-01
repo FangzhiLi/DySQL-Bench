@@ -1,5 +1,6 @@
 # tests/test_taskgen_cli.py
-import json, os, subprocess, sys
+import json, os, subprocess, sys, threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from taskgen_common.testing import make_db
 from v2_fixtures import SHOP2, FKS, CUSTOMER, STAFF, SHOP_PROFILE
 from taskgen_v2 import db_profile, io
@@ -109,3 +110,54 @@ def test_profile_check_render_and_confirm(tmp_path):
     assert r.returncode == 1 and "products hangs under orders but is not public" in r.stdout
     r = run("profile", "confirm", *common, "--db", db, check=False)
     assert r.returncode == 1 and db_profile.load(profiles)[db]["confirmed"] is False
+
+
+class FakeVerifier(BaseHTTPRequestHandler):
+    """An OpenAI-style endpoint that answers Yes and keeps every request body."""
+    seen = []
+
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        FakeVerifier.seen.append(body)
+        out = json.dumps({"model": body["model"], "usage": {"completion_tokens": 9}, "choices": [
+            {"message": {"content": "Fine. Verification: Is the answer correct (Yes/No)? Yes"}, "finish_reason": "stop"}]}).encode()
+        self.send_response(200); self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(out))); self.end_headers(); self.wfile.write(out)
+
+    def log_message(self, *a):
+        pass
+
+
+def test_verify_sees_precapped_candidates_with_the_profile_quirks(tmp_path):
+    args = setup(tmp_path)
+    profiles = args[args.index("--profiles") + 1]
+    ps = db_profile.load(profiles)
+    ps["test:shop2"] = db_profile.confirm({**ps["test:shop2"], "quirks": ["qty counts boxes, not items."]})
+    db_profile.save(ps, profiles)
+    out = tmp_path / "res"
+    run("trees", *args, "--n", "3", "--seed", "0")
+    rows = []
+    for t in io.read_jsonl(out / "trees.jsonl"):
+        oid = t["events"][0]["rows"][0]["row"]["order_id"]
+        rows.append({"id": "test:shop2:customers:%s:0" % t["key_value"], "db": "shop2", "source": "test",
+                     "anchor_table": "customers", "anchor_key": "customer_id", "key_value": t["key_value"],
+                     "anchor_name": t["anchor_name"], "profile_version": t["profile_version"],
+                     "plan": {"task_type": "1_self", "difficulty": "easy"},
+                     "instruction": f"I am {t['anchor_name']}. Set qty of my order {oid} to 3.",
+                     "actions": [{"sql": f"UPDATE orders SET qty = 3 WHERE order_id = {oid}"}], "error": None})
+    io.append_jsonl(out / "candidates.jsonl", rows)
+    run("check", *args)
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), FakeVerifier)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    env = {**os.environ, "TASKGEN_VERIFY_BASE_URL": f"http://127.0.0.1:{srv.server_port}/v1",
+           "TASKGEN_VERIFY_API_KEY": "k", "TASKGEN_VERIFY_MODELS": "m1:2"}
+    try:
+        subprocess.run([sys.executable, SCRIPT, "verify", *args, "--precap-template", "2", "--workers", "1"],
+                       check=True, capture_output=True, text=True, env=env)
+    finally:
+        srv.shutdown()
+    v = io.read_jsonl(out / "verify.jsonl")
+    assert len(v) == 2 and all(r["models"] == {"m1": {"yes": 2, "no": 0, "pass": True}} and r["pass"] for r in v)  # 3 checked, 2 per template
+    assert len(FakeVerifier.seen) == 4 and {b["model"] for b in FakeVerifier.seen} == {"m1"}
+    u = FakeVerifier.seen[0]["messages"][1]["content"]
+    assert "- qty counts boxes, not items." in u and "CREATE TABLE orders" in u

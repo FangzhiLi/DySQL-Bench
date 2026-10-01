@@ -6,8 +6,11 @@ from taskgen_v2 import io
 
 def to_task_row(i, r):
     meta = {k: r.get(k) for k in ("id", "db", "source", "anchor_table", "anchor_key", "key_value", "task_type",
-                                   "difficulty", "template", "plan", "gen_model", "verify_model")}
-    meta["verify_votes"] = [v["verdict"] for v in r.get("votes", [])]
+                                   "difficulty", "template", "plan", "gen_model", "verify_model", "profile_version")}
+    meta["verify_votes"] = {}   # every model's every vote (design §4.7); failed calls are not votes
+    for v in r.get("votes", []):
+        if "error" not in v:
+            meta["verify_votes"].setdefault(v.get("model") or r.get("verify_model"), []).append(v["verdict"])
     return {"user_id": str(i), "instruction": r["instruction"],
             "actions": [{"name": "sql", "kwargs": {"sql": a["sql"]}} for a in r["actions"]], "meta": meta}
 

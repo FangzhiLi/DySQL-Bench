@@ -9,8 +9,9 @@ from dysql_bench.types import Action
 REC = {"id": "test:shop:customers:5:0", "db": "shop", "source": "test", "anchor_table": "customers", "anchor_key": "customer_id",
        "key_value": 5, "instruction": "I am a5 b5. Set qty of my order 5 to 3.", "actions": [{"sql": "UPDATE orders SET qty = 3 WHERE order_id = 5"}],
        "plan": {"task_type": "1_self"}, "task_type": "1_self", "template": "1_self|UPDATE orders",
-       "difficulty": {"score": 0, "level": "easy"}, "gen_model": "g", "verify_model": "v",
-       "votes": [{"verdict": "yes"}, {"verdict": "yes"}, {"verdict": "no"}]}
+       "difficulty": {"score": 0, "level": "easy"}, "gen_model": "g", "verify_model": "v,w", "profile_version": "abc",
+       "votes": [{"verdict": "yes", "model": "v"}, {"verdict": "error", "error": "HTTP 503", "model": "v"},
+                 {"verdict": "yes", "model": "v"}, {"verdict": "no", "model": "w"}]}
 
 
 def setup(tmp_path):
@@ -26,7 +27,7 @@ def test_write_tasks_and_manifest(tmp_path):
     db, tasks, manifest, n = setup(tmp_path)
     row = io.read_jsonl(tasks)[0]
     assert n == 1 and row["user_id"] == "0" and row["actions"] == [{"name": "sql", "kwargs": {"sql": "UPDATE orders SET qty = 3 WHERE order_id = 5"}}]
-    assert row["meta"]["task_type"] == "1_self" and row["meta"]["verify_votes"] == ["yes", "yes", "no"] and row["meta"]["difficulty"]["level"] == "easy"
+    assert row["meta"]["task_type"] == "1_self" and row["meta"]["verify_votes"] == {"v": ["yes", "yes"], "w": ["no"]} and row["meta"]["profile_version"] == "abc" and row["meta"]["difficulty"]["level"] == "easy"
     m = json.load(open(manifest))["shop"]
     assert m["db_key"] == "test:shop" and m["sqlite"] == db and m["tasks"] == os.path.join("data", "shop", "tasks.jsonl")   # relative to the manifest
 
