@@ -106,7 +106,7 @@ def lookup(conn, table, person, row):
     for c in [c for c in row if c != person["key"] and ID_COL.search(c) and row[c] not in (None, "")]:
         if conn.execute(f"SELECT COUNT(*) FROM {_q(table)} WHERE {_q(c)} = ?", (row[c],)).fetchone()[0] == 1:
             return {c: row[c]}
-    names = {c: row[c] for c in person["name_cols"] if row.get(c) not in (None, "")}
+    names = {c: row[c] for c in person["name_cols"] if row.get(c) not in (None, "") and c != person["key"]}   # student_loan: name is the key
     if names and conn.execute(f"SELECT COUNT(*) FROM {_q(table)} WHERE " + " AND ".join(f"{_q(c)} = ?" for c in names),
                               tuple(names.values())).fetchone()[0] == 1:
         return names

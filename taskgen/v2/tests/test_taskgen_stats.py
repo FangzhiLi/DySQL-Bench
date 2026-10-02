@@ -30,3 +30,8 @@ def test_tasks_without_a_vote_are_counted():
     d = stats.summarize(cands, checks, verifies, [])
     assert d["n_verify_pass"] == 1 and d["n_verify_unvoted"] == 1 and "n_verify_unvoted" in stats.render(d)
 
+
+def test_failed_calls_are_not_votes_in_the_agreement_numbers():
+    cands, checks = [c(0)[0]], [c(0)[1]]
+    verifies = [{"id": "x:0", "votes": [{"verdict": "yes"}, {"verdict": "error", "error": "HTTP 503"}, {"verdict": "yes"}], "pass": True}]
+    assert stats.summarize(cands, checks, verifies, [])["unanimous_share"] == 1.0

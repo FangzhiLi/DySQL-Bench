@@ -160,7 +160,7 @@ def main():
     for name, f in (("sheet", cmd_sheet), ("review", cmd_review), ("report", cmd_report)):
         p = sub.add_parser(name); p.add_argument("--dir", required=True); p.set_defaults(f=f)
         if name == "review":
-            p.add_argument("--votes", type=int, default=3, help="the rule the disagreements are judged by (calibrate.RULES)")
+            p.add_argument("--votes", type=int, default=verify.DEFAULT_VOTES, help="the rule the disagreements are judged by (calibrate.RULES)")
     a = ap.parse_args()
     a.f(a)
 

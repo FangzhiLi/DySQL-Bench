@@ -226,3 +226,12 @@ def test_a_vote_cut_off_while_thinking_does_not_count_toward_a_pause(tmp_path):
     s = verify.run([{**CAND, "id": f"c{i}"} for i in range(10)], [(Thinker(["x"] * 20), 1)], str(tmp_path / "v.jsonl"),
                    workers=1, max_failures=3)
     assert not s["paused"] and s["unvoted"] == 10
+
+
+def test_models_from_env_needs_a_model(monkeypatch):
+    monkeypatch.setattr(verify.io, "load_dotenv", lambda *a, **k: None)
+    for k in ("TASKGEN_VERIFY_MODELS", "TASKGEN_VERIFY_MODEL"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("TASKGEN_VERIFY_BASE_URL", "https://v/1"); monkeypatch.setenv("TASKGEN_VERIFY_API_KEY", "k")
+    with pytest.raises(verify.llm.LLMError, match="TASKGEN_VERIFY_MODEL"):
+        verify.models_from_env()

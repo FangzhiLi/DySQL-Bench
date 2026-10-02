@@ -490,3 +490,18 @@ def test_two_archive_copies_numbered_by_sqlite_are_rejected(db):
     r = check.run_check(db, cand(f"I am a5 b5. Copy items 65 and 5 as items {new} and {new + 1}, then set the note of items 5 and 65 to x.",
                                  [keyed.format(new, 65), keyed.format(new + 1, 5), change]))
     assert r["ok"], r["reasons"]        # the SQL states the copies' keys: nothing hangs on the order
+
+
+def test_only_a_word_of_three_letters_or_more_takes_a_plural_ending():
+    # 'M' matched "Ms" and let a gender value no one asked for pass; "cups" for 'cup' and "10g" for 'g' still match
+    assert not check._contains("ms lee asked for it", "m") and not check._contains("fix its row", "it")
+    assert check._contains("add 2 cups of rice", "cup") and check._contains("add 10g of salt", "g")
+
+
+def test_a_double_quoted_now_reads_the_clock(rental):
+    # SQLite reads "now" as the string 'now' when no column has that name, so datetime("now") is the current time
+    r = check.run_check(rental, cand("I am a5 b5. Mark my rental 5 as returned right now.",
+                                     ['UPDATE rental SET return_date = datetime("now") WHERE rental_id = 5']))
+    assert r["reasons"] == ["nondeterministic: rental"]
+    assert check.at_instant("UPDATE r SET d = datetime(\"NOW\", 'localtime')", "2000-01-01 13:37:42") == (
+        "UPDATE r SET d = datetime('2000-01-01 13:37:42', 'localtime')")

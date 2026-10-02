@@ -105,3 +105,9 @@ INSERT INTO people VALUES (1, 'Ann', 'Lee', 'ann@x.org', '555'), (2, 'Ann', 'Lee
     assert trees.lookup(conn, "people", person, row(3)) == {"phone": "777"}               # no email
     assert trees.lookup(conn, "people", person, row(6)) == {"first": "Di", "last": "Wu"}  # shared email, own name
     assert trees.lookup(conn, "people", person, row(4)) == {}                             # nothing of their own
+
+
+def test_lookup_skips_a_name_column_that_is_the_key(tmp_path):
+    # student_loan's person table is just the name, which is the key: "find me by my name" found the key by the key
+    conn = sqlite3.connect(make_db(tmp_path, "loans", "CREATE TABLE person (name TEXT PRIMARY KEY); INSERT INTO person VALUES ('student1');"))
+    assert trees.lookup(conn, "person", {"key": "name", "name_cols": ["name"]}, {"name": "student1"}) == {}

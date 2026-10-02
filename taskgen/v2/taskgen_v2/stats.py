@@ -30,7 +30,8 @@ def summarize(cands, checks, verifies, selected):
                      "archive": sum(x["archive"] for x in f), "public": sum(x["public_or_other"] for x in f)}
     five = [v for v in verifies if len(v["votes"]) >= 5]
     d["vote_agreement"] = (sum(_majority(v["votes"][:3]) != _majority(v["votes"][:5]) for v in five) / len(five)) if five else None
-    d["unanimous_share"] = (sum(len({x["verdict"] for x in v["votes"]}) == 1 for v in verifies) / len(verifies)) if verifies else None
+    d["unanimous_share"] = (sum(len({x["verdict"] for x in v["votes"] if "error" not in x}) == 1 for v in verifies)
+                            / len(verifies)) if verifies else None   # a failed call is not a vote
     return d
 
 

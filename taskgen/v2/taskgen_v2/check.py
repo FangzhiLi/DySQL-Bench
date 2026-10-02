@@ -17,8 +17,9 @@ _NAME = r'(?:"([^"]+)"|\[([^\]]+)\]|`([^`]+)`|([\w$]+))'
 # archive = INSERT whose source is a SELECT (not a subquery inside VALUES) ...
 ARCHIVE_SRC = re.compile(r"(?is)^\s*insert\b(?:(?!\bvalues\b).)*?\bselect\b.*?\bfrom\s+" + _NAME)
 # gold that reads the clock or random(): run it twice and compare what the eval hash compares. Date functions called
-# without a time value read the clock too: date(), datetime(), julianday(), strftime('%H:%M')
-NONDET = re.compile(r"(?i)\bcurrent_(?:timestamp|time|date)\b|'now'|\brandom(?:blob)?\s*\(|\bunixepoch\s*\(|"
+# without a time value read the clock too: date(), datetime(), julianday(), strftime('%H:%M'); so does "now", which
+# SQLite reads as the string 'now' when no column has that name
+NONDET = re.compile(r"(?i)\bcurrent_(?:timestamp|time|date)\b|'now'|\"now\"|\brandom(?:blob)?\s*\(|\bunixepoch\s*\(|"
                     r"\b(?:date|time|datetime|julianday)\s*\(\s*\)|\bstrftime\s*\(\s*'(?:[^']|'')*'\s*\)")
 # columns the eval hash skips, copied from DySQL-Bench/dysql_bench/envs/base.py (test_volatile_columns_match_the_eval)
 VOLATILE_COL_RE = re.compile(
@@ -123,10 +124,11 @@ def text_forms(instruction):
 
 
 def _contains(text, n):
-    """n occurs in text as a whole token: '203' is not in '2030', 'ann' is not in 'joanna'. A word may take a plural
-    ending ('cup' in '2 cups') and a unit may follow a number ('g' in '10g'), as in DySQL's cookbook gold."""
+    """n occurs in text as a whole token: '203' is not in '2030', 'ann' is not in 'joanna'. A word of three letters
+    or more may take a plural ending ('cup' in '2 cups'; 'M' is not in 'Ms') and a unit may follow a number ('g' in
+    '10g'), as in DySQL's cookbook gold."""
     before = r"(?:(?<!\w)|(?<=\d))" if n.isalpha() else r"(?<!\w)"
-    after = r"(?:e?s)?(?!\w)" if n[-1:].isalpha() else r"(?!\w)"
+    after = r"(?:e?s)?(?!\w)" if n[-1:].isalpha() and len(n) >= 3 else r"(?!\w)"
     return re.search(before + re.escape(n) + after, text) is not None
 
 
@@ -178,14 +180,14 @@ def snapshot(db, tables):
 
 
 def at_instant(stmt, instant):
-    """The statement with every clock reading replaced by a fixed instant: 'now', CURRENT_TIMESTAMP/DATE/TIME, and
-    date functions called without a time value. A column default that reads the clock is not replaced; none of the
+    """The statement with every clock reading replaced by a fixed instant: 'now' or "now", CURRENT_TIMESTAMP/DATE/TIME,
+    and date functions called without a time value. A column default that reads the clock is not replaced; none of the
     36 databases (23 here, 13 in DySQL) has one."""
     day, tod = instant.split()
     s = re.sub(r"(?i)\bcurrent_timestamp\b", f"'{instant}'", stmt)
     s = re.sub(r"(?i)\bcurrent_date\b", f"'{day}'", s)
     s = re.sub(r"(?i)\bcurrent_time\b", f"'{tod}'", s)
-    s = re.sub(r"(?i)'now'", f"'{instant}'", s)
+    s = re.sub(r"(?i)'now'|\"now\"", f"'{instant}'", s)
     s = re.sub(r"(?i)\b(date|time|datetime|julianday|unixepoch)\s*\(\s*\)", rf"\1('{instant}')", s)
     return re.sub(r"(?i)\bstrftime\s*\(\s*('(?:[^']|'')*')\s*\)", rf"strftime(\1, '{instant}')", s)
 

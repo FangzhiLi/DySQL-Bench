@@ -69,7 +69,9 @@ def models_from_env(spec=None):
     """[(client, votes)] for spec, else TASKGEN_VERIFY_MODELS, else TASKGEN_VERIFY_MODEL with DEFAULT_VOTES; every
     model goes to TASKGEN_VERIFY_BASE_URL with TASKGEN_VERIFY_API_KEY."""
     io.load_dotenv()
-    spec = spec or os.environ.get("TASKGEN_VERIFY_MODELS") or f"{os.environ.get('TASKGEN_VERIFY_MODEL', '')}:{DEFAULT_VOTES}"
+    if not (spec or os.environ.get("TASKGEN_VERIFY_MODELS") or os.environ.get("TASKGEN_VERIFY_MODEL")):
+        raise llm.LLMError("missing env TASKGEN_VERIFY_MODELS or TASKGEN_VERIFY_MODEL (see .env)")
+    spec = spec or os.environ.get("TASKGEN_VERIFY_MODELS") or f"{os.environ['TASKGEN_VERIFY_MODEL']}:{DEFAULT_VOTES}"
     return [(llm.client_from_env("VERIFY", model=name), n) for name, n in parse_models(spec)]
 
 
