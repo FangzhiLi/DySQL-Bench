@@ -1,6 +1,6 @@
 # 23 个库的档案：审阅页
 
-GLM-5.3 按 `data/profile_hints.json` 的提示和两份 DySQL 手写示例起草了这些档案，Claude 又对着库逐个预审过。所有档案都通过了 `profile check`。用户 2026-10-01 审阅后回复"保持现状"：下面九点都按建议，档案没有再改，23 个库全部确认。之后，最终复核后的检查发现两份描述还在介绍已排除的表，于是改了 professional_basketball 和 book_publishing_company 的描述：不再把这些表当成数据介绍，并写明它们不在范围内。用户同意后重新确认。由 `taskgen.py profile render` 生成，档案原文在 `taskgen/v2/data/db_profiles.json`。
+GLM-5.3 按 `data/profile_hints.json` 的提示和两份 DySQL 手写示例起草了这些档案，Claude 又对着库逐个预审过。所有档案都通过了 `profile check`。用户 2026-10-01 审阅后回复"保持现状"：下面九点都按建议，档案没有再改，23 个库全部确认。之后，最终复核后的检查发现两份描述还在介绍已排除的表，于是改了 professional_basketball 和 book_publishing_company 的描述：不再把这些表当成数据介绍，并写明它们不在范围内。用户同意后重新确认。2026-10-01 又对 23 个库的描述和数据怪异点做了一次事实核对（只读查库）：16 个库的 description 和 quirks 按查库结果改过，结构没动，每库改了什么见各节"Claude 的改动"的最后一条；用户同意后重新确认。由 `taskgen.py profile render` 生成，档案原文在 `taskgen/v2/data/db_profiles.json`。
 
 ## 怎么看
 
@@ -62,7 +62,7 @@ GLM-5.3 按 `data/profile_hints.json` 的提示和两份 DySQL 手写示例起�
 
 ## bird:address　已确认　校验通过
 
-> A United States postal geography and demographics reference built around ZIP codes: zip_data records per-ZIP population, housing, income, business and benefit statistics, while alias, area_code, country and avoid map each ZIP to city names, telephone area codes and counties. The only people are the members of Congress in congress, each linked through zip_congress to the ZIP codes of the district they represent.
+> A United States postal geography and demographics reference built around ZIP codes: zip_data records per-ZIP population, housing, income, business and benefit statistics, while alias, area_code, country and avoid map each ZIP to city names, telephone area codes and counties. The only people are the members of Congress in congress, 440 House members and 100 senators; every House member except the District of Columbia delegate is linked through zip_congress to the ZIP codes of their district, and senators have no zip_congress rows.
 
 | 项 | 内容 |
 |---|---|
@@ -88,12 +88,13 @@ GLM-5.3 按 `data/profile_hints.json` 的提示和两份 DySQL 手写示例起�
 
 Claude 的改动：
 - Claude: roles, edges and every quirk checked against the data; no change
+- Claude: fact check 2026-10-01 -- the description says senators and the DC delegate have no zip_congress rows
 
 起草：glm-5.3，1 轮
 
 ## bird:beer_factory　已确认　校验通过
 
-> A root beer retail tracker: customers buy individual root beer items (a brand in a container sold at a location) recorded as transactions with credit card type and price, and they leave star reviews and comments on brands. Brands carry brewery, ingredient, packaging, social media and pricing details, and selling locations have addresses with coordinates.
+> A root beer retail tracker: customers buy individual root beer items, recorded as transactions with the location of sale, credit card type and price, and they leave star reviews on brands (only 16 of 713 reviews have a comment). rootbeer lists each item with its brand, container, LocationID and PurchaseDate; these need not match the location and date of the transaction that sold the item. Brands carry brewery, ingredient, packaging, social media and pricing details, and locations have addresses with coordinates.
 
 | 项 | 内容 |
 |---|---|
@@ -119,12 +120,13 @@ Claude 的改动：
 
 Claude 的改动：
 - Claude: transaction parents trimmed to rootbeer -> rootbeerbrand and location -- the coordinates (geolocation) and the root beer's own stock location add two rows per purchase without helping read it
+- Claude: fact check 2026-10-01 -- rootbeer's LocationID and PurchaseDate need not match the sale (the location differs in 3180 of 6312 transactions, the date in all of them); few reviews have a comment
 
 起草：glm-5.3，1 轮
 
 ## bird:book_publishing_company　已确认　校验通过
 
-> A book publishing house database: authors write titles that publishers publish, with titleauthor recording each author's order and royalty share on a book and roysched defining royalty tiers per title. Publishers employ staff tracked in employee with job levels from jobs. Requests center on the authors and the books they are credited with; the store side (stores, sales, discounts) is out of scope.
+> A book publishing house database: authors write titles that publishers publish, with titleauthor recording each author's order and royalty share on a book and roysched defining royalty tiers per title. Publishers employ staff tracked in employee, each with a job from jobs and a job level (job_lvl) within that job's range. Requests center on the authors and the books they are credited with; the store side (stores, sales, discounts) is out of scope.
 
 | 项 | 内容 |
 |---|---|
@@ -148,6 +150,7 @@ Claude 的改动：
 Claude 的改动：
 - Claude: quirks checked against the data -- contract is '0' for all 23 authors (the draft implied '1' occurs); pub_info.logo is stored as text, not a binary blob, and nobody edits it, so that quirk is dropped
 - Claude: description drops the store side (stores, sales, discounts are excluded) and says it is out of scope (after the final review; approved by the user)
+- Claude: fact check 2026-10-01 -- job levels are employee.job_lvl, jobs gives their range
 
 起草：glm-5.3，1 轮
 
@@ -194,7 +197,7 @@ Claude 的改动：
 
 ## bird:car_retails　已确认　校验通过
 
-> A wholesale distributor of classic model cars. Customers are companies, each with a contact person and a sales representative among the employees, who are assigned to offices. Customers place orders whose line items list products (each belonging to a product line) and make payments by check.
+> A wholesale distributor of classic model cars. Customers are companies, each with a contact person; 100 of the 122 have a sales representative among the employees, who are assigned to offices, and the 22 without one have no orders or payments. Customers place orders whose line items list products (each belonging to a product line) and make payments by check.
 
 | 项 | 内容 |
 |---|---|
@@ -221,12 +224,13 @@ Claude 的改动：
 Claude 的改动：
 - Claude: payments removed from no_insert -- the check number comes from the customer, so recording a new payment is a natural request
 - Claude: trailing-space quirk made exact (44 of 122 contactFirstName values; checked)
+- Claude: fact check 2026-10-01 -- the description says 22 customers have no sales representative
 
 起草：glm-5.3，1 轮
 
 ## bird:food_inspection_2　已确认　校验通过
 
-> A municipal food-safety program: health-department employees (sanitarians, supervisors and division managers, each reporting to another employee) inspect licensed establishments such as restaurants and cafeterias. Each visit is an inspection with a type and result, possibly following up an earlier inspection, and each citation is a violation tied to a standard inspection point carrying a fine and the inspector's comment.
+> A municipal food-safety program: the health department's employees are sanitarians, supervisors and a division manager, each with a supervisor on record (the division manager's, 204603, is not in employee), and only the sanitarians inspect licensed establishments such as restaurants, grocery stores, schools and daycares. Each visit is an inspection with a type and result, possibly following up an earlier inspection, and each citation is a violation tied to a standard inspection point carrying a fine and the inspector's comment.
 
 | 项 | 内容 |
 |---|---|
@@ -253,12 +257,13 @@ Claude 的改动：
 
 Claude 的改动：
 - Claude: fine quirk corrected (85% of violations carry the standard fine, not all) and the space-padded point_level added (checked)
+- Claude: fact check 2026-10-01 -- the description says only sanitarians inspect (supervisors and the division manager have no inspections) and lists the main establishment types
 
 起草：glm-5.3，1 轮
 
 ## bird:legislator　已确认　校验通过
 
-> A directory of United States members of Congress. The roots are the historical (no longer serving) legislators: each row of historical is a person, and historical-terms records that legislator's term of office with chamber type, state, district, party, and start and end dates. Currently serving legislators live in the separate current table with their terms in current-terms and their accounts in social-media, but they are different people and their records must not be touched.
+> A directory of United States members of Congress. The roots are the historical (no longer serving) legislators: each row of historical is a person, and historical-terms records one term of that legislator with chamber type, state, district, party, and start and end dates. Currently serving legislators live in the separate current table with their terms in current-terms and their accounts in social-media, but they are different people and their records must not be touched.
 
 | 项 | 内容 |
 |---|---|
@@ -269,18 +274,19 @@ Claude 的改动：
 | 公共表 | — |
 | 排除 | current-terms, social-media |
 | 不出 INSERT | historical, current, historical-terms |
-| 数据怪异点 | historical-terms has exactly one row per legislator (its key is bioguide alone), so each person has a single term on record.；chamber is null in historical-terms; type tells the chamber: 'sen' for senators, 'rep' for representatives.；class is set only for senators (1, 2 or 3) and district only for representatives.；name, relation, last, title and office in historical-terms are null in almost every row.；historical.fec_id holds a stringified list, e.g. "['S6CO00168']".；current, current-terms and social-media describe different people (sitting legislators, none of them in historical); leave them alone. |
+| 数据怪异点 | historical-terms has exactly one row per legislator (its key is bioguide alone), so each person has a single term on record, often only the first of a longer career (Robert Byrd's row is his 1953-1955 House term).；chamber is null in historical-terms except in 3 rows; type tells the chamber: 'sen' for senators, 'rep' for representatives. type is null in 6 rows: in 3 of them chamber is set ('house' or 'senate'), in the other 3 both are null.；class is set only for senators (1, 2 or 3) and district only for representatives.；name, relation, last, title and office in historical-terms are null in almost every row.；historical.fec_id holds a stringified list, e.g. "['S6CO00168']".；current, current-terms and social-media describe different people (sitting legislators, none of them in historical); leave them alone. |
 
 主键：非整数或复合主键：current(bioguide_id, cspan_id), current-terms(bioguide, end), historical(bioguide_id), historical-terms(bioguide), social-media(bioguide)
 
 Claude 的改动：
 - Claude: quirks checked; dropped the two about the current table's column types (current is never written), tightened the rest
+- Claude: fact check 2026-10-01 -- the single term on record is often the first one; chamber/type quirk states its exceptions
 
 起草：glm-5.3，3 轮
 
 ## bird:movie　已确认　校验通过
 
-> A movie database: each actor has a profile (birthplace, gender, ethnicity, net worth) and is cast in movies through the characters table, which records the character name, credit order, pay and screen time for each role. Movies carry budget, box office gross, MPAA rating, genre, runtime, rating and release date.
+> A movie database: each actor has a profile (birthplace, gender, ethnicity, net worth; many of these are null) and is cast in movies through the characters table, which records the character name, credit order, pay and screen time for each role. Movies carry budget, box office gross, MPAA rating, genre, runtime, rating and release date.
 
 | 项 | 内容 |
 |---|---|
@@ -302,6 +308,7 @@ Claude 的改动：
 
 Claude 的改动：
 - Claude: quirks checked; column quoting now shows double quotes (the draft used single quotes, which SQLite reads as strings); dropped the naming-style remark
+- Claude: fact check 2026-10-01 -- the description says many actor profile fields are null
 
 起草：glm-5.3，1 轮
 
@@ -382,7 +389,7 @@ Claude 的改动：
 | 公共表 | teams, series_post |
 | 排除 | coaches, awards_coaches |
 | 不出 INSERT | players |
-| 数据怪异点 | playerID values are text codes built from names, like 'abdulka01', not numbers.；players.firstseason and lastseason are 0 in almost every row; a player's real seasons are the years in players_teams.；players.deathDate '0000-00-00' means the player is alive.；draft.playerID is null for 4958 of 8621 picks (players who never played in the league); such rows belong to no player.；In draft, draftRound or draftSelection 0 means the number is unknown.；draft and player_allstar repeat the player's name next to playerID, and the copy often differs from players (nicknames, spellings).；Null statistics in player_allstar and players_teams mean the stat was not tracked, not zero.；In awards_players, note 'tie' means the award was shared; null means nothing special.；teams has one row per team per season, keyed by (year, tmID), and covers early leagues (ABA, NBL, ABL1, NPBL, PBLA) besides the NBA. |
+| 数据怪异点 | playerID values are text codes built from names, like 'abdulka01', not numbers.；players.firstseason and lastseason are 0 in almost every row; a player's real seasons are the years in players_teams.；players.deathDate '0000-00-00' means no death date is recorded (the player may be alive or the date unknown); birthDate '0000-00-00' means the birth date is unknown.；draft.playerID is null for 4958 of 8621 picks (players who never played in the league); such rows belong to no player.；In draft, draftRound or draftSelection 0 means the number is unknown.；draft and player_allstar repeat the player's name next to playerID, and the copy often differs from players (nicknames, spellings).；Statistics in players_teams are never null: a stat that was not tracked is stored as 0 (before 1973, steals are 0 in 7022 of 7030 rows). In player_allstar a null statistic means it was not tracked.；In awards_players, note 'tie' means the award was shared; null means nothing special.；teams has one row per team per season, keyed by (year, tmID), and covers early leagues (ABA, NBL, ABL1, NPBL, PBLA) besides the NBA. |
 
 挂在根和事件下面的父行（← 后面是外键列）：
 
@@ -397,6 +404,7 @@ Claude 的改动：
 - Claude: removed the second root coaches and its awards_coaches event -- the hint names players only, coachID repeats across a coach's stints and coaches have no name columns, so coaches and awards_coaches are excluded
 - Claude: quirks checked; dropped the coach ones, firstseason/lastseason are 0 in 5046 of 5062 rows (not all)
 - Claude: description no longer presents the excluded coaches tables as data and says they are out of scope (after the final review; approved by the user)
+- Claude: fact check 2026-10-01 -- quirks corrected: players_teams stats are never null (untracked is 0, null only in player_allstar); deathDate '0000-00-00' means no date recorded, not 'alive'
 
 起草：glm-5.3，3 轮，没改掉的问题 1 条
 
@@ -432,7 +440,7 @@ Claude 的改动：
 
 ## bird:retail_complains　已确认　校验通过
 
-> A consumer-complaint call center: clients (customers) lodge complaints by phone, each call logged in callcenterlogs with priority, type, outcome and server handling times, while events records the substance of each complaint (product, issue, narrative, channel) and the company's response. Clients live in districts grouped by state, and reviews logs daily product star ratings per district.
+> A bank's consumer-complaint records: clients (customers) file complaints about bank accounts and credit cards through several channels (web, referral, phone, postal mail, fax, email). events records the substance of each complaint (product, issue, narrative, channel) and the company's response; a complaint made by phone also has a row in callcenterlogs with priority, type, outcome and server handling times. Clients live in districts grouped by state, and reviews holds dated reviews of three bank products (stars, sometimes text), at most one per day, each tied to a district.
 
 | 项 | 内容 |
 |---|---|
@@ -443,7 +451,7 @@ Claude 的改动：
 | 公共表 | district, state, reviews |
 | 排除 | — |
 | 不出 INSERT | client, callcenterlogs, events |
-| 数据怪异点 | Many column names contain spaces or special characters ('Complaint ID', 'rand client', 'vru+line', 'Date received', 'Consumer consent provided?', 'Timely response?', 'Consumer disputed?') and must be double-quoted in SQL.；'rand client' in callcenterlogs is a foreign key to client.client_id despite the space in its name.；The client table stores the birth date as three separate columns day, month, year instead of one date column.；Complaint ID appears in both callcenterlogs and events, but no foreign key links the two tables, so a call and a complaint record are only loosely associated.；callcenterlogs.priority is 0, 1, 2 or null, with higher meaning more urgent.；The server column in callcenterlogs holds call-center agents' first names (e.g. MICHAL, TOVA), not ids. |
+| 数据怪异点 | Many column names contain spaces or special characters ('Complaint ID', 'rand client', 'vru+line', 'Date received', 'Consumer consent provided?', 'Timely response?', 'Consumer disputed?') and must be double-quoted in SQL.；'rand client' in callcenterlogs is a foreign key to client.client_id despite the space in its name.；The client table stores the birth date as three separate columns day, month, year instead of one date column.；events."Complaint ID" is a declared foreign key to callcenterlogs: each phone complaint has exactly one callcenterlogs row with the same Complaint ID and the same client ("rand client"); complaints submitted any other way have none.；callcenterlogs.priority is 0, 1, 2 or null, with higher meaning more urgent.；The server column in callcenterlogs holds call-center agents' first names (e.g. MICHAL, TOVA), not ids. |
 
 挂在根和事件下面的父行（← 后面是外键列）：
 
@@ -455,6 +463,7 @@ Claude 的改动：
 
 Claude 的改动：
 - Claude: roles, edges and every quirk checked against the data; no change
+- Claude: fact check 2026-10-01 -- only phone complaints (2504 of 23419) have call logs; reviews described as single dated reviews; the quirk claiming no foreign key between events and callcenterlogs corrected
 
 起草：glm-5.3，1 轮
 
@@ -522,7 +531,7 @@ Claude 的改动：
 
 ## bird:student_loan　已确认　校验通过
 
-> A student loan database of 1000 students identified by codes like 'student123'. One-to-one tables record each student's circumstances (disabled, unemployed, male, filed for bankruptcy, longest absence, payment due), while enlist records organizations a student enlisted in and enrolled records the school and month of enrollment.
+> A student loan database of 1000 students identified by codes like 'student123'. longest_absense_from_school and no_payment_due have a row for every student, while disabled, unemployed, male and filed_for_bankrupcy list only the students for whom the fact holds. enlist records organizations a student enlisted in, and enrolled records the schools a student is enrolled in with the number of months enrolled.
 
 | 项 | 内容 |
 |---|---|
@@ -533,18 +542,19 @@ Claude 的改动：
 | 公共表 | — |
 | 排除 | bool |
 | 不出 INSERT | — |
-| 数据怪异点 | Students are identified by codes like 'student123' stored in a name column, not by real names or numeric ids.；filed_for_bankrupcy and longest_absense_from_school are misspelled in the schema; always use those exact table names.；In longest_absense_from_school, month 0 means the student has never been absent.；Only male students appear in male; a student missing from that table is female, so 'changing gender' means adding or removing the row.；In no_payment_due, bool 'neg' means the student has no payment due and 'pos' means the student has payment due; those are the only two values.；enlist.organ and enrolled.school hold text codes like 'fire_department' and 'ucb' with no reference table. |
+| 数据怪异点 | Students are identified by codes like 'student123' stored in a name column, not by real names or numeric ids.；filed_for_bankrupcy and longest_absense_from_school are misspelled in the schema; always use those exact table names.；In longest_absense_from_school, month 0 means the student has never been absent.；disabled, unemployed, filed_for_bankrupcy and male hold only a name column and list just the students for whom the fact holds (a student missing from male is female); changing such a fact means adding or removing the student's row.；In no_payment_due, bool 'neg' means the student has no payment due and 'pos' means the student has payment due; those are the only two values.；enlist.organ and enrolled.school hold text codes like 'fire_department' and 'ucb' with no reference table.；enrolled.month is the number of months the student has been enrolled at that school (1 to 15), not a calendar month. |
 
 主键：非整数或复合主键：bool(name), disabled(name), enrolled(name, school), filed_for_bankrupcy(name), longest_absense_from_school(name), male(name), no_payment_due(name), person(name), unemployed(name)；无主键：enlist
 
 Claude 的改动：
 - Claude: roles, edges and every quirk checked against the data; no change
+- Claude: fact check 2026-10-01 -- enrolled.month is the months enrolled, not the month of enrollment; the yes/no membership tables named as such
 
 起草：glm-5.3，1 轮
 
 ## bird:superhero　已确认　校验通过
 
-> A catalog of comic-book superheroes: each hero has a hero name, full name, physical traits (gender, eye/hair/skin colour, race, height, weight) plus a publisher and moral alignment, all described via small lookup tables. hero_attribute rates each hero on traits like intelligence and strength, and hero_power records which superpowers the hero has.
+> A catalog of comic-book characters, heroes and villains alike (alignment Good, Bad or Neutral): each has a hero name, full name, physical traits (gender, eye/hair/skin colour, race, height, weight) plus a publisher and moral alignment, all described via small lookup tables. hero_attribute rates each character on traits like intelligence and strength, and hero_power records which superpowers the character has.
 
 | 项 | 内容 |
 |---|---|
@@ -576,12 +586,13 @@ Claude 的改动：
 
 Claude 的改动：
 - Claude: roles, edges and every quirk checked against the data; no change
+- Claude: fact check 2026-10-01 -- the description says 212 characters are villains (alignment Bad)
 
 起草：glm-5.3，1 轮
 
 ## bird:synthea　已确认　校验通过
 
-> A synthetic electronic health record system: each patient's identity and demographics live in patients, and their medical history is a series of encounters, each of which can carry allergies, care plans, conditions, immunizations, medications, observations, procedures and claims. Claims reference only the patient. all_prevalences is reference data on how common each disease is in the living population.
+> A synthetic electronic health record system: each patient's identity and demographics live in patients, and their medical history is a series of encounters. Allergies, care plans, conditions, immunizations, medications, observations and procedures each belong to a patient and (almost always) to one of the patient's encounters, while claims reference only the patient. all_prevalences is reference data listing 244 items, mostly conditions and medications, with prevalence figures for a reference population of 1000.
 
 | 项 | 内容 |
 |---|---|
@@ -592,7 +603,7 @@ Claude 的改动：
 | 公共表 | all_prevalences |
 | 排除 | — |
 | 不出 INSERT | patients, encounters, claims, careplans |
-| 数据怪异点 | In claims, the ENCOUNTER column holds the patient's id rather than an encounter id; it always matches claims.PATIENT.；allergies START and STOP are text dates in m/d/yy format (e.g. 3/11/95), unlike the yyyy-mm-dd dates used everywhere else.；patients.passport holds the string 'FALSE' (564 patients) or null (339) when a patient has no passport.；careplans.CODE is stored as a REAL number (e.g. 53950000.0) while code columns in the other clinical tables are integers. |
+| 数据怪异点 | In claims, the ENCOUNTER column holds the patient's id rather than an encounter id; it always matches claims.PATIENT.；allergies START and STOP are text dates in m/d/yy format (e.g. 3/11/95), unlike the yyyy-mm-dd dates used everywhere else.；patients.passport holds the string 'FALSE' (564 patients) or null (339) when a patient has no passport.；careplans.CODE is stored as a REAL number (e.g. 53950000.0) and observations.CODE as text (e.g. '14959-1'); the CODE columns of allergies, conditions, immunizations, medications and procedures are integers.；careplans.ID is not unique: a care plan has one row per activity, all sharing the plan's ID (12125 rows, 3673 IDs). |
 
 挂在根和事件下面的父行（← 后面是外键列）：
 
@@ -615,6 +626,7 @@ Claude 的改动：
 
 Claude 的改动：
 - Claude: quirks checked; passport is 'FALSE' or null for patients without one
+- Claude: fact check 2026-10-01 -- the description no longer hangs claims under encounters; all_prevalences described as it is; the CODE quirk corrected (observations.CODE is text); quirk added that careplans.ID repeats per activity
 
 起草：glm-5.3，1 轮
 
@@ -631,7 +643,7 @@ Claude 的改动：
 | 公共表 | course, section, prereq, department, classroom, time_slot |
 | 排除 | — |
 | 不出 INSERT | — |
-| 数据怪异点 | section, teaches and takes all share the composite key (course_id, sec_id, semester, year); a new takes or teaches row must copy the values of an existing section row.；IDs in student, instructor and course are plain digit strings (e.g. '24746', '787'), and sec_id holds plain digits like '1'. |
+| 数据怪异点 | section, teaches and takes all share the composite key (course_id, sec_id, semester, year); a new takes or teaches row must copy the values of an existing section row.；IDs in student, instructor and course are plain digit strings (e.g. '24746', '787'), and sec_id holds plain digits like '1'.；takes.grade stores the plain grades with a trailing space ('A ', 'B ', 'C ') while the signed grades ('A+', 'B-', ...) have none; since an instruction cannot show the space, a request neither sets a grade to plain A, B or C nor picks rows by one. |
 
 挂在根和事件下面的父行（← 后面是外键列）：
 
@@ -654,6 +666,7 @@ Claude 的改动：
 
 Claude 的改动：
 - Claude: event parents trimmed to section -> course for takes and teaches and to the other person for advisor -- a student has about 15 enrolments, and classroom, time slot and departments added four rows to each; section -> time_slot also led to several rows (one per day)
+- Claude: fact check 2026-10-01 -- quirk added: plain grades are stored as 'A ', 'B ', 'C '; requests leave them out, so neither the gold nor the agent has to guess the space
 
 起草：glm-5.3，1 轮
 
@@ -670,7 +683,7 @@ Claude 的改动：
 | 公共表 | jobs, departments, locations, countries, regions |
 | 排除 | — |
 | 不出 INSERT | jobs, countries |
-| 数据怪异点 | No key is assigned automatically: every key is a DECIMAL or a varchar code, so a new row needs an explicit id.；employees.MANAGER_ID 0 (on employee 100, the president) means 'no manager' and matches no employee row.；regions.REGION_NAME values end with the two characters \r (a backslash and r), e.g. 'Europe\r'.；Only 7 of the 107 employees have job_history rows. |
+| 数据怪异点 | No key is assigned automatically: every key is a DECIMAL or a varchar code, so a new row needs an explicit id.；employees.MANAGER_ID 0 (on employee 100, the president) means 'no manager' and matches no employee row.；regions.REGION_NAME values end with the two characters \r (a backslash and r), e.g. 'Europe\r'.；Only 7 of the 107 employees have job_history rows; job_history also holds one junk row with EMPLOYEE_ID 0. |
 
 挂在根和事件下面的父行（← 后面是外键列）：
 
@@ -689,6 +702,7 @@ Claude 的改动：
 - Claude: removed same_as employees.MANAGER_ID and departments.MANAGER_ID -- same_as is for the same person's id in another table; these columns name a manager, and as ownership edges they would make every department the manager's private data
 - Claude: root parents end at departments -> locations and job_history parents at jobs and departments -- countries and regions add rows without helping
 - Claude: quirks checked: REGION_NAME ends with a literal backslash and r, not a carriage return; dropped the unverifiable claim that job_history rows predate the current job
+- Claude: fact check 2026-10-01 -- the job_history quirk mentions the junk row with EMPLOYEE_ID 0
 
 起草：glm-5.3，1 轮
 
@@ -734,7 +748,7 @@ Claude 的改动：
 
 ## spider2:WWE　已确认　校验通过
 
-> A professional-wrestling results database assembled by scraping profightdb.com. Cards record each event card (date, promotion, location and event name), and Matches record each individual bout with its winner, loser, win type, match type, duration and the championship belt at stake. The only people are the wrestlers, who appear in Matches as the winner and the loser.
+> A professional-wrestling results database assembled by scraping profightdb.com. Cards record each event card (date, promotion, location and event name), and Matches record each individual bout with its winner, loser, win type, match type, duration and the championship belt at stake. The people are the entries of Wrestlers, who appear in Matches as the winner and the loser; most entries (12952 of 17182) are tag teams or groups whose name joins several wrestlers' names with ' & ', and such an entry stands for the team, apart from any entry of its members.
 
 | 项 | 内容 |
 |---|---|
@@ -745,7 +759,7 @@ Claude 的改动：
 | 公共表 | Cards, Events, Locations, Promotions, Match_Types, Belts |
 | 排除 | Tables |
 | 不出 INSERT | — |
-| 数据怪异点 | Matches.winner_id, loser_id, match_type_id and title_id are TEXT columns holding integer ids as strings; compare them as text.；Wrestlers.name, Belts.name, Events.name, Locations.name, Promotions.name and Match_Types.name are UNIQUE.；sqlite_sequence is ahead of MAX(id) in Belts, Cards, Events, Locations, Match_Types, Promotions, Tables and Wrestlers, so a new row in any of those tables needs an explicit id.；Belts id 1 and Match_Types id 1 have empty names and act as 'no title' / 'no special type' placeholders referenced by most Matches.；Cards.url, Cards.info_html, Cards.match_html and Tables.html are scraped web artifacts, not data a request should rewrite. |
+| 数据怪异点 | Matches.winner_id, loser_id, match_type_id and title_id are TEXT columns holding integer ids as strings; compare them as text.；Wrestlers.name, Belts.name, Events.name, Locations.name, Promotions.name and Match_Types.name are UNIQUE.；sqlite_sequence is ahead of MAX(id) in Belts, Cards, Events, Locations, Match_Types, Promotions and Wrestlers, so SQLite would number a new row in those tables above MAX(id)+1; a new row there states its id explicitly.；Belts id 1 and Match_Types id 1 have empty names and act as 'no title' / 'no special type' placeholders referenced by most Matches.；Cards.url, Cards.info_html, Cards.match_html and Tables.html are scraped web artifacts, not data a request should rewrite.；Almost every bout is stored seven times in Matches: its 540800 rows hold 77546 distinct bouts, nearly all of them as seven identical rows under different ids. A request names the Matches ids it changes, and the other copies stay as they are; a request that adds a new bout inserts it once.；win_type values starting with 'draw' (and 'vs.') mean nobody won: winner_id and loser_id then just hold the two sides (16011 rows). |
 
 挂在根和事件下面的父行（← 后面是外键列）：
 
@@ -767,6 +781,7 @@ Claude 的改动：
 Claude 的改动：
 - Claude: removed same_as Matches.winner_id -- it repeats the 'matches won' path, and same_as is for identity columns, not references
 - Claude: Cards parents trimmed to Events -- each card row already carries cut-down HTML, Locations and Promotions added two more rows per match
+- Claude: fact check 2026-10-01 -- the description says most Wrestlers entries are tag teams joined by ' & '; quirks added for the seven stored copies of each bout and for draws; the sqlite_sequence quirk states the fact instead of 'needs an explicit id'
 
 起草：glm-5.3，1 轮
 
@@ -783,7 +798,7 @@ Claude 的改动：
 | 公共表 | Classes, Subjects, Categories, Departments, Class_Rooms, Buildings, Majors, Student_Class_Status |
 | 排除 | — |
 | 不出 INSERT | — |
-| 数据怪异点 | Staff's last-name column is StfLastname (lowercase n), while Students uses StudLastName.；Subjects.SubjectPreReq stores another subject's SubjectCode (e.g. 'ACC 210'), not a SubjectID; it is null when there is no prerequisite.；Faculty is the teaching profile of a Staff member and reuses Staff.StaffID; only 24 of the 27 staff members are faculty.；Departments.DeptChair holds the StaffID of the staff member who chairs the department.；Grades in Student_Schedules and StudGPA in Students are on a 0-100 scale, not 0-4. |
+| 数据怪异点 | Staff's last-name column is StfLastname (lowercase n), while Students uses StudLastName.；Subjects.SubjectPreReq stores another subject's SubjectCode (e.g. 'ACC 210'), not a SubjectID; it is null when there is no prerequisite.；Faculty is the teaching profile of a Staff member and reuses Staff.StaffID; only 24 of the 27 staff members are faculty.；Departments.DeptChair holds the StaffID of the staff member who chairs the department.；Grades in Student_Schedules and StudGPA in Students are on a 0-100 scale, not 0-4.；Student_Schedules.Grade is 0 for classes still enrolled or withdrawn (ClassStatus 1 or 3); only completed classes (ClassStatus 2) carry a real grade. |
 
 挂在根和事件下面的父行（← 后面是外键列）：
 
@@ -806,6 +821,7 @@ Claude 的改动：
 Claude 的改动：
 - Claude: event parents trimmed to class -> subject (plus the enrolment status) -- category, classroom, building and department added up to four rows per record
 - Claude: quirks checked against the data; no change
+- Claude: fact check 2026-10-01 -- quirk added: grades are 0 unless the class is completed
 
 起草：glm-5.3，1 轮
 
