@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from taskgen_v2 import io, llm
 
 VERIFY_TEMPERATURE, VERIFY_MAX_TOKENS = 1.2, 16384
-DEFAULT_VOTES = 2   # with two votes both must say Yes (design §4.6)
+DEFAULT_VOTES = 1   # one vote, Yes to pass: in plan 4 it kept 98% of the good tasks and rejected every broken one
 FINAL = "Verification: Is the answer correct (Yes/No)?"
 
 SYSTEM = """You are checking a training task for a database agent. The task has two parts: the user's request (what a

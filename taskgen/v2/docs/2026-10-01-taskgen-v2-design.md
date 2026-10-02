@@ -1,6 +1,6 @@
 # 训练任务生成 v2：设计
 
-**日期：** 2026-10-01　**状态：** 已确认（2026-10-01）。实施计划分几份写：计划 1（阶段 A、G、E）见 `2026-10-01-taskgen-v2-plan-1.md`，计划 2（阶段 B、C，执行检查读档案）见 `2026-10-01-taskgen-v2-plan-2.md`，计划 3（阶段 D 出题，顺带计划 1 留下的检查规则）见 `2026-10-01-taskgen-v2-plan-3.md`；校验和运行的计划在前一份完成后再写
+**日期：** 2026-10-01　**状态：** 已确认（2026-10-01）。实施计划分几份写：计划 1（阶段 A、G、E）见 `2026-10-01-taskgen-v2-plan-1.md`，计划 2（阶段 B、C，执行检查读档案）见 `2026-10-01-taskgen-v2-plan-2.md`，计划 3（阶段 D 出题，顺带计划 1 留下的检查规则）见 `2026-10-01-taskgen-v2-plan-3.md`，计划 4（阶段 F 校验的校准）见 `2026-10-01-taskgen-v2-plan-4.md`；运行的计划在前一份完成后再写
 **起点：** v1（tag `taskgen-v1`，61c8133），复制到 `taskgen/v2/`，包名 `taskgen_v2`。
 **依据：** 论文（ACL Findings 2026）§3 和附录 J、官方 `data_pipeline_shell/`、v1 全量结果（3816 条）与 DySQL 1062 条的逐项对比。
 
@@ -16,7 +16,7 @@
 | D2 | 根默认一个，college_2 和 school_scheduling 双根；hr_1、address 保留；23 个库的根见 §4.1 | 论文每库一个主实体；DySQL 两群人都会来的库有例外 |
 | D3 | 树以事件记录为单位嵌套，父行取被抽中事件实际引用的；出题时再抽事件 | 论文 Fig. 14 的 `build_info_tree`；v1 兄弟表对不上、两跳公共表看不到 |
 | D4 | 校验先用**一个模型**：`deepseek-v4.1-flash`，走 ollama.com 的 OpenAI 兼容接口（`.env` 已配好）；代码按"模型列表 + 每模型票数"设计；要不要加第二个由校准决定 | 官方实际是两模型串跑各过多数；我们有执行检查在前、GRPO 奖励统计在后兜底 |
-| D5 | 校验模型先做**校准**，三组样本：①正样本 = 过了 v2 执行检查的 DySQL gold（原样 gold 的通过率单独报告，不设门槛）；②负样本 = 程序化改坏的 gold，只算改坏后库哈希确实变了、且仍过执行检查的；③人工标注的真实候选 100–150 条（v1 试点的 93 条起步），覆盖 instruction 一侧的错误。漏的类别补进执行检查，而不是加模型 | 单模型的风险是系统性盲点。DySQL gold 本身有坏题（47 条全 0 行、42 条缺字面量、约 3 条把当前时间写进评测会比较的列、retail 按不唯一邮箱定位），而且被 DeepSeek-R1 筛过，用同系模型校准会偏高 |
+| D5 | 校验模型先做**校准**，三组样本：①正样本 = 过了 v2 执行检查的 DySQL gold（原样 gold 的通过率单独报告，不设门槛）；②负样本 = 程序化改坏的 gold，只算改坏后库哈希确实变了、且仍过执行检查的；③人工标注的真实候选 100–150 条（计划 4 改为用修好的代码新出的一批 v2 候选；v1 的题和 v2 差别太大），覆盖 instruction 一侧的错误。漏的类别补进执行检查，而不是加模型 | 单模型的风险是系统性盲点。DySQL gold 本身有坏题（47 条全 0 行、42 条缺字面量、约 3 条把当前时间写进评测会比较的列、retail 按不唯一邮箱定位），而且被 DeepSeek-R1 筛过，用同系模型校准会偏高 |
 | D6 | **这一轮不出第 4 类**（库内的人改别人的数据），也不为此加 staff 根；类型只抽 1、2、3、5；用档案检查时，算出第 4 类的候选拒掉（`other_person`）。备注见 §4.8 | agent policy 写明 "must deny any requests for tasks related to any other user"（v1 试点 4B 在第 4 类 0/6）。DySQL 按 check 规则的 17.6% 是假象：186 条里 retail 占 100（不唯一邮箱把同邮箱的别人算进来）、eu_soccer 35（分析员被当成库内人）、8 条写入（6 题）是新插入的人物行被算成"别人"；真实的约 5% |
 | D7 | gold 里不放 SELECT；prompt 去掉 `outputs` 和只读提问 | 奖励只看库哈希；v1 73% 的题带只读提问，DySQL 4% |
 | D8 | 说话人"名字 + ID/邮箱"一起给，被改的记录直接给 ID；按归属子查询的形状降到 10% 左右 | DySQL 92.4% 前 25 词内给 ID、邮箱、SSN 或 #编号（`metrics.ID_RE`），语句含子查询 5.9%；v1 36.9% / 44.6%（§3） |
@@ -119,12 +119,12 @@ notes, draft: 审阅用（Claude 的改动；起草模型、轮数、没改掉�
 - 其余规则不变（noop、bulk 50、txn、out_of_scope）。在 DySQL gold 上重新校准：相对 v1 新增的拒绝只应来自上面列出的原因（时间函数里会被拒的约 3 条：pagila 把 `CURRENT_TIMESTAMP` 写进 return_date、payment_date；其余写的是 last_update，或只精确到日），逐条看过。
 
 ### 4.6 校验（改 `verify.py`、`llm.py` 配置）
-- 配置：`TASKGEN_VERIFY_MODELS="deepseek-v4.1-flash:2"`（模型:票数，逗号分隔多个；端点和 key 沿用 `TASKGEN_VERIFY_BASE_URL`、`TASKGEN_VERIFY_API_KEY`）；每个模型 Yes 严格多于 No 才过（2 票即两票都要 Yes），全部模型通过才通过。
-- prompt 沿用 v1 重写的五问版。
+- 配置：`TASKGEN_VERIFY_MODELS="deepseek-v4.1-flash:2"`（模型:票数，逗号分隔多个；端点和 key 沿用 `TASKGEN_VERIFY_BASE_URL`、`TASKGEN_VERIFY_API_KEY`）；每个模型 Yes 严格多于 No 才过（2 票即两票都要 Yes），全部模型通过才通过。没设 `TASKGEN_VERIFY_MODELS` 时用 `TASKGEN_VERIFY_MODEL` 投 `verify.DEFAULT_VOTES` 票（计划 4 校准后定为 1 票：好题通过 98%，改坏的题全部被拒）。思考用光 token 没给结论的票不算票，下次运行重投。
+- prompt 沿用 v1 重写的五问版，另附档案的数据怪异点（计划 4：address 把议员的姓存在 first_name，不附就误判）。
 - 校准脚本 `scripts/verify_calibrate.py`，三组样本（D5）：
   - 正样本：过了 v2 执行检查的 DySQL gold。
-  - 负样本：五种改坏（改一个字面量、删一个 WHERE 条件、换一个 SET 列、删最后一条语句、对调两个值）；只保留改坏后库哈希变了、且仍过执行检查的，按类别报告拒绝率。
-  - 人工标注集：v1 试点的 93 条起步，不够再从全量里补到 100–150 条。每条标"好 / 坏"（标准：只看得到 instruction、能查库的 agent 能否得到和 gold 一样的库）；坏的再选原因：SQL 没做 instruction 说的事 / SQL 多做了 / instruction 缺信息或有歧义 / 改错了行 / 其它。
+  - 负样本：五种改坏（改一个字面量、删一个 WHERE 条件、换一个 SET 列、删最后一条语句、对调两个值）；只保留改坏后库哈希变了、且仍过执行检查的，按类别报告拒绝率。DySQL 金标准和 v2 候选各改一批（每类 60 / 40 条），分开报告。
+  - 人工标注集：用修好的代码新出的一批 v2 候选（每库 7 棵树，seed 1）里过了执行检查的全部（计划 4）。每条标"好 / 坏"（标准：只看得到 instruction、能查库的 agent 能否得到和 gold 一样的库）；坏的再选原因：SQL 没做 instruction 说的事 / SQL 多做了 / instruction 缺信息或有歧义 / 改错了行 / 其它。
     流程：先由 Claude 全部标一遍；用户只复核"Claude 与校验模型结论不一致"和"Claude 拿不准"的条目（估计 20–30 条）。标注文件放 `results/`，不进 git。
   - 同系偏差：DySQL gold 被 DeepSeek-R1 筛过，正样本通过率只作下限参考，判断以负样本和人工标注集为主。
 - 顺序改为 check → 预封顶（每模板 ≤25、每库 ≤900）→ verify → 终封顶（v1 的 2/15/600）。

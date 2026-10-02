@@ -96,9 +96,10 @@ def cmd_sheet(a):
 def cmd_review(a):
     items, votes, labels = load(a.dir)
     dbs = calibrate.Databases()
-    show = calibrate.disagreements([i for i in items if i["set"] == "labeled"], votes, labels)
+    show = calibrate.disagreements([i for i in items if i["set"] == "labeled"], votes, labels, k=a.votes)
     lines = [f"# 需要你复核的 {len(show)} 条", "",
-             "每条给出 Claude 的判断和校验模型的 3 票。请对每条回复 good 或 bad（bad 附原因）。", ""]
+             f"Claude 拿不准的，和 Claude 的判断与校验模型（{a.votes} 票规则）不一致的。每条给出两边的结论。"
+             "请对每条回复 good 或 bad（bad 附原因）。", ""]
     for n, i in enumerate(show, 1):
         lab, v = labels[i["id"]], votes.get(i["id"], {})
         real = [x for x in v.get("votes", []) if "error" not in x]
@@ -156,6 +157,8 @@ def main():
     p.add_argument("--workers", type=int, default=3, help="Ollama Pro plan limit: 3 concurrent requests"); p.set_defaults(f=cmd_vote)
     for name, f in (("sheet", cmd_sheet), ("review", cmd_review), ("report", cmd_report)):
         p = sub.add_parser(name); p.add_argument("--dir", required=True); p.set_defaults(f=f)
+        if name == "review":
+            p.add_argument("--votes", type=int, default=3, help="the rule the disagreements are judged by (calibrate.RULES)")
     a = ap.parse_args()
     a.f(a)
 

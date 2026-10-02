@@ -32,3 +32,6 @@ v2 从 v1 原样复制起步（tag `taskgen-v1`，61c8133）。复制的那个 c
 | 出题素材：档案的描述和数据怪异点、范围内表的 DDL 和列说明、每表一行键说明（`schema.key_notes`）；树记下能单独认出说话人的列（`lookup`） | §4.3 |
 | 出题计划与 prompt：写语句数和形状（两张表、子查询、批量、archive）按 DySQL 校准，难度由形状推出；不要 `outputs` 和只读提问；40–80 词、名字加 ID 开头；手写 DySQL 式示例；删掉 `describe` 和 `data/db_descriptions.json` | §4.4 |
 | 验证：beer_factory 100 条、其余 22 个库各 10 条，§3 指标对照 DySQL（`docs/2026-10-01-prompt-and-materials.md`）；设计写回计划 3 的规则 | §5 D |
+| 模型调用：回答在 max_tokens 处截断、HTTP 200 没有消息体时重试；校验的票思考用光 token 不算票，结论行认得更宽 | §4.6 |
+| 校验：`TASKGEN_VERIFY_MODELS` 配几个模型各投几票，附档案的数据怪异点；预封顶（每模板 25、每库 900）之后再校验；meta 按模型记票 | §4.6、§4.7 |
+| 校准：五种改坏（`corrupt.py`）、比较两份 SQL 留下的库（`check.final_state`）、`scripts/verify_calibrate.py`；DySQL 金标准、改坏的题、新一批 v2 候选上量出每条 1 票就够（`docs/2026-10-01-verify-calibration.md`） | §5 F |

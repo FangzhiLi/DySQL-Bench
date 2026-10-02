@@ -258,7 +258,7 @@ def main():
     p = sub.add_parser("trees"); common(p); p.add_argument("--n", type=int, default=50); p.add_argument("--anchor", help="one root table only"); p.set_defaults(f=cmd_trees)
     p = sub.add_parser("generate"); common(p); p.add_argument("--workers", type=int, default=5, help="GLM plan limit: 5 concurrent requests"); p.add_argument("--per-tree", type=int, default=1); p.add_argument("--retry-errors", action="store_true", help="regenerate candidates whose API call failed (e.g. 429)"); p.set_defaults(f=cmd_generate)
     p = sub.add_parser("check"); common(p); p.set_defaults(f=cmd_check)
-    p = sub.add_parser("verify"); common(p); p.add_argument("--models", help="model:votes,... (default: TASKGEN_VERIFY_MODELS, else TASKGEN_VERIFY_MODEL:2)")
+    p = sub.add_parser("verify"); common(p); p.add_argument("--models", help="model:votes,... (default: TASKGEN_VERIFY_MODELS, else TASKGEN_VERIFY_MODEL with verify.DEFAULT_VOTES)")
     p.add_argument("--precap-template", type=int, default=25); p.add_argument("--precap-db", type=int, default=900)
     p.add_argument("--workers", type=int, default=3, help="Ollama Pro plan limit: 3 concurrent requests"); p.add_argument("--all-dbs", action="store_true"); p.set_defaults(f=cmd_verify)
     p = sub.add_parser("dedup"); common(p); p.add_argument("--per-person", type=int, default=2); p.add_argument("--per-template", type=int, default=15); p.add_argument("--per-db", type=int, default=600); p.set_defaults(f=cmd_dedup)
