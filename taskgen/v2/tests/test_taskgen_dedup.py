@@ -44,3 +44,13 @@ def test_precap_draws_the_same_candidates_on_a_rerun():
     checks = [{"id": f"x:{i}", "ok": True, "template": f"t{i % 4}"} for i in range(60)]
     a = dedup.precap(cands, checks, random.Random(0), per_template=5, per_db=900)
     assert a == dedup.precap(cands, checks, random.Random(0), per_template=5, per_db=900) and len(a) == 20
+
+
+def test_near_duplicate_instructions_keep_only_the_first():
+    # design 4.7: within a database, instructions whose word 3-grams overlap by Jaccard >= 0.6 are one task
+    base = "Hi, I am a5 b5, customer 5. Please set the quantity of my order 5 to 3 and leave everything else as it is."
+    recs = [{"id": "x:0", "instruction": base},
+            {"id": "x:1", "instruction": base.replace("to 3", "to 4")},            # one word apart: a near duplicate
+            {"id": "x:2", "instruction": "It's a6 b6 (customer 6). Cancel order 66, the shipment never arrived."}]
+    assert [r["id"] for r in dedup.near_duplicates(recs)] == ["x:0", "x:2"]
+    assert len(dedup.near_duplicates(recs, threshold=1.01)) == 3

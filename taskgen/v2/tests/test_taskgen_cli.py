@@ -201,3 +201,23 @@ def test_verify_pauses_when_every_call_fails(tmp_path):
         srv.shutdown()
     assert r.returncode == 3 and "paused" in r.stderr and Refuses.calls == 2
     assert all(not v["pass"] and v["unvoted"] for v in io.read_jsonl(out / "verify.jsonl"))
+
+
+def test_dedup_leaves_out_the_tasks_a_review_excluded(tmp_path):
+    # the full run's spot check (30 tasks a database) marks bad tasks in excluded.jsonl; convert then drops them
+    args = setup(tmp_path)
+    out = tmp_path / "res"
+    run("trees", *args, "--n", "3", "--seed", "0")
+    rows = [{"id": "test:shop2:customers:%s:0" % t["key_value"], "db": "shop2", "source": "test", "anchor_table": "customers",
+             "anchor_key": "customer_id", "key_value": t["key_value"], "anchor_name": t["anchor_name"],
+             "profile_version": t["profile_version"], "plan": {"task_type": "1_self", "difficulty": "easy"},
+             "instruction": f"I am {t['anchor_name']}. Set qty of my order {t['events'][0]['rows'][0]['row']['order_id']} to 3.",
+             "actions": [{"sql": f"UPDATE orders SET qty = 3 WHERE order_id = {t['events'][0]['rows'][0]['row']['order_id']}"}],
+             "error": None} for t in io.read_jsonl(out / "trees.jsonl")]
+    io.append_jsonl(out / "candidates.jsonl", rows)
+    run("check", *args)
+    io.append_jsonl(out / "verify.jsonl", [{"id": r["id"], "votes": [{"verdict": "yes", "model": "m"}] * 2, "pass": True,
+                                            "unvoted": False, "verify_model": "m"} for r in rows])
+    io.append_jsonl(out / "excluded.jsonl", [{"id": rows[0]["id"], "reason": "unclear", "by": "claude"}])
+    run("dedup", *args)
+    assert sorted(r["id"] for r in io.read_jsonl(out / "selected.jsonl")) == sorted(r["id"] for r in rows[1:])

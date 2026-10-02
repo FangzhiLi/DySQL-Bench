@@ -2,6 +2,7 @@
 """Diversity caps (spec §5): at most `per_person` tasks per anchor row, `per_template` per template, `per_db` per
 database. Rare templates are taken first so the long tail survives the per-db cap. The same caps, looser and without
 the per-person one, pick what the verifier sees (design §4.6: check -> pre-cap -> verify -> final cap)."""
+import re
 from collections import Counter
 
 
@@ -29,3 +30,19 @@ def precap(cands, checks, rng, per_template=25, per_db=900):
     recs = [{**c, "template": ok[c["id"]]["template"]} for c in cands if c["id"] in ok]
     keep = {r["id"] for r in select(recs, rng, per_person=None, per_template=per_template, per_db=per_db)}
     return [c for c in cands if c["id"] in keep]
+
+
+def _shingles(text):
+    w = re.findall(r"[a-z0-9]+", (text or "").lower())
+    return {tuple(w[i:i + 3]) for i in range(len(w) - 2)}
+
+
+def near_duplicates(records, threshold=0.6):
+    """The records whose instruction is not a near duplicate of an earlier kept one (design §4.7): word 3-gram
+    Jaccard >= threshold within the database. In plans 3 and 4 no two instructions of a database came above 0.11."""
+    kept, seen = [], []
+    for r in records:
+        s = _shingles(r["instruction"])
+        if not any(s and k and len(s & k) / len(s | k) >= threshold for k in seen):
+            kept.append(r); seen.append(s)
+    return kept

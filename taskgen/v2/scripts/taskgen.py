@@ -125,12 +125,15 @@ def cmd_verify(a):
 
 
 def merged(out):
+    """Candidates that passed the check and the verifier, minus those a spot check excluded (excluded.jsonl:
+    {"id", "reason", "by"} per line)."""
     chk = {r["id"]: r for r in io.read_jsonl(f"{out}/check.jsonl")}
     ver = {r["id"]: r for r in io.read_jsonl(f"{out}/verify.jsonl")}
+    excluded = {r["id"] for r in io.read_jsonl(f"{out}/excluded.jsonl")}
     rows = []
     for c in io.read_jsonl(f"{out}/candidates.jsonl"):
         k, v = chk.get(c["id"]), ver.get(c["id"])
-        if k and k["ok"] and v and v["pass"]:
+        if k and k["ok"] and v and v["pass"] and c["id"] not in excluded:
             rows.append({**c, "task_type": k["task_type"], "template": k["template"], "difficulty": k["difficulty"],
                          "writes": k["writes"], "votes": v["votes"], "verify_model": v.get("verify_model")})
     return rows
@@ -138,7 +141,7 @@ def merged(out):
 
 def cmd_dedup(a):
     rec, out = rec_and_dir(a)
-    sel = dedup.select(merged(out), random.Random(a.seed), a.per_person, a.per_template, a.per_db)
+    sel = dedup.select(dedup.near_duplicates(merged(out)), random.Random(a.seed), a.per_person, a.per_template, a.per_db)
     if os.path.exists(f"{out}/selected.jsonl"):
         os.remove(f"{out}/selected.jsonl")
     io.append_jsonl(f"{out}/selected.jsonl", sel)
