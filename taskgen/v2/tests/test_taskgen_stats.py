@@ -21,3 +21,12 @@ def test_summarize_counts_and_ratios():
     assert d["patterns"] == {"multi_write": 1, "subquery": 1, "archive": 0, "public": 0}
     assert abs(d["vote_agreement"] - 1 / 3) < 1e-9 and abs(d["unanimous_share"] - 1 / 3) < 1e-9   # x:1 flips between 3 and 5 votes
     assert "top1_share" in stats.render(d)
+
+
+def test_tasks_without_a_vote_are_counted():
+    cands, checks = [c(0)[0], c(1)[0]], [c(0)[1], c(1)[1]]
+    verifies = [{"id": "x:0", "votes": [{"verdict": "yes"}], "pass": True},
+                {"id": "x:1", "votes": [{"verdict": "error", "error": "Truncated: x"}], "pass": False, "unvoted": True}]
+    d = stats.summarize(cands, checks, verifies, [])
+    assert d["n_verify_pass"] == 1 and d["n_verify_unvoted"] == 1 and "n_verify_unvoted" in stats.render(d)
+

@@ -95,3 +95,19 @@ def test_v2_items_are_the_checked_candidates_keyed_by_database(tmp_path):
     io.append_jsonl(d / "candidates.jsonl", [{"id": "test:shop2:customers:5:0", "db": "shop2"}, {"id": "test:shop2:customers:6:0", "db": "shop2"}])
     io.append_jsonl(d / "check.jsonl", [{"id": "test:shop2:customers:5:0", "ok": True}, {"id": "test:shop2:customers:6:0", "ok": False}])
     assert calibrate.v2_items([str(tmp_path / "run")]) == [{"id": "test:shop2:customers:5:0", "db": "test:shop2", "set": "labeled"}]
+
+
+def test_a_rule_that_cannot_judge_every_voted_item_is_not_chosen():
+    # one vote each after the second votes stopped: a 2-vote rule judged only the items a single No settles, and
+    # looked better than it is on that biased part
+    items = ([item(f"p{i}", "positives") for i in range(20)] + [item("g", "labeled"), item("z", "positives")]
+             + [item(f"n{i}", "negatives", source="dysql", kind="where") for i in range(10)])
+    v = {f"p{i}": votes("yes", "yes") for i in range(20)}
+    v.update({f"n{i}": votes("yes", "no") for i in range(5)})   # 1 vote: passed; 2 votes: rejected
+    v.update({f"n{i}": votes("yes") for i in range(5, 10)})     # 1 vote: passed; 2 votes: not judged yet
+    v.update(g=votes("yes", "yes"), z=votes("err"))             # z has no real vote: no rule judges it
+    m = calibrate.metrics(items, v, {"g": {"label": "good"}})
+    assert m["1 vote"]["undecided"] == 0 and m["2 votes, both Yes"]["undecided"] == 5 and m["3 votes, 2 Yes"]["undecided"] == 10
+    assert m["2 votes, both Yes"]["negatives_reject"] == (1.0, 5, 5)          # the biased part
+    assert calibrate.choose_rule(m) == "1 vote" and calibrate.unvoted(items, v) == ["z"]
+

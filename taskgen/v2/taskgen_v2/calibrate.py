@@ -150,14 +150,27 @@ def metrics(items, votes, labels):
         m["labeled_good_pass"] = _rate([None if v[i["id"]] is None else v[i["id"]] == "pass" for i in good])
         m["labeled_bad_reject"] = _rate([None if v[i["id"]] is None else v[i["id"]] == "fail" for i in bad])
         m["labeled_precision"] = _rate([labels[i["id"]]["label"] == "bad" for i in lab if v[i["id"]] == "fail"])
+        m["undecided"] = sum(1 for i in items if v[i["id"]] is None and _real_votes(votes.get(i["id"])))
         out[rule] = m
     return out
 
 
+def _real_votes(rec):
+    return [x for x in (rec or {}).get("votes", []) if "error" not in x]
+
+
+def unvoted(items, votes):
+    """Ids of the items without a single real vote: no rule judges them, so they are left out of every rate."""
+    return [i["id"] for i in items if not _real_votes(votes.get(i["id"]))]
+
+
 def choose_rule(m, floor=0.95):
     """The rule to run with (design §3): of the rules whose positives and labeled good tasks both pass at >= floor,
-    the one that rejects the most negatives; fewer votes on a tie. None when no rule keeps the good tasks."""
-    ok = [r for r in RULES if (m[r]["positives_pass"][0] or 0) >= floor and (m[r]["labeled_good_pass"][0] or 0) >= floor]
+    the one that rejects the most negatives; fewer votes on a tie. A rule that leaves an item with votes undecided
+    is not a candidate: its rates come from a biased part (a single No settles two votes, a single Yes does not).
+    None when no rule keeps the good tasks."""
+    ok = [r for r in RULES if (m[r]["positives_pass"][0] or 0) >= floor and (m[r]["labeled_good_pass"][0] or 0) >= floor
+          and not m[r].get("undecided")]
     if not ok:
         return None
     return max(ok, key=lambda r: (m[r]["negatives_reject"][0] or 0, -RULES[r]))

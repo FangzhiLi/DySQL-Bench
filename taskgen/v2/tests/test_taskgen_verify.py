@@ -39,7 +39,7 @@ def test_run_votes_majority_and_resumes(tmp_path):
     c = FakeClient([YES, NO, YES])
     s = run([CAND], c, out)
     r = io.read_jsonl(out)[0]
-    assert s == {"verified": 1, "passed": 1, "skipped": 0} and r["models"]["fake-verifier"] == {"yes": 2, "no": 1, "pass": True}
+    assert s == {"verified": 1, "passed": 1, "skipped": 0, "unvoted": 0} and r["models"]["fake-verifier"] == {"yes": 2, "no": 1, "pass": True}
     assert r["pass"] and len(r["votes"]) == 3 and r["votes"][0]["reasoning_chars"] == 10 and r["votes"][0]["model"] == "fake-verifier"
     s2 = run([CAND], FakeClient([YES]), out)
     assert s2["skipped"] == 1 and len(io.read_jsonl(out)) == 1
@@ -163,3 +163,20 @@ def test_models_from_env(monkeypatch):
     ms = verify.models_from_env()
     assert [(c.model, n) for c, n in ms] == [("m1", 2), ("m2", 1)] and ms[0][0].base_url == "https://v/1"
     assert [(c.model, n) for c, n in verify.models_from_env("m3:3")] == [("m3", 3)]
+
+
+def test_a_task_without_any_vote_is_unvoted_not_rejected(tmp_path):
+    # with one vote per task, a vote cut off while thinking would otherwise read as a No: the task is dropped silently
+    class AlwaysThinking(FakeClient):
+        def chat(self, messages, **kw):
+            return {**super().chat(messages, **kw), "content": "", "finish_reason": "length", "usage": {"completion_tokens": 16384}}
+    out = str(tmp_path / "v.jsonl")
+    s = run([CAND], AlwaysThinking(["x"]), out, votes=1)
+    r = io.read_jsonl(out)[0]
+    assert r["models"]["fake-verifier"] == {"yes": 0, "no": 0, "pass": None} and r["unvoted"] and not r["pass"]
+    assert s == {"verified": 1, "passed": 0, "skipped": 0, "unvoted": 1}
+    c = FakeClient([YES])
+    s = run([CAND], c, out, votes=1)
+    r = io.read_jsonl(out)[0]
+    assert c.calls == 1 and r["pass"] and not r["unvoted"] and s["unvoted"] == 0
+

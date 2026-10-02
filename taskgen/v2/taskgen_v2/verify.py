@@ -115,13 +115,15 @@ def _real(votes, model=None):
 
 def tally(rec, names):
     """Per model Yes/No counts and pass (Yes strictly more than No; unparsed counts as No); the task passes when
-    every model passes it."""
+    every model passes it. A model without a single real vote (every call cut off or failed) has pass None and the
+    task is 'unvoted': not passed, not rejected either, and voted again on the next run."""
     rec["models"] = {}
     for name in names:
         votes = _real(rec["votes"], name)
         yes = sum(v["verdict"] == "yes" for v in votes)
-        rec["models"][name] = {"yes": yes, "no": len(votes) - yes, "pass": yes > len(votes) - yes}
-    rec["pass"] = all(m["pass"] for m in rec["models"].values())
+        rec["models"][name] = {"yes": yes, "no": len(votes) - yes, "pass": (yes > len(votes) - yes) if votes else None}
+    rec["pass"] = all(m["pass"] is True for m in rec["models"].values())
+    rec["unvoted"] = any(m["pass"] is None for m in rec["models"].values())
     rec["verify_model"] = ",".join(names)
     return rec
 
@@ -137,7 +139,7 @@ def run(cands, models, out_path, workers=3, context=lambda cand: ("", ())):
     pending = {}
     for c, _ in jobs:
         pending[c["id"]] = pending.get(c["id"], 0) + 1
-    new_votes, updated, passed = {}, {}, 0
+    new_votes, updated, passed, unvoted = {}, {}, 0, 0
     with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
         futs = {ex.submit(_vote_safe, client, build_messages(c, *context(c))): c["id"] for c, client in jobs}
         for f in as_completed(futs):
@@ -148,7 +150,7 @@ def run(cands, models, out_path, workers=3, context=lambda cand: ("", ())):
                 continue
             rec = existing.get(cid) or {"id": cid, "votes": []}
             rec = tally({**rec, "votes": rec["votes"] + new_votes.pop(cid)}, names)
-            passed += rec["pass"]
+            passed += rec["pass"]; unvoted += rec["unvoted"]
             if cid in existing:
                 updated[cid] = rec
             else:
@@ -160,4 +162,4 @@ def run(cands, models, out_path, workers=3, context=lambda cand: ("", ())):
             os.remove(tmp)
         io.append_jsonl(tmp, rows)
         os.replace(tmp, out_path)
-    return {"verified": len(pending), "passed": passed, "skipped": len(cands) - len(pending)}
+    return {"verified": len(pending), "passed": passed, "skipped": len(cands) - len(pending), "unvoted": unvoted}

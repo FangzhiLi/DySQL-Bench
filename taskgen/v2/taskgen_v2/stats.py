@@ -15,7 +15,8 @@ def summarize(cands, checks, verifies, selected):
     passed = [c for c in cands if chk.get(c["id"], {}).get("ok")]
     d = {"n_candidates": len(cands), "n_parse_error": sum(1 for c in cands if not c.get("instruction")),
          "n_check_pass": len(passed), "check_reasons": Counter(x.split(":")[0] for c in checks for x in c["reasons"]),
-         "n_verify_pass": sum(1 for v in verifies if v["pass"]), "n_selected": len(selected)}
+         "n_verify_pass": sum(1 for v in verifies if v["pass"]), "n_verify_unvoted": sum(1 for v in verifies if v.get("unvoted")),
+         "n_selected": len(selected)}
     good = [chk[c["id"]] for c in passed]
     d["type_mix"] = dict(Counter(g["task_type"] for g in good))
     d["difficulty_mix"] = dict(Counter(g["difficulty"]["level"] for g in good))
@@ -36,7 +37,8 @@ def summarize(cands, checks, verifies, selected):
 def render(d):
     rows = [("n_candidates", d["n_candidates"]), ("n_parse_error", d["n_parse_error"]), ("n_check_pass", d["n_check_pass"]),
             ("check_reasons", ", ".join(f"{k} {v}" for k, v in d["check_reasons"].most_common())),
-            ("n_verify_pass", d["n_verify_pass"]), ("n_selected", d["n_selected"]),
+            ("n_verify_pass", d["n_verify_pass"]), ("n_verify_unvoted (run verify again)", d["n_verify_unvoted"]),
+            ("n_selected", d["n_selected"]),
             ("type_mix", d["type_mix"]), ("difficulty_mix", d["difficulty_mix"]), ("templates", d["templates"]),
             ("top1_share", f"{d['top1_share']:.2f}"), ("per_person_mean", f"{d['per_person_mean']:.2f}"),
             ("patterns", d["patterns"]),

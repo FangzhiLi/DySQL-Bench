@@ -134,9 +134,11 @@ def cmd_report(a):
     lines.append("| 标注集 被拒的是坏题（精度） | " + " | ".join(pct(m[r]["labeled_precision"]) for r in rules) + " |")
     allv = [x for r in votes.values() for x in r["votes"]]
     trunc = sum(x.get("error", "").startswith("Truncated") for x in allv)
-    short = len(calibrate.undecided(items, votes))
+    none = calibrate.unvoted(items, votes)
     lines += ["", f"票数 {len(allv)}；思考被截断的 {trunc}；其它失败 {sum('error' in x for x in allv) - trunc}；"
-              f"还判不了的条目 {short}；标注 {len(labels)} 条（用户复核 {sum(r.get('by') == 'user' for r in labels.values())}）。",
+              f"没有有效票的条目 {len(none)}（不计入任何比例）：{', '.join(none) or '-'}；"
+              f"标注 {len(labels)} 条（用户复核 {sum(r.get('by') == 'user' for r in labels.values())}）。",
+              "有票但这条规则还判不了的条目（不为 0 的规则不参与选择）：" + "，".join(f"{r} {m[r]['undecided']}" for r in rules),
               "", f"按 calibrate.choose_rule 选出的规则：{calibrate.choose_rule(m) or '没有规则同时满足两条 95%'}"]
     text = "\n".join(lines)
     with open(os.path.join(a.dir, "report.md"), "w", encoding="utf-8") as f:
