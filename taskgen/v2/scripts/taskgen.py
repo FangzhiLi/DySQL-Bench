@@ -116,8 +116,12 @@ def cmd_verify(a):
                              random.Random(a.seed), a.precap_template, a.precap_db)
         ddl, quirks = schema.ddl(io.resolve_db_path(rec["path"])), prof["quirks"]
         t0 = time.time()
-        s = verify.run(cands, models, f"{out}/verify.jsonl", workers=a.workers, context=lambda c: (ddl, quirks))
+        s = verify.run(cands, models, f"{out}/verify.jsonl", workers=a.workers, context=lambda c: (ddl, quirks),
+                       max_failures=a.max_failures)
         print(f"{db}: {s} in {time.time() - t0:.0f}s")
+        if s["paused"]:   # the quota is gone (or the endpoint is down): stop here, the same command resumes
+            print(f"paused after {a.max_failures} failed calls in a row; run verify again later", file=sys.stderr)
+            sys.exit(3)
 
 
 def merged(out):
@@ -260,6 +264,7 @@ def main():
     p = sub.add_parser("check"); common(p); p.set_defaults(f=cmd_check)
     p = sub.add_parser("verify"); common(p); p.add_argument("--models", help="model:votes,... (default: TASKGEN_VERIFY_MODELS, else TASKGEN_VERIFY_MODEL with verify.DEFAULT_VOTES)")
     p.add_argument("--precap-template", type=int, default=25); p.add_argument("--precap-db", type=int, default=900)
+    p.add_argument("--max-failures", type=int, default=20, help="failed calls in a row before the run pauses (quota gone)")
     p.add_argument("--workers", type=int, default=3, help="Ollama Pro plan limit: 3 concurrent requests"); p.add_argument("--all-dbs", action="store_true"); p.set_defaults(f=cmd_verify)
     p = sub.add_parser("dedup"); common(p); p.add_argument("--per-person", type=int, default=2); p.add_argument("--per-template", type=int, default=15); p.add_argument("--per-db", type=int, default=600); p.set_defaults(f=cmd_dedup)
     p = sub.add_parser("convert"); common(p); p.add_argument("--tasks"); p.add_argument("--manifest"); p.set_defaults(f=cmd_convert)

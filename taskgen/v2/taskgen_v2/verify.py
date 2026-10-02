@@ -4,12 +4,13 @@ agent transcript against the agent policy, so a 27B verifier failed every pilot 
 this prompt judges only whether the SQL implements the request, and whether the request is complete and solvable.
 Several models may vote (design §4.6, D4): each passes a task when its Yes votes outnumber its No votes, and a task
 passes when every model passes it."""
-import json, os, re
+import json, os, re, threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from taskgen_v2 import io, llm
 
 VERIFY_TEMPERATURE, VERIFY_MAX_TOKENS = 1.2, 16384
-DEFAULT_VOTES = 1   # one vote, Yes to pass: in plan 4 it kept 98% of the good tasks and rejected every broken one
+DEFAULT_VOTES = 3   # majority of three, settled after two when they agree: the user's choice for the full run
+                    # (plan 5); one vote was enough in plan 4's calibration
 FINAL = "Verification: Is the answer correct (Yes/No)?"
 
 SYSTEM = """You are checking a training task for a database agent. The task has two parts: the user's request (what a
@@ -113,53 +114,113 @@ def _real(votes, model=None):
     return [v for v in votes if "error" not in v and (model is None or v.get("model") == model)]
 
 
-def tally(rec, names):
-    """Per model Yes/No counts and pass (Yes strictly more than No; unparsed counts as No); the task passes when
-    every model passes it. A model without a single real vote (every call cut off or failed) has pass None and the
-    task is 'unvoted': not passed, not rejected either, and voted again on the next run."""
+def settled(votes, k):
+    """'pass' / 'fail' for a model's real votes under its k-vote rule (the first k; Yes must outnumber No, unparsed
+    counts as No) as soon as more votes cannot change it: two Yes or two No settle three votes. None until then."""
+    votes = votes[:k]
+    yes = sum(v["verdict"] == "yes" for v in votes)
+    if yes > k / 2:
+        return "pass"
+    if len(votes) - yes >= k / 2:
+        return "fail"
+    return None
+
+
+def needed(votes, k):
+    """How many more votes could settle the rule now: enough for one side to reach a majority (two of three at the
+    start, one after a split); 0 once settled."""
+    if settled(votes, k):
+        return 0
+    votes = votes[:k]
+    yes = sum(v["verdict"] == "yes" for v in votes)
+    return k // 2 + 1 - max(yes, len(votes) - yes)
+
+
+def tally(rec, models):
+    """models: [(name, k)]. Per model Yes/No counts and pass (settled(), None while unsettled); the task passes when
+    every model passes it. A task some model has not settled -- every call cut off or failed, or a split still
+    waiting for its third vote -- is 'unvoted': not passed, not rejected either, and voted again on the next run."""
     rec["models"] = {}
-    for name in names:
-        votes = _real(rec["votes"], name)
+    for name, k in models:
+        votes = _real(rec["votes"], name)[:k]
         yes = sum(v["verdict"] == "yes" for v in votes)
-        rec["models"][name] = {"yes": yes, "no": len(votes) - yes, "pass": (yes > len(votes) - yes) if votes else None}
+        v = settled(votes, k)
+        rec["models"][name] = {"yes": yes, "no": len(votes) - yes, "pass": None if v is None else v == "pass"}
     rec["pass"] = all(m["pass"] is True for m in rec["models"].values())
     rec["unvoted"] = any(m["pass"] is None for m in rec["models"].values())
-    rec["verify_model"] = ",".join(names)
+    rec["verify_model"] = ",".join(name for name, _ in models)
     return rec
 
 
-def run(cands, models, out_path, workers=3, context=lambda cand: ("", ())):
-    """models: [(client, votes)]; context(cand) -> (ddl_text, notes). Every vote goes to one thread pool; a new
-    candidate's record is appended as soon as its last vote returns, so an interrupted run keeps all finished
-    candidates. Records that were topped up are rewritten in place at the end."""
-    names = [getattr(c, "model", None) for c, _ in models]
+def run(cands, models, out_path, workers=3, context=lambda cand: ("", ()), max_failures=20):
+    """models: [(client, votes)]; context(cand) -> (ddl_text, notes). Votes go out in rounds: each round asks, for
+    every task and model, only the votes that could still settle it (needed()), so three votes by majority cost about
+    two a task. A call that fails is not asked again in the same run. After max_failures failed calls in a row (an
+    exhausted quota answers every call with an error) the run stops and returns paused=True; the same command
+    resumes it. A new task's record is appended as soon as its votes of a round are in, so an interrupted run keeps
+    them; records that got more votes are rewritten in place at the end."""
+    names = [(getattr(c, "model", None), k) for c, k in models]
     existing = {r["id"]: r for r in io.read_jsonl(out_path)}
-    jobs = [(c, client) for c in cands for client, n in models
-            for _ in range(n - len(_real(existing.get(c["id"], {}).get("votes", []), getattr(client, "model", None))))]
-    pending = {}
-    for c, _ in jobs:
-        pending[c["id"]] = pending.get(c["id"], 0) + 1
-    new_votes, updated, passed, unvoted = {}, {}, 0, 0
-    with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
-        futs = {ex.submit(_vote_safe, client, build_messages(c, *context(c))): c["id"] for c, client in jobs}
-        for f in as_completed(futs):
-            cid = futs[f]
-            new_votes.setdefault(cid, []).append(f.result())
-            pending[cid] -= 1
-            if pending[cid]:
-                continue
-            rec = existing.get(cid) or {"id": cid, "votes": []}
-            rec = tally({**rec, "votes": rec["votes"] + new_votes.pop(cid)}, names)
-            passed += rec["pass"]; unvoted += rec["unvoted"]
-            if cid in existing:
-                updated[cid] = rec
+    in_file, dirty, voted, failed = set(existing), set(), set(), set()
+    settled_before = sum(1 for c in cands if not any(
+        needed(_real(existing.get(c["id"], {}).get("votes", []), getattr(cl, "model", None)), k) for cl, k in models))
+    stop, lock, streak = threading.Event(), threading.Lock(), [0]
+
+    def job(client, msgs):   # counts failures where they happen, so no call goes out after the limit
+        if stop.is_set():
+            return None
+        v = _vote_safe(client, msgs)
+        with lock:
+            if "error" not in v or v["error"].startswith("Truncated"):   # cut off while thinking: the API works
+                streak[0] = 0
             else:
-                io.append_jsonl(out_path, [rec])
-    if updated:  # rewrite the file with the topped-up records in place
-        rows = [updated.get(r["id"], r) for r in io.read_jsonl(out_path)]
+                streak[0] += 1
+                if streak[0] >= max_failures:
+                    stop.set()
+        return v
+
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
+        while not stop.is_set():
+            jobs = [(c, client) for c in cands for client, k in models
+                    if (c["id"], getattr(client, "model", None)) not in failed
+                    for _ in range(needed(_real(existing.get(c["id"], {}).get("votes", []), getattr(client, "model", None)), k))]
+            if not jobs:
+                break
+            pending = {}
+            for c, _ in jobs:
+                pending[c["id"]] = pending.get(c["id"], 0) + 1
+            futs = {ex.submit(job, client, build_messages(c, *context(c))): c["id"] for c, client in jobs}
+            new = {}
+            for f in as_completed(futs):
+                cid, v = futs[f], f.result()
+                pending[cid] -= 1
+                if v is not None:   # None: not asked, the run is pausing
+                    new.setdefault(cid, []).append(v)
+                    if "error" in v:
+                        failed.add((cid, v.get("model")))
+                if pending[cid] == 0 and cid in new:
+                    _keep(existing, in_file, dirty, out_path, cid, new.pop(cid), names); voted.add(cid)
+            for cid, votes in new.items():   # cut short by a pause: keep what came back
+                _keep(existing, in_file, dirty, out_path, cid, votes, names); voted.add(cid)
+    if dirty:  # rewrite the file with the records that got more votes, in place
+        rows = [existing[r["id"]] if r["id"] in dirty else r for r in io.read_jsonl(out_path)]
         tmp = out_path + ".tmp"
         if os.path.exists(tmp):
             os.remove(tmp)
         io.append_jsonl(tmp, rows)
         os.replace(tmp, out_path)
-    return {"verified": len(pending), "passed": passed, "skipped": len(cands) - len(pending), "unvoted": unvoted}
+    recs = [existing[cid] for cid in voted]
+    return {"verified": len(voted), "passed": sum(r["pass"] for r in recs), "skipped": settled_before,
+            "unvoted": sum(r["unvoted"] for r in recs), "paused": stop.is_set()}
+
+
+def _keep(existing, in_file, dirty, out_path, cid, votes, names):
+    """Tally a task's new votes into its record: appended when the file does not have it yet, else marked for the
+    rewrite at the end of the run."""
+    rec = existing.get(cid) or {"id": cid, "votes": []}
+    existing[cid] = rec = tally({**rec, "votes": rec["votes"] + votes}, names)
+    if cid in in_file:
+        dirty.add(cid)
+    else:
+        io.append_jsonl(out_path, [rec])
+        in_file.add(cid)

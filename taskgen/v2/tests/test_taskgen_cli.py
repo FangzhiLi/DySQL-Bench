@@ -161,3 +161,43 @@ def test_verify_sees_precapped_candidates_with_the_profile_quirks(tmp_path):
     assert len(FakeVerifier.seen) == 4 and {b["model"] for b in FakeVerifier.seen} == {"m1"}
     u = FakeVerifier.seen[0]["messages"][1]["content"]
     assert "- qty counts boxes, not items." in u and "CREATE TABLE orders" in u
+
+
+class Refuses(BaseHTTPRequestHandler):
+    """An endpoint whose quota is gone: every call fails."""
+    calls = 0
+
+    def do_POST(self):
+        self.rfile.read(int(self.headers["Content-Length"]))
+        Refuses.calls += 1
+        out = b'{"error": "weekly usage limit reached"}'
+        self.send_response(400); self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(out))); self.end_headers(); self.wfile.write(out)
+
+    def log_message(self, *a):
+        pass
+
+
+def test_verify_pauses_when_every_call_fails(tmp_path):
+    args = setup(tmp_path)
+    out = tmp_path / "res"
+    run("trees", *args, "--n", "3", "--seed", "0")
+    io.append_jsonl(out / "candidates.jsonl", [
+        {"id": "test:shop2:customers:%s:0" % t["key_value"], "db": "shop2", "source": "test", "anchor_table": "customers",
+         "anchor_key": "customer_id", "key_value": t["key_value"], "anchor_name": t["anchor_name"],
+         "profile_version": t["profile_version"], "plan": {"task_type": "1_self", "difficulty": "easy"},
+         "instruction": f"I am {t['anchor_name']}. Set qty of my order {t['events'][0]['rows'][0]['row']['order_id']} to 3.",
+         "actions": [{"sql": f"UPDATE orders SET qty = 3 WHERE order_id = {t['events'][0]['rows'][0]['row']['order_id']}"}],
+         "error": None} for t in io.read_jsonl(out / "trees.jsonl")])
+    run("check", *args)
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), Refuses)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    env = {**os.environ, "TASKGEN_VERIFY_BASE_URL": f"http://127.0.0.1:{srv.server_port}/v1",
+           "TASKGEN_VERIFY_API_KEY": "k", "TASKGEN_VERIFY_MODELS": "m1:3"}
+    try:
+        r = subprocess.run([sys.executable, SCRIPT, "verify", *args, "--workers", "1", "--max-failures", "2"],
+                           capture_output=True, text=True, env=env)
+    finally:
+        srv.shutdown()
+    assert r.returncode == 3 and "paused" in r.stderr and Refuses.calls == 2
+    assert all(not v["pass"] and v["unvoted"] for v in io.read_jsonl(out / "verify.jsonl"))

@@ -1,4 +1,5 @@
 # tests/test_taskgen_verify.py
+import pytest
 from taskgen_v2 import verify, io
 
 CAND = {"id": "c1", "instruction": "I am a5 b5. Set qty of order 5 to 3.", "actions": [{"sql": "UPDATE orders SET qty = 3 WHERE order_id = 5"}]}
@@ -36,22 +37,24 @@ def test_messages_contain_policy_requirements_actions_and_ddl():
 
 def test_run_votes_majority_and_resumes(tmp_path):
     out = str(tmp_path / "verify.jsonl")
-    c = FakeClient([YES, NO, YES])
+    c = FakeClient([YES, NO, YES])                       # two split, so a third settles it
     s = run([CAND], c, out)
     r = io.read_jsonl(out)[0]
-    assert s == {"verified": 1, "passed": 1, "skipped": 0, "unvoted": 0} and r["models"]["fake-verifier"] == {"yes": 2, "no": 1, "pass": True}
-    assert r["pass"] and len(r["votes"]) == 3 and r["votes"][0]["reasoning_chars"] == 10 and r["votes"][0]["model"] == "fake-verifier"
+    assert s == {"verified": 1, "passed": 1, "skipped": 0, "unvoted": 0, "paused": False}
+    assert r["models"]["fake-verifier"] == {"yes": 2, "no": 1, "pass": True} and r["pass"] and len(r["votes"]) == 3
+    assert r["votes"][0]["reasoning_chars"] == 10 and r["votes"][0]["model"] == "fake-verifier"
     s2 = run([CAND], FakeClient([YES]), out)
     assert s2["skipped"] == 1 and len(io.read_jsonl(out)) == 1
 
 
 def test_run_tops_up_votes(tmp_path):
     out = str(tmp_path / "verify.jsonl")
-    run([CAND], FakeClient([YES, YES, NO]), out)
-    c = FakeClient([NO, NO])
-    run([CAND], c, out, votes=5)
+    run([CAND], FakeClient([YES, YES]), out)             # settled by two
+    c = FakeClient([NO, NO, NO])
+    run([CAND], c, out, votes=5)                         # five need three of a kind: 2 Yes, then No until it settles
     r = io.read_jsonl(out)
-    assert len(r) == 1 and len(r[0]["votes"]) == 5 and r[0]["models"]["fake-verifier"]["no"] == 3 and not r[0]["pass"] and c.calls == 2
+    assert len(r) == 1 and len(r[0]["votes"]) == 5 and r[0]["models"]["fake-verifier"] == {"yes": 2, "no": 3, "pass": False}
+    assert not r[0]["pass"] and c.calls == 3
 
 
 def test_unparsed_counts_as_no(tmp_path):
@@ -81,9 +84,9 @@ def test_finished_candidates_are_written_before_a_crash(tmp_path):
         pass
     rows = io.read_jsonl(out)
     assert [r["id"] for r in rows] == ["c1"] and rows[0]["models"]["fake-verifier"]["yes"] == 2   # c1's votes survived
-    c = FakeClient([NO, NO, NO])
+    c = FakeClient([NO, NO])
     s = run([CAND, c2], c, out)
-    assert s["skipped"] == 1 and c.calls == 3 and [r["id"] for r in io.read_jsonl(out)] == ["c1", "c2"]
+    assert s["skipped"] == 1 and c.calls == 2 and [r["id"] for r in io.read_jsonl(out)] == ["c1", "c2"]
 
 
 def test_short_verdict_line_is_accepted():
@@ -99,13 +102,14 @@ def test_failed_votes_are_not_counted_and_are_retried(tmp_path):
                 raise RuntimeError("HTTP 503")
             return super().chat(messages, **kw)
     out = str(tmp_path / "v.jsonl")
-    run([CAND], Flaky([YES, YES]), out)
+    run([CAND], Flaky([YES, YES]), out)                  # one Yes, one failed call: not asked again in this run
     r = io.read_jsonl(out)[0]
-    assert r["models"]["fake-verifier"] == {"yes": 2, "no": 0, "pass": True} and sum("error" in v for v in r["votes"]) == 1
-    c = FakeClient([NO])
-    run([CAND], c, out)
+    assert r["models"]["fake-verifier"] == {"yes": 1, "no": 0, "pass": None} and r["unvoted"] and not r["pass"]
+    assert sum("error" in v for v in r["votes"]) == 1
+    c = FakeClient([YES])
+    s = run([CAND], c, out)
     r = io.read_jsonl(out)[0]
-    assert c.calls == 1 and r["models"]["fake-verifier"] == {"yes": 2, "no": 1, "pass": True} and r["pass"]
+    assert c.calls == 1 and r["models"]["fake-verifier"] == {"yes": 2, "no": 0, "pass": True} and r["pass"] and s["unvoted"] == 0
 
 
 def test_a_verdict_line_without_the_choice_in_brackets_is_read():
@@ -125,10 +129,10 @@ def test_a_vote_cut_off_while_thinking_is_not_a_no_and_is_asked_again(tmp_path):
     run([CAND], Thinker([YES, YES, YES]), out, votes=2)
     r = io.read_jsonl(out)[0]
     assert r["votes"][0]["verdict"] == "error" and r["votes"][0]["error"].startswith("Truncated: no verdict within 16384")
-    assert r["models"]["fake-verifier"] == {"yes": 1, "no": 0, "pass": True}
+    assert r["models"]["fake-verifier"] == {"yes": 1, "no": 0, "pass": None} and r["unvoted"]
     c = FakeClient([YES])
     run([CAND], c, out, votes=2)
-    assert c.calls == 1 and io.read_jsonl(out)[0]["models"]["fake-verifier"]["yes"] == 2
+    assert c.calls == 1 and io.read_jsonl(out)[0]["models"]["fake-verifier"] == {"yes": 2, "no": 0, "pass": True}
 
 
 def test_every_model_must_pass(tmp_path):
@@ -174,9 +178,51 @@ def test_a_task_without_any_vote_is_unvoted_not_rejected(tmp_path):
     s = run([CAND], AlwaysThinking(["x"]), out, votes=1)
     r = io.read_jsonl(out)[0]
     assert r["models"]["fake-verifier"] == {"yes": 0, "no": 0, "pass": None} and r["unvoted"] and not r["pass"]
-    assert s == {"verified": 1, "passed": 0, "skipped": 0, "unvoted": 1}
+    assert s == {"verified": 1, "passed": 0, "skipped": 0, "unvoted": 1, "paused": False}
     c = FakeClient([YES])
     s = run([CAND], c, out, votes=1)
     r = io.read_jsonl(out)[0]
     assert c.calls == 1 and r["pass"] and not r["unvoted"] and s["unvoted"] == 0
 
+
+def test_three_votes_stop_once_two_agree(tmp_path):
+    # the full run votes three times by majority; when the first two agree the third cannot change anything
+    out = str(tmp_path / "v.jsonl")
+    c2, c3 = {**CAND, "id": "c2"}, {**CAND, "id": "c3"}
+    c = FakeClient([YES, YES, NO, NO, YES, NO, YES])
+    s = verify.run([CAND, c2, c3], [(c, 3)], out, workers=1)
+    rows = {r["id"]: r for r in io.read_jsonl(out)}
+    assert c.calls == 7 and [len(rows[i]["votes"]) for i in ("c1", "c2", "c3")] == [2, 2, 3]
+    assert [rows[i]["pass"] for i in ("c1", "c2", "c3")] == [True, False, True] and s["passed"] == 2
+
+
+def test_settled_and_needed():
+    v = lambda *xs: [{"verdict": x} for x in xs]
+    assert verify.settled(v("yes", "yes"), 3) == "pass" and verify.settled(v("no", "unparsed"), 3) == "fail"
+    assert verify.settled(v("yes", "no"), 3) is None and verify.settled(v("yes"), 1) == "pass"
+    assert [verify.needed(v(*xs), 3) for xs in [(), ("yes",), ("yes", "no"), ("yes", "yes")]] == [2, 1, 1, 0]
+    assert verify.needed(v(), 1) == 1 and verify.needed(v("no"), 2) == 0 and verify.needed(v("yes"), 2) == 1
+
+
+def test_a_long_run_of_failed_calls_pauses_the_run(tmp_path):
+    # an exhausted quota answers every call with an error: stop instead of failing every task, resume later
+    class Broke(FakeClient):
+        def chat(self, messages, **kw):
+            self.calls += 1
+            raise RuntimeError("HTTP 429: weekly usage limit reached")
+    out = str(tmp_path / "v.jsonl")
+    cands = [{**CAND, "id": f"c{i}"} for i in range(40)]
+    c = Broke([])
+    s = verify.run(cands, [(c, 3)], out, workers=1, max_failures=5)
+    assert s["paused"] and s["passed"] == 0 and c.calls == 5             # stopped after five failures in a row
+    s = verify.run(cands, [(FakeClient([YES] * 80), 3)], out, workers=1)
+    assert not s["paused"] and s["passed"] == 40 and s["unvoted"] == 0
+
+
+def test_a_vote_cut_off_while_thinking_does_not_count_toward_a_pause(tmp_path):
+    class Thinker(FakeClient):
+        def chat(self, messages, **kw):
+            return {**super().chat(messages, **kw), "content": "", "finish_reason": "length"}
+    s = verify.run([{**CAND, "id": f"c{i}"} for i in range(10)], [(Thinker(["x"] * 20), 1)], str(tmp_path / "v.jsonl"),
+                   workers=1, max_failures=3)
+    assert not s["paused"] and s["unvoted"] == 10
