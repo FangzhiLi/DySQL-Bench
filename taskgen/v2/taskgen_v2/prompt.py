@@ -196,7 +196,8 @@ def sample_plan(rng, tree, anchor, cfg=CFG, ctx=None):
     groups = [g for g in tree["events"] if 2 <= g["count"] <= cfg["MAX_ROWS_PER_STMT"] and g["table"] in tabs["own"]]
     if task_type != "3_public_only" and groups and rng.random() < cfg["BATCH"]:
         g = max(groups, key=lambda g: g["count"])
-        batch = {"table": g["table"], "label": g["label"], "count": g["count"], "all": rng.random() < cfg["BATCH_ALL"]}
+        batch = {"table": g["table"], "label": g["label"], "count": g["count"],
+                 "all": rng.random() < cfg["BATCH_ALL"] or g["count"] < 3}   # two rows: a condition would pick 1 of them
     n_tables = 1
     if task_type == "2_self_and_public":
         n_tables = 2
@@ -284,7 +285,7 @@ def shape_text(anchor, tree, plan, cfg=CFG):
                      f"are {b['count']}): select them by a condition such as a date range, a status or a value, written in the "
                      f"instruction exactly as the SQL uses it, not by listing ids; it changes between 2 and {b['count'] - 1} rows.")
     if s["archive"]:
-        lines.append(f"- First copy the {s['archive']} rows you will change as new rows with INSERT INTO \"{s['archive']}\" ... "
+        lines.append(f"- First copy all the {s['archive']} rows you will change, in one statement, as new rows with INSERT INTO \"{s['archive']}\" ... "
                      f"SELECT ... FROM \"{s['archive']}\", then UPDATE or DELETE the original rows by their "
                      + (f"{s['archive_key']} values; the copies get new {s['archive_key']} values and stay as they are."
                         if s.get("archive_key") else "keys; the copies get new keys and stay as they are."))

@@ -473,3 +473,20 @@ def test_final_state_reads_the_clock_at_a_fixed_instant(tmp_path):
     a = check.final_state(db, ["INSERT INTO notes VALUES (5, CURRENT_TIMESTAMP)"])
     time.sleep(1.1)
     assert a == check.final_state(db, ["INSERT INTO notes VALUES (5, datetime('now'))"]) == {"notes": ([(5, check.INSTANTS[0])], [])}
+
+
+def test_two_archive_copies_numbered_by_sqlite_are_rejected(db):
+    # SQLite numbers the copies in statement order; an agent that copies both rows in one INSERT ... SELECT numbers
+    # them in table order, so whether it matches the gold would hang on the order of two statements
+    one = "INSERT INTO order_items (order_id, note) SELECT order_id, note FROM order_items WHERE item_id = {}"
+    change = "UPDATE order_items SET note = 'x' WHERE item_id IN (5, 65)"
+    ask = "I am a5 b5. Copy my order items 65 and 5, then set the note of items 5 and 65 to x."
+    r = check.run_check(db, cand(ask, [one.format(65), one.format(5), change]))
+    assert "archive_split: order_items" in r["reasons"]
+    r = check.run_check(db, cand(ask, [one.format("65 OR item_id = 5"), change]))
+    assert r["ok"], r["reasons"]
+    new = sqlite3.connect(db["path"]).execute("SELECT MAX(item_id) + 1 FROM order_items").fetchone()[0]
+    keyed = "INSERT INTO order_items (item_id, order_id, note) SELECT {}, order_id, note FROM order_items WHERE item_id = {}"
+    r = check.run_check(db, cand(f"I am a5 b5. Copy items 65 and 5 as items {new} and {new + 1}, then set the note of items 5 and 65 to x.",
+                                 [keyed.format(new, 65), keyed.format(new + 1, 5), change]))
+    assert r["ok"], r["reasons"]        # the SQL states the copies' keys: nothing hangs on the order

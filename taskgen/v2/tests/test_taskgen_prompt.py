@@ -151,7 +151,8 @@ def test_subquery_archive_batch_and_proxy_wording():
     p = plan_for("1_self", ownership_subquery=True, archive="orders")
     u = prompt.build_messages(DB, ANCHOR, TREE, p, MATERIALS)[1]["content"]
     assert "WHERE customer_id = (SELECT customer_id FROM \"customers\" WHERE email = 'a5@x.org'), instead of writing customer_id = 5." in u
-    assert 'First copy the orders rows you will change as new rows with INSERT INTO "orders" ... SELECT ... FROM "orders"' in u
+    assert ('First copy all the orders rows you will change, in one statement, as new rows with INSERT INTO "orders" ... '
+            'SELECT ... FROM "orders"') in u
     p5 = plan_for("5_proxy")
     u = prompt.build_messages(DB, ANCHOR, TREE, p5, MATERIALS)[1]["content"]
     assert f"The speaker is not in the database: {p5['style']['name']}, {p5['style']['role']}." in u and "the person the request is about" in u
@@ -193,3 +194,10 @@ def test_a_tree_without_events_asks_for_no_more_writes_than_it_has_tables():
     ps = plans(1000, NO_EVENTS)
     assert all(p["shape"]["n_writes"] <= len(p["scope"]) for p in ps)
     assert Counter(p["shape"]["n_writes"] for p in ps)[2] > 0          # the root and its vip attribute: two writes fit
+
+
+def test_a_batch_of_two_rows_takes_both():
+    # "by a condition" over a group of two read "it changes between 2 and 1 rows"
+    two = {**TREE, "events": [{**TREE["events"][0], "count": 2, "rows": TREE["events"][0]["rows"][:2]}, TREE["events"][1]]}
+    batches = [p["shape"]["batch"] for p in plans(3000, two) if p["shape"]["batch"]]
+    assert batches and all(b["all"] and b["count"] == 2 for b in batches)

@@ -52,6 +52,12 @@ def write_target(stmt):
     return ("INSERT" if op == "REPLACE" else op), next(g for g in m.groups() if g)
 
 
+def names_column(stmt, col):
+    """Whether an INSERT gives a value for col: its column list names it, or it has no column list (every column)."""
+    m = re.match(r'(?is)^\s*(?:insert|replace)\s+(?:or\s+\w+\s+)?into\s+' + _NAME + r'\s*\(([^)]*)\)', stmt)
+    return not m or col.lower() in [c.strip().strip('"[]`').lower() for c in m.group(5).split(",")]
+
+
 def has_archive(stmts):
     """INSERT ... SELECT ... FROM t followed by an UPDATE or DELETE of t (spec §5)."""
     for i, st in enumerate(stmts):
@@ -296,6 +302,7 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
                        f"INSERT INTO _old VALUES ('{t}', json_object({obj})); END")
     stmts, labels, executed = [], [], []   # executed: every statement that ran, in order (writes and DDL)
     copies = {}   # table -> rowids an INSERT ... SELECT added: the archived copies, which later writes must leave alone
+    numbered = {}   # table -> INSERT ... SELECTs whose copies SQLite numbered, in statement order
     db.execute("BEGIN")
     try:
         for a in cand["actions"]:
@@ -328,6 +335,10 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
                     hit = len(set(before) - set(_copy_rows(db, table, copies[table]) or ()))
                     if hit and len(rs) > hit:
                         out["reasons"].append(f"archive_copy_changed: {op} {table}")
+                if top is not None and key in auto and not names_column(st, auto[key][1]):
+                    numbered[table] = numbered.get(table, 0) + 1
+                    if numbered[table] == 2:   # one INSERT ... SELECT for all rows would number them in table order
+                        out["reasons"].append(f"archive_split: {table}")
                 if nxt is not None:
                     # keys SQLite would assign anyway: an agent may leave them out, so the user need not say them,
                     # here or in a later statement that refers to the new row
