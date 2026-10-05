@@ -5,7 +5,13 @@
 16 份 profile 由 Claude 读 schema 和数据起草，用户 2026-10-05 确认：
 - 每条数据怪异点都用 SQL 核对过；
 - 都通过了 `profile check`；
-- 用户的唯一改动：california_schools 的 frpm 和 satscores 从属性表改成事件表，让建树优先挑有这两张表数据的学校。
+- 第一轮确认时用户改了一处：california_schools 的 frpm 和 satscores 从属性表改成事件表，让建树优先挑有这两张表数据的学校。
+- 第二轮（同日，另一次 profile 审阅后，用户批准，9 份重新确认）：
+  - california_schools 的 satscores 改回属性表：学区和县办公室几乎都是从 satscores 的学区级行带进来的；改后，优先挑出的 9,986 所里只有 45 所是办公室；
+  - 改正 3 条与数据不符的说明：food_inspection 的重复行，video_games 的 region_sales 重复组合，bike_1 的站名不一致数；
+  - 补 4 条说明：restaurant 的 location.city，chicago_crime 的末尾空格，Airlines 的 '\N'，shakespeare 的舞台说明；
+  - shakespeare 的章节标签改为 "chapters (scenes, or sections of a poem)"；
+  - flight_4 的新查找行加上起点机场。
 
 ## 请你看的
 
@@ -80,7 +86,7 @@ Claude 的改动：
 
 ## bird:california_schools　已确认　校验通过
 
-> California public schools. Each school (schools) has its directory details, and may have one row of free and reduced-price meal figures (frpm) and one row of SAT results (satscores), each kept as an event of the school. A task is about one school.
+> California public schools. Each school (schools) has its directory details, and may have one row of free and reduced-price meal figures (frpm) and one row of SAT results (satscores). A task is about one school.
 
 | 项 | 内容 |
 |---|---|
@@ -89,8 +95,8 @@ Claude 的改动：
 | 说话人角色 | the office manager at this school；a district data coordinator responsible for this school；a county office of education analyst；a state reporting specialist correcting this school's records |
 | 可新建的查找行 | — |
 | 人物表 | schools（CDSCode；School） |
-| 事件 | frpm（free and reduced-price meal figures）：frpm.CDSCode -> schools.CDSCode；satscores（SAT results）：satscores.cds -> schools.CDSCode |
-| 属性表 | — |
+| 事件 | frpm（free and reduced-price meal figures）：frpm.CDSCode -> schools.CDSCode |
+| 属性表 | satscores → schools |
 | 公共表 | — |
 | 排除 | — |
 | 不出 INSERT | — |
@@ -101,6 +107,7 @@ Claude 的改动：
 Claude 的改动：
 - Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL
 - Claude: frpm and satscores moved from attributes to events (user, 2026-10-05), so trees pick schools that have them
+- Claude: fixes from a second profile review (user approved 2026-10-05)
 
 起草：claude，1 轮
 
@@ -150,7 +157,7 @@ Claude 的改动：
 | 公共表 | IUCR, FBI_Code, Ward, Community_Area, Neighborhood |
 | 排除 | — |
 | 不出 INSERT | — |
-| 数据怪异点 | Crime.date is text 'M/D/YYYY H:MM' ('1/1/2018 2:46').；Crime.arrest and Crime.domestic are the strings 'TRUE' and 'FALSE'.；District.email and District.twitter begin with a non-breaking space; never copy it into a new value.；Community_Area.population is text with thousands commas ('54,991').；FBI codes mix digits and letters ('01A', '2'). |
+| 数据怪异点 | Crime.date is text 'M/D/YYYY H:MM' ('1/1/2018 2:46').；Crime.arrest and Crime.domestic are the strings 'TRUE' and 'FALSE'.；District.email and District.twitter begin with a non-breaking space; never copy it into a new value.；Community_Area.population is text with thousands commas ('54,991').；FBI codes mix digits and letters ('01A', '2').；Community_Area.side ends with a space in 74 of 77 rows ('Far North '); never copy the trailing space into a new value. |
 
 挂在根和事件下面的父行（← 后面是外键列）：
 
@@ -164,6 +171,7 @@ Claude 的改动：
 
 Claude 的改动：
 - Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL
+- Claude: fixes from a second profile review (user approved 2026-10-05)
 
 起草：claude，1 轮
 
@@ -208,12 +216,13 @@ Claude 的改动：
 | 公共表 | — |
 | 排除 | — |
 | 不出 INSERT | — |
-| 数据怪异点 | inspections and violations have no key; dates are 'YYYY-MM-DD'.；146 inspections share business_id, date and type with another inspection, so a task naming one such inspection gives its score as well.；inspections.score is NULL for inspections that are not scored (46% of them, such as follow-ups).；violations.risk_category is 'Low Risk', 'Moderate Risk' or 'High Risk'.；owner_name is the business's legal owner, often a company ('Tiramisu LLC'), not necessarily the person speaking. |
+| 数据怪异点 | inspections and violations have no key; dates are 'YYYY-MM-DD'.；inspections has 145 pairs of identical rows (same business_id, date, type and score) and violations 42 pairs of identical rows; an UPDATE or DELETE that matches one row of a pair changes both.；inspections.score is NULL for inspections that are not scored (46% of them, such as follow-ups).；violations.risk_category is 'Low Risk', 'Moderate Risk' or 'High Risk'.；owner_name is the business's legal owner, often a company ('Tiramisu LLC'), not necessarily the person speaking. |
 
 主键：可省 ID：businesses；无主键：inspections, violations
 
 Claude 的改动：
 - Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL
+- Claude: fixes from a second profile review (user approved 2026-10-05)
 
 起草：claude，1 轮
 
@@ -263,7 +272,7 @@ Claude 的改动：
 | 公共表 | geographic |
 | 排除 | — |
 | 不出 INSERT | — |
-| 数据怪异点 | All text is lower case ('sparky's diner', 'san francisco', 'church st'); keep new values lower case.；review is a score between 1.3 and 4.5 with one decimal.；location.street_num is the house number and street_name the street only.；geographic.city is the key of geographic: a new city row states city, county and region. |
+| 数据怪异点 | All text is lower case ('sparky's diner', 'san francisco', 'church st'); keep new values lower case.；review is a score between 1.3 and 4.5 with one decimal.；location.street_num is the house number and street_name the street only.；geographic.city is the key of geographic: a new city row states city, county and region.；location.city repeats generalinfo.city (NULL in 225 location rows, different in 1); a task that moves a restaurant to another city sets both. |
 
 挂在根和事件下面的父行（← 后面是外键列）：
 
@@ -274,6 +283,7 @@ Claude 的改动：
 
 Claude 的改动：
 - Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL
+- Claude: fixes from a second profile review (user approved 2026-10-05)
 
 起草：claude，1 轮
 
@@ -288,12 +298,12 @@ Claude 的改动：
 | 说话人角色 | an editor of this work's digital edition；a dramaturg preparing this work for a production；a literature professor correcting the text for a course reader；a volunteer proofreader for the Shakespeare corpus |
 | 可新建的查找行 | paragraphs.character_id -> characters.id（名字列 CharName） |
 | 人物表 | works（id；Title） |
-| 事件 | chapters（scenes）：chapters.work_id -> works.id；paragraphs（paragraphs）：chapters.work_id -> works.id / paragraphs.chapter_id -> chapters.id |
+| 事件 | chapters（chapters (scenes, or sections of a poem)）：chapters.work_id -> works.id；paragraphs（paragraphs）：chapters.work_id -> works.id / paragraphs.chapter_id -> chapters.id |
 | 属性表 | — |
 | 公共表 | characters |
 | 排除 | — |
 | 不出 INSERT | — |
-| 数据怪异点 | chapters are scenes: Act and Scene are numbers; 270 scene descriptions use the curly apostrophe (’), so copy them exactly.；paragraphs.PlainText often spans several lines and includes stage directions in square brackets.；characters is one list for all works; 1,266 rows hold 957 distinct names, so a character is named by its id.；works.GenreType is 'Comedy', 'Tragedy', 'History', 'Poem' or 'Sonnet'; works.Date is a year. |
+| 数据怪异点 | chapters are the scenes of a play (Act and Scene numbers) or, for the 28 poem and 154 sonnet chapters, sections of a poem; 270 chapter descriptions use the curly apostrophe (’), so copy them exactly.；paragraphs.PlainText often spans several lines and includes stage directions in square brackets.；characters is one list for all works; 1,266 rows hold 957 distinct names, so a character is named by its id.；works.GenreType is 'Comedy', 'Tragedy', 'History', 'Poem' or 'Sonnet'; works.Date is a year.；Paragraphs of character 1261, '(stage directions)', are stage directions, not speech (3,732 paragraphs). |
 
 挂在根和事件下面的父行（← 后面是外键列）：
 
@@ -304,6 +314,7 @@ Claude 的改动：
 
 Claude 的改动：
 - Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL
+- Claude: fixes from a second profile review (user approved 2026-10-05)
 
 起草：claude，1 轮
 
@@ -356,7 +367,7 @@ Claude 的改动：
 | 公共表 | genre, publisher, platform, region |
 | 排除 | — |
 | 不出 INSERT | — |
-| 数据怪异点 | A game reaches its platforms through game_publisher: game_platform.game_publisher_id points to a game_publisher row, not to the game.；region_sales has no key: a row is one (region_id, game_platform_id); by the database's notes, games sold = num_sales * 100000. |
+| 数据怪异点 | A game reaches its platforms through game_publisher: game_platform.game_publisher_id points to a game_publisher row, not to the game.；region_sales has no key; 16 (region_id, game_platform_id) pairs appear twice, 14 of them with different num_sales, so a write by region and release changes both rows; by the database's notes, games sold = num_sales * 100000. |
 
 挂在根和事件下面的父行（← 后面是外键列）：
 
@@ -373,6 +384,7 @@ Claude 的改动：
 
 Claude 的改动：
 - Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL
+- Claude: fixes from a second profile review (user approved 2026-10-05)
 
 起草：claude，1 轮
 
@@ -392,12 +404,13 @@ Claude 的改动：
 | 公共表 | weather |
 | 排除 | — |
 | 不出 INSERT | — |
-| 数据怪异点 | installation_date and trip dates are 'M/D/YYYY' ('8/21/2015 17:03' for trips); status.time is 'YYYY-MM-DD HH:MM:SS'.；status has no key: a row is one (station_id, time).；trip.start_station_name and end_station_name copy the station's name at trip time and differ from station.name for 213 trips.；trip.duration is in seconds. |
+| 数据怪异点 | installation_date and trip dates are 'M/D/YYYY' ('8/21/2015 17:03' for trips); status.time is 'YYYY-MM-DD HH:MM:SS'.；status has no key: a row is one (station_id, time).；trip.start_station_name and end_station_name copy the station names at trip time: 213 start names and 218 end names differ from station.name (419 trips in all).；trip.duration is in seconds. |
 
 主键：可省 ID：station, trip；无主键：status, weather
 
 Claude 的改动：
 - Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL
+- Claude: fixes from a second profile review (user approved 2026-10-05)
 
 起草：claude，1 轮
 
@@ -435,7 +448,7 @@ Claude 的改动：
 | 根 | airlines（airline） |
 | 类型 | 实体（根是物，不是人） |
 | 说话人角色 | a network planner at this airline；the airline's schedules data manager；an aviation database volunteer who maintains this airline's routes；an airport slot coordinator working with this airline |
-| 可新建的查找行 | routes.dst_apid -> airports.apid（名字列 name） |
+| 可新建的查找行 | routes.dst_apid -> airports.apid（名字列 name）；routes.src_apid -> airports.apid（名字列 name） |
 | 人物表 | airlines（alid；name） |
 | 事件 | routes（routes）：routes.alid -> airlines.alid |
 | 属性表 | — |
@@ -454,6 +467,7 @@ Claude 的改动：
 
 Claude 的改动：
 - Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL
+- Claude: fixes from a second profile review (user approved 2026-10-05)
 
 起草：claude，1 轮
 
@@ -473,7 +487,7 @@ Claude 的改动：
 | 公共表 | flights, airports_data, aircrafts_data, seats |
 | 排除 | — |
 | 不出 INSERT | — |
-| 数据怪异点 | book_ref and ticket_no are text codes with leading zeros ('00000F', '0005435212351'); copy them exactly.；book_date and flight times carry a +03 time zone ('2017-07-05 03:12:00+03').；total_amount and amount are whole rubles.；fare_conditions is 'Economy', 'Comfort' or 'Business'.；tickets.passenger_id is a document number with a space ('8149 604011'); passengers' names are not stored.；airports_data and aircrafts_data names are JSON text with English and Russian ('{"en": "Boeing 777-300", "ru": ...}'). |
+| 数据怪异点 | book_ref and ticket_no are text codes with leading zeros ('00000F', '0005435212351'); copy them exactly.；book_date and flight times carry a +03 time zone ('2017-07-05 03:12:00+03').；total_amount and amount are whole rubles.；fare_conditions is 'Economy', 'Comfort' or 'Business'.；tickets.passenger_id is a document number with a space ('8149 604011'); passengers' names are not stored.；airports_data and aircrafts_data names are JSON text with English and Russian ('{"en": "Boeing 777-300", "ru": ...}').；flights.actual_departure and actual_arrival are the text '\N' when the flight has not departed or arrived. |
 
 挂在根和事件下面的父行（← 后面是外键列）：
 
@@ -486,6 +500,7 @@ Claude 的改动：
 
 Claude 的改动：
 - Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL
+- Claude: fixes from a second profile review (user approved 2026-10-05)
 
 起草：claude，1 轮
 
