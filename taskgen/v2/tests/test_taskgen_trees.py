@@ -3,6 +3,7 @@ import random, sqlite3
 import pytest
 from taskgen_common.testing import make_db
 from v2_fixtures import SHOP2, FKS, CUSTOMER, STAFF, SHOP_PROFILE, SCHOOL, SCHOOL_FKS, SCHOOL_COMPOSITE, SCHOOL_PROFILE   # noqa: F401 (re-exported)
+from v2_fixtures import MENUS, MENUS_FKS, MENUS_PROFILE
 from taskgen_v2 import db_profile, owners, trees
 
 SHOP_REC = {"source": "test", "db": "shop2", "anchors": [CUSTOMER, STAFF], "fks": FKS}
@@ -111,3 +112,28 @@ def test_lookup_skips_a_name_column_that_is_the_key(tmp_path):
     # student_loan's person table is just the name, which is the key: "find me by my name" found the key by the key
     conn = sqlite3.connect(make_db(tmp_path, "loans", "CREATE TABLE person (name TEXT PRIMARY KEY); INSERT INTO person VALUES ('student1');"))
     assert trees.lookup(conn, "person", {"key": "name", "name_cols": ["name"]}, {"name": "student1"}) == {}
+
+
+MENUS_REC = {"source": "test", "db": "menus", "anchors": [], "fks": MENUS_FKS}
+
+
+@pytest.fixture
+def menus(tmp_path):
+    c = sqlite3.connect(make_db(tmp_path, "menus", MENUS)); yield c; c.close()
+
+
+def test_an_entity_tree_says_its_kind_and_lists_used_keys(menus, monkeypatch):
+    t = tree(menus, MENUS_PROFILE, MENUS_REC, MENUS_PROFILE["roots"][0], 3)
+    assert (t["kind"], t["root_label"], t["anchor_name"]) == ("entity", "menu", "Menu 3")
+    assert t["parents"][0]["table"] == "dish" and t["parents"][0]["label"] == "public"
+    pages, items, stats = t["events"]
+    assert {n["label"] for n in pages["rows"] + items["rows"]} == {"own"} and items["rows"][0]["parents"][0]["label"] == "public"
+    assert stats["taken"] == {"menu_id, year": [[3, 2000], [3, 2001], [3, 2002]]} and pages["taken"] == {} and items["taken"] == {}
+    monkeypatch.setattr(trees, "TAKEN_MAX", 2)
+    assert tree(menus, MENUS_PROFILE, MENUS_REC, MENUS_PROFILE["roots"][0], 3)["events"][2]["taken"] == \
+        {"menu_id, year": [[3, 2000], [3, 2001]]}
+
+
+def test_person_trees_say_person(shop):
+    t = tree(shop, SHOP_PROFILE, SHOP_REC, CUSTOMERS, 5)
+    assert t["kind"] == "person" and t["root_label"] == "customer" and all(g["taken"] == {} for g in t["events"])

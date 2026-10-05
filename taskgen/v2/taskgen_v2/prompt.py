@@ -27,6 +27,7 @@ CFG = {
     "MAX_VALUE_CHARS": 200,   # longer text values are cut in the prompt
 }
 PUBLIC_TYPES = ("2_self_and_public", "3_public_only")
+ENTITY = "6_entity"   # an entity profile's only type (design 2026-10-04)
 # style pools: the pilot reused the same invented names ("Priya Raghavan" x6) and roles, so a proxy speaker gets a
 # sampled name and role, and every plan a sampled tone
 FIRST_NAMES = ["Aisha", "Ben", "Carlos", "Dmitri", "Elena", "Farid", "Grace", "Hiro", "Ingrid", "Jamal", "Keiko", "Luis",
@@ -125,6 +126,8 @@ def feasible_types(tree):
 
 
 def _who(task_type):
+    if task_type == ENTITY:
+        return "the record the request is about"
     return "the speaker's own row" if task_type != "5_proxy" else "the person the request is about"
 
 
@@ -238,20 +241,32 @@ def _short(row, cfg):
     return {k: (v[:n] + f"... ({len(v)} chars)" if isinstance(v, str) and len(v) > n else v) for k, v in row.items()}
 
 
-def _label_text(label):
+def _label_text(label, other="another person's data"):
     if label.startswith("other:"):
-        return f"another person's data: {label[6:]}"
+        return f"{other}: {label[6:]}"
     return {"own": "own", "public": "public, shared reference data owned by nobody"}.get(label, label)
+
+
+def _taken_lines(g):
+    """What a new row of the group must not repeat (trees.taken), so the model does not pick a used pair."""
+    out = []
+    for cols, vals in (g.get("taken") or {}).items():
+        shown = ", ".join("(" + ", ".join(sql_value(v) for v in t) + ")" if len(t) > 1 else sql_value(t[0]) for t in vals)
+        more = " and others" if g["count"] > len(vals) else ""
+        out.append(f"A new {g['table']} row must not repeat these ({cols}) values, already used: {shown}{more}.")
+    return out
 
 
 def data_blocks(tree, refs, who, cfg=CFG):
     """The root row with its attributes and parent rows, then each shown event group; parent rows are indented under
     the row that references them, and every row says whose data it is."""
+    other = f"another {tree['root_label']}'s data" if tree.get("kind") == "entity" else "another person's data"
+
     def js(row):
         return json.dumps(_short(row, cfg), ensure_ascii=False, default=str)
 
     def lines(node, depth):
-        out = [f"{'  ' * depth}- {node['table']} ({_label_text(node['label'])}): {js(node['row'])}"]
+        out = [f"{'  ' * depth}- {node['table']} ({_label_text(node['label'], other)}): {js(node['row'])}"]
         for p in node["parents"]:
             out += lines(p, depth + 1)
         return out
@@ -261,7 +276,7 @@ def data_blocks(tree, refs, who, cfg=CFG):
     blocks = ["\n".join(head)]
     for g in trees.shown(tree, refs):
         blocks.append(f"## {g['label']}: {g['table']} records ({len(g['rows'])} of {g['count']} shown)\n"
-                      + "\n".join(x for n in g["rows"] for x in lines(n, 0)))
+                      + "\n".join([x for n in g["rows"] for x in lines(n, 0)] + _taken_lines(g)))
     return "\n\n".join(blocks)
 
 

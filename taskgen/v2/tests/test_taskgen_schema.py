@@ -91,3 +91,13 @@ CREATE TABLE profile (pid INTEGER PRIMARY KEY REFERENCES plain(id), v TEXT);
         "extra": "- extra: a new row states code, the key of the row it belongs to, written in the instruction",
         "profile": "- profile: a new row states pid, the key of the row it belongs to, written in the instruction"}
     assert schema.unique_columns(conn, "named") == [("code", "city"), ("name",)] and schema.unique_columns(conn, "pair") == []
+
+
+def test_key_groups_are_the_keys_a_new_row_must_not_repeat(tmp_path):
+    conn = sqlite3.connect(make_db(tmp_path, "kg", """
+CREATE TABLE auto (id INTEGER PRIMARY KEY, v TEXT);
+CREATE TABLE pair (a INTEGER, b INTEGER, v TEXT, PRIMARY KEY (a, b));
+CREATE TABLE coded (code TEXT PRIMARY KEY, name TEXT UNIQUE);
+CREATE TABLE nokey (v TEXT);"""))
+    assert schema.key_groups(conn, "auto") == [] and schema.key_groups(conn, "nokey") == []
+    assert schema.key_groups(conn, "pair") == [("a", "b")] and schema.key_groups(conn, "coded") == [("code",), ("name",)]

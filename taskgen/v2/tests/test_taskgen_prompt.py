@@ -29,6 +29,23 @@ NO_PUBLIC = {**TREE, "events": [TREE["events"][1]]}
 NO_EVENTS = {**TREE, "events": [], "parents": [], "lookup": {}}
 
 
+def item(i, label="own"):
+    return {"table": "item", "row": {"item_id": i, "page_id": 3, "dish_id": i, "price": 2.5}, "label": label,
+            "parents": [{"table": "dish", "row": {"dish_id": i, "name": f"dish {i}"}, "label": "public", "parents": []}]}
+
+
+ENTITY_TREE = {"kind": "entity", "root_label": "menu", "anchor_table": "menu", "anchor_key": "menu_id", "key_value": 3,
+               "anchor_name": "Menu 3", "anchor_row": {"menu_id": 3, "name": "Menu 3", "owner_name": "Grace Kim", "house_dish": 3},
+               "lookup": {"name": "Menu 3"}, "profile_version": "v1", "attributes": {},
+               "parents": [{"table": "dish", "row": {"dish_id": 3, "name": "dish 3"}, "label": "public", "parents": []}],
+               "events": [{"table": "item", "label": "menu items", "count": 6, "taken": {}, "rows": [item(i) for i in (3, 13, 23)]},
+                          {"table": "menu_stats", "label": "yearly views", "count": 3, "taken": {"menu_id, year": [[3, 2000], [3, 2001], [3, 2002]]},
+                           "rows": [{"table": "menu_stats", "row": {"menu_id": 3, "year": 2000 + k, "views": k}, "label": "own", "parents": []}
+                                    for k in range(3)]},
+                          {"table": "page", "label": "pages", "count": 1, "taken": {},
+                           "rows": [{"table": "page", "row": {"page_id": 4, "menu_id": 4, "page_number": 1}, "label": "other:Menu 4", "parents": []}]}]}
+
+
 def plans(n=3000, tree=TREE, seed=0):
     rng = random.Random(seed)
     return [prompt.sample_plan(rng, tree, ANCHOR, prompt.CFG, CTX) for _ in range(n)]
@@ -201,3 +218,14 @@ def test_a_batch_of_two_rows_takes_both():
     two = {**TREE, "events": [{**TREE["events"][0], "count": 2, "rows": TREE["events"][0]["rows"][:2]}, TREE["events"][1]]}
     batches = [p["shape"]["batch"] for p in plans(3000, two) if p["shape"]["batch"]]
     assert batches and all(b["all"] and b["count"] == 2 for b in batches)
+
+
+def test_entity_data_blocks_name_the_record_and_the_used_keys():
+    text = prompt.data_blocks(ENTITY_TREE, [[0, 0], [1, 0], [2, 0]], prompt._who(prompt.ENTITY))
+    assert text.startswith("## menu record (the record the request is about)\n")
+    assert "- page (another menu's data: Menu 4): " in text
+    assert ("A new menu_stats row must not repeat these (menu_id, year) values, already used: (3, 2000), (3, 2001), (3, 2002)."
+            in text)
+    few = {**ENTITY_TREE, "events": [{**ENTITY_TREE["events"][1], "count": 9}]}
+    assert "already used: (3, 2000), (3, 2001), (3, 2002) and others." in prompt.data_blocks(few, [[0, 0]], "x")
+    assert "already used" not in prompt.data_blocks(TREE, [[0, 0], [1, 0]], "x")       # person trees from before Task 2

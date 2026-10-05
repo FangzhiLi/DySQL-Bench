@@ -4,10 +4,11 @@ parent rows it actually references nested under it (purchase -> product -> brand
 1:1 attributes. Every row carries its owner label (owners.Tracer), the same label the execution check computes."""
 import json, re, sqlite3
 from taskgen_common.db_select import _q
-from taskgen_v2 import db_profile
+from taskgen_v2 import db_profile, schema
 
 MAX_EVENTS = 30   # event rows kept per tree; the prompt shows 3-12 of them
 MAX_DEPTH = 4     # levels of parent rows under an event
+TAKEN_MAX = 60    # used key values listed per event group; a group with more lists the first 60
 ID_COL = re.compile(r"(?i)e-?mail|phone|ssn|social|passport|licen[cs]e|user.?name|login")   # what people identify by
 
 
@@ -99,6 +100,16 @@ def _cap(groups, rng, k):
     return [sorted(x) for x in keep]
 
 
+def taken(conn, table, rows):
+    """{'a, b': [[1, 2], ...]}: the values of each key group (schema.key_groups) that the group's rows already use."""
+    out = {}
+    for g in schema.key_groups(conn, table):
+        vals = sorted({tuple(r.get(c) for c in g) for r in rows if all(r.get(c) is not None for c in g)}, key=str)
+        if vals:
+            out[", ".join(g)] = [list(v) for v in vals[:TAKEN_MAX]]
+    return out
+
+
 def lookup(conn, table, person, row):
     """Columns that pick out this person's row without the key, for the subquery shape (design D8): an email-, phone-
     or SSN-like column whose value no other row shares, else the name columns when no one else has the same name.
@@ -135,12 +146,13 @@ def build_tree(conn, profile, root, key_value, rng, tracer, max_events=MAX_EVENT
             got = _rows(conn, f"SELECT * FROM {_q(a['table'])} WHERE " + " AND ".join(f"{_q(c)} = ?" for c in e.cols), vals)
             if got:
                 attrs[a["table"]] = got
-    return {"anchor_table": t, "anchor_key": person["key"], "key_value": key_value,
+    return {"kind": db_profile.kind(profile), "root_label": root["label"],
+            "anchor_table": t, "anchor_key": person["key"], "key_value": key_value,
             "anchor_name": " ".join(str(row[c]) for c in person["name_cols"] if row.get(c) not in (None, "")),
             "anchor_row": row, "lookup": lookup(conn, t, person, row), "profile_version": db_profile.version(profile),
             "parents": _parents(conn, row, root.get("parents"), tracer, speaker),
             "attributes": attrs,
-            "events": [{"table": ev["table"], "label": ev["label"], "count": len(rs),
+            "events": [{"table": ev["table"], "label": ev["label"], "count": len(rs), "taken": taken(conn, ev["table"], rs),
                         "rows": [_node(conn, ev["table"], rs[j], ev.get("parents"), tracer, speaker) for j in idx]}
                        for (ev, rs), idx in zip(groups, keep)]}
 

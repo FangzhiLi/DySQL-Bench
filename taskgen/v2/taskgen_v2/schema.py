@@ -89,6 +89,17 @@ def unique_columns(conn, table):
     return sorted(out)
 
 
+def key_groups(conn, table):
+    """Column groups no two rows may share that a new row has to state (design 2026-10-04 §6): a primary key SQLite
+    does not fill in (anything but a rowid alias) and every UNIQUE group. Trees list the values a root's rows already
+    use, since the prompt shows only some rows (plan 5 lost address, IPL, WWE and school_scheduling candidates to them)."""
+    pk = sorted((r for r in conn.execute(f"PRAGMA table_info({_q(table)})") if r[5]), key=lambda r: r[5])
+    sql = (conn.execute("SELECT sql FROM sqlite_master WHERE name = ?", (table,)).fetchone() or ("",))[0] or ""
+    rowid = len(pk) == 1 and (pk[0][2] or "").upper() == "INTEGER" and not re.search(r"(?i)\bwithout\s+rowid\b", sql)
+    out = [tuple(r[1] for r in pk)] if pk and not rowid else []
+    return out + [u for u in unique_columns(conn, table) if u not in out]
+
+
 def _next_number(conn, table, col):
     """MAX + 1 when every value of a one-column key is a whole number, also when stored as text (college_2's IDs)."""
     vals = [v for (v,) in conn.execute(f"SELECT {_q(col)} FROM {_q(table)}") if v is not None]
