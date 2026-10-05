@@ -59,11 +59,11 @@ def plan_for(task_type, tree=TREE, **shape):
             return p
 
 
-def test_examples_are_dysql_style_for_the_four_types():
+def test_examples_are_dysql_style_for_every_type():
     ex = prompt.load_examples()
-    assert set(ex) == set(prompt.CFG["TYPE_MIX"]) == {"1_self", "2_self_and_public", "3_public_only", "5_proxy"}
+    assert set(ex) == set(prompt.CFG["TYPE_MIX"]) | {f"6_entity/{s}" for s in prompt.SPEAKERS}
     for t, xs in ex.items():
-        assert len(xs) >= 3, t
+        assert len(xs) >= (2 if t.startswith("6_entity/") else 3), t
         for x in xs:
             assert 40 <= len(x.split()) <= 80 and metrics.ID_RE.search(" ".join(x.split()[:25])) and not metrics.ASK.search(x), x
 
@@ -229,3 +229,92 @@ def test_entity_data_blocks_name_the_record_and_the_used_keys():
     few = {**ENTITY_TREE, "events": [{**ENTITY_TREE["events"][1], "count": 9}]}
     assert "already used: (3, 2000), (3, 2001), (3, 2002) and others." in prompt.data_blocks(few, [[0, 0]], "x")
     assert "already used" not in prompt.data_blocks(TREE, [[0, 0], [1, 0]], "x")       # person trees from before Task 2
+
+
+ENTITY_ANCHOR = {"table": "menu", "key": "menu_id", "names": ["name"]}
+ENTITY_CTX = {"fixed": {"item": {"item_id", "page_id", "dish_id"}, "dish": {"dish_id"}, "menu_stats": {"menu_id", "year"},
+                        "menu": {"menu_id", "house_dish"}},
+              "copyable": {"item"}, "pk": {"item": ["item_id"]},
+              "speaker_roles": ["a menu collection archivist", "a volunteer transcriber", "a restaurant historian", "a librarian"],
+              "new_lookup": [{"via": "item.dish_id -> dish.dish_id", "name_cols": ["name"]}]}
+ENTITY_MATERIALS = {**ENTITY_CTX, "description": "Historical menus.", "quirks": [], "schema": "CREATE TABLE menu (...)",
+                    "keys": {"dish": "- dish: a new row may leave dish_id out (SQLite assigns 30)"}}
+
+
+def entity_plans(n=3000, seed=0, tree=ENTITY_TREE, ctx=ENTITY_CTX):
+    rng = random.Random(seed)
+    return [prompt.sample_plan(rng, tree, ENTITY_ANCHOR, prompt.CFG, ctx) for _ in range(n)]
+
+
+def test_entity_trees_get_only_entity_tasks_with_the_speaker_mix():
+    assert prompt.feasible_types(ENTITY_TREE) == ["6_entity"]
+    ps = entity_plans()
+    assert {p["task_type"] for p in ps} == {"6_entity"}
+    sp = Counter(p["style"]["speaker"] for p in ps)
+    assert abs(sp["name"] / 3000 - 0.55) < 0.04 and abs(sp["none"] / 3000 - 0.28) < 0.04
+    assert abs((sp["role"] + sp["username"]) / 3000 - 0.17) < 0.03 and sp["role"] > 100 and sp["username"] > 100
+    named = [p["style"] for p in ps if p["style"]["speaker"] == "name"]
+    assert 0.4 < sum(s["role"] is not None for s in named) / len(named) < 0.6
+    assert all(p["style"]["role"] in ENTITY_CTX["speaker_roles"] for p in ps if p["style"]["role"])
+    assert len({p["style"]["username"] for p in ps if p["style"]["username"]}) > 100
+    assert all(p["style"]["name"] is None for p in ps if p["style"]["speaker"] != "name")
+    assert all(p["example"] in prompt.load_examples()[f"6_entity/{p['style']['speaker']}"] for p in ps[:300])
+
+
+def test_entity_tasks_write_only_own_tables_except_a_new_lookup_row():
+    ps = entity_plans()
+    look = [p for p in ps if p["shape"]["new_lookup"]]
+    assert 0.06 < len(look) / 3000 < 0.13      # 10% of the plans whose shown tables include item
+    for p in look:
+        s = p["shape"]
+        assert s["new_lookup"] == {"table": "dish", "child": "item", "via": "item.dish_id -> dish.dish_id", "name_cols": ["name"]}
+        assert s["n_writes"] >= 2 and s["n_tables"] == 2 and p["write_tables"] == ["dish", "item"]
+        assert not s["batch"] and not s["archive"] and "dish" in p["scope"]
+        assert not any(t.startswith("dish.") for t in p["targets"])
+    for p in ps:
+        if not p["shape"]["new_lookup"]:
+            assert "dish" not in p["scope"] and set(p["write_tables"] or []) <= set(p["tables"]["own"])
+    assert not any(p["shape"]["new_lookup"] for p in entity_plans(300, ctx={**ENTITY_CTX, "new_lookup": []}))
+    assert all(p["shape"]["new_lookup"] is None for p in plans(300))     # person plans never get one
+
+
+def test_entity_messages_say_who_speaks_and_what_the_request_is_about():
+    rng, by = random.Random(0), {}
+    while len(by) < 4:
+        p = prompt.sample_plan(rng, ENTITY_TREE, ENTITY_ANCHOR, prompt.CFG, ENTITY_CTX)
+        by.setdefault(p["style"]["speaker"], p)
+    users = {k: prompt.build_messages(DB, ENTITY_ANCHOR, ENTITY_TREE, p, ENTITY_MATERIALS)[1]["content"] for k, p in by.items()}
+    for k, u in users.items():
+        assert "The speaker is not in the database, and nothing in it records who they are: " in u
+        assert "The request is about the menu in menu with menu_id = 3 (Menu 3)." in u
+        assert "the menu's name and its ID, written with the word ID or the column name (menu_id 3 or ID 3)" in u
+        assert "no new row is added to menu (that would be another menu)" in u
+        assert "## menu record (the record the request is about)" in u
+        assert by[k]["shape"]["ownership_subquery"] or "identify the menu by menu_id = 3; names can repeat" in u
+        assert ("and no new row is added to a public table" in u) != bool(by[k]["shape"]["new_lookup"])
+    st = by["name"]["style"]
+    assert f"The speaker is not in the database, and nothing in it records who they are: {st['name']}, " in users["name"]
+    assert f"a user with the username {by['username']['style']['username']}, who gives no other name" in users["username"]
+    assert f"{by['role']['style']['role']}, who gives no name" in users["role"] and "Their first sentence gives their role, then" in users["role"]
+    assert "someone who gives no name, role or username" in users["none"]
+    assert "Their first sentence says nothing about who they are and gives the menu's name and its ID" in users["none"]
+
+
+def test_entity_text_without_a_name_and_with_a_new_lookup_row():
+    nameless = {**ENTITY_TREE, "anchor_name": "", "lookup": {}}
+    rng = random.Random(1)
+    while not (p := prompt.sample_plan(rng, nameless, ENTITY_ANCHOR, prompt.CFG, ENTITY_CTX))["shape"]["new_lookup"]:
+        pass
+    assert not p["shape"]["ownership_subquery"]
+    u = prompt.build_messages(DB, ENTITY_ANCHOR, nameless, p, ENTITY_MATERIALS)[1]["content"]
+    assert "The request is about the menu in menu with menu_id = 3." in u and "the menu's name" not in u
+    assert "except the one new dish row the task shape asks for" in u and "no new row is added to a public table" not in u
+    assert ("- First add one new row to dish whose name no dish row has yet (say it in the instruction), then make one "
+            "item row of this menu refer to it through item.dish_id: change an existing row or add a new one. "
+            "No other dish row changes.") in u
+
+
+def test_a_new_lookup_row_under_the_root_takes_two_writes():
+    ctx = {**ENTITY_CTX, "new_lookup": [{"via": "menu.house_dish -> dish.dish_id", "name_cols": ["name"]}]}
+    look = [p for p in entity_plans(2000, ctx=ctx) if p["shape"]["new_lookup"]]
+    assert look and all(p["shape"]["n_writes"] == 2 and p["write_tables"] == ["dish", "menu"] for p in look)

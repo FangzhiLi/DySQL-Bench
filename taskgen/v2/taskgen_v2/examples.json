@@ -22,5 +22,21 @@
     "This is Omar Siddiqui from the billing team, about customer Isabel Torres, customer ID 2210. Her card was charged twice on invoice 90031 and she called us about it this morning. Please delete the duplicate payment 41877 and set that invoice's balance to 0.",
     "Sanjay Patel at the co-working front desk, writing for member Ines Moreau (member ID 6602), who asked me to sort this out while she travels. She is moving to the quiet floor: please change her desk assignment 3121 to desk 'Q-14'. Her locker rental 845 should end on 2024-06-30.",
     "I'm Grace Liu, assistant to Dr. Felix Brandt (vet ID 230) at Elm Street Vets. Three changes to his schedule: 1) cancel his 14:00 surgery slot 9921 on 2024-04-02; 2) add a 30-minute consultation for him on 2024-04-03 at 10:30 in room 2; 3) set his on-call status to 'off'."
+  ],
+  "6_entity/name": [
+    "I'm Lena Hartmann, and album ID 4471, 'Harbour Lights 1962', in the photo archive is mine. The scan of print 88213 is filed under the wrong year, so please set its year to 1963. Also give print 88214 the caption 'Fishing boats at dawn', which the album has been missing since it was first catalogued.",
+    "Tobias Reyes here, a curator for the coastal collection, about artefact ID 3092, the brass ship's bell. Its display case changed last week, so please move it to case 'C-14'. The condition report from 2019-04-02 was entered twice: delete report 5531 and keep report 5530 exactly as it is."
+  ],
+  "6_entity/role": [
+    "As the volunteer who catalogues the trail network, I'm updating trail ID 218, Ridge Loop. It was measured again this spring at 7.4 km, so please change its length from 6.9 to 7.4. The signpost at waypoint 1904 was replaced, and its marker text should now read 'Ridge Loop North'.",
+    "I'm the librarian in charge of the board game shelf, writing about game ID 615, 'Harbor Masters'. We started a new genre this month: please create the genre 'Cooperative Logistics' and make it the genre of this game. We also bought a second copy, so its copy count goes from 1 to 2."
+  ],
+  "6_entity/username": [
+    "Username vinyl_otto, editing record ID 9021, 'Blue Hours' by the Larsen Trio. Track 4 is listed at 192 seconds, but on the pressing it actually runs 221 seconds, so please set its length to 221. The pressing year printed on the sleeve is 1974, not 1975, so change that as well.",
+    "This is gardener.k about plot ID 57 in the community garden. I've stopped growing beans there this season, so please remove planting 7713 from the plot. Change the plot's watering day to 'Thursday' too, since the old Monday slot clashes with the farmers' market that moved next door."
+  ],
+  "6_entity/none": [
+    "Podcast episode ID 1208, 'Night Shift Stories', needs two fixes before the weekly newsletter goes out. Its release date should be 2023-11-14 rather than 2023-11-07. The guest entry 3317 for that episode also has the guest's name misspelled; please change it to 'Amara Okonkwo', which is how she spells it.",
+    "Please update ship ID 7340, the 'Northern Tern', in the harbour registry. Its home port moved to 'Bergen' this spring after the old berth was sold. Inspection 2291 from 2021 was a duplicate of inspection 2290, so delete 2291 and leave inspection 2290 exactly as it is now."
   ]
 }

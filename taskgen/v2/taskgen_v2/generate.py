@@ -43,7 +43,8 @@ def context(db_rec, profile):
                 and t not in unique and t not in profile["no_insert"]}
     return {"description": profile["description"], "quirks": profile["quirks"], "schema": schema.schema_block(path, scope),
             "keys": keys, "no_insert": set(profile["no_insert"]), "fixed": fixed, "copyable": copyable,
-            "pk": {t: v["cols"] for t, v in pk.items()}}
+            "pk": {t: v["cols"] for t, v in pk.items()},
+            "speaker_roles": profile.get("speaker_roles") or [], "new_lookup": profile.get("new_lookup") or []}
 
 
 def parse_answer(text):

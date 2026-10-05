@@ -2,7 +2,7 @@
 import json, random
 import pytest
 from taskgen_common.testing import make_db
-from v2_fixtures import SHOP2, FKS, SHOP_PROFILE, SCHOOL, SCHOOL_FKS, SCHOOL_COMPOSITE, SCHOOL_PROFILE
+from v2_fixtures import SHOP2, FKS, SHOP_PROFILE, SCHOOL, SCHOOL_FKS, SCHOOL_COMPOSITE, SCHOOL_PROFILE, MENUS, MENUS_FKS, MENUS_PROFILE
 from taskgen_v2 import generate, io
 from test_taskgen_prompt import ANCHOR, DB, TREE
 
@@ -155,3 +155,12 @@ def test_an_archive_copies_only_into_tables_whose_copies_differ_from_the_origina
     rec = {"source": "test", "db": "shop2", "path": make_db(tmp_path, "shop2u", SHOP2 + "CREATE UNIQUE INDEX u ON staff(name);"),
            "anchors": [], "fks": FKS}
     assert generate.context(rec, SHOP_PROFILE)["copyable"] == {"customers", "orders", "order_items", "products"}   # not staff
+
+
+def test_context_carries_the_entity_fields(tmp_path):
+    rec = {"source": "test", "db": "menus", "path": make_db(tmp_path, "menus", MENUS), "anchors": [], "fks": MENUS_FKS}
+    m = generate.context(rec, MENUS_PROFILE)
+    assert m["speaker_roles"] == MENUS_PROFILE["speaker_roles"] and m["new_lookup"] == MENUS_PROFILE["new_lookup"]
+    assert m["keys"]["menu_stats"] == "- menu_stats: key (menu_id, year); a new row states every key column, in a combination not used yet"
+    shop = {"source": "test", "db": "shop2", "path": make_db(tmp_path, "shop2", SHOP2), "anchors": [], "fks": FKS}
+    assert generate.context(shop, SHOP_PROFILE)["speaker_roles"] == [] and generate.context(shop, SHOP_PROFILE)["new_lookup"] == []
