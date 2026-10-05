@@ -1,0 +1,8 @@
+{
+ "note": "DySQL car/cookbook gold whose instruction names another row than its SQL writes (cookbook: ingredient name against its ID, or an ID that does not exist) or whose SQL writes a value outside the data (car: the country as text, a model_year outside 1970-1982). Read on 2026-10-02; left out of the verifier's positives.",
+ "ids": ["dysql:car:3", "dysql:car:4", "dysql:car:9", "dysql:car:13", "dysql:car:21", "dysql:car:22",
+         "dysql:cookbook:6", "dysql:cookbook:8", "dysql:cookbook:12", "dysql:cookbook:13", "dysql:cookbook:18",
+         "dysql:cookbook:23", "dysql:cookbook:25", "dysql:cookbook:33", "dysql:cookbook:34", "dysql:cookbook:37",
+         "dysql:cookbook:38", "dysql:cookbook:39", "dysql:cookbook:42", "dysql:cookbook:43", "dysql:cookbook:47",
+         "dysql:cookbook:49"]
+}

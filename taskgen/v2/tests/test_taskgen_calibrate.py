@@ -111,3 +111,19 @@ def test_a_rule_that_cannot_judge_every_voted_item_is_not_chosen():
     assert m["2 votes, both Yes"]["negatives_reject"] == (1.0, 5, 5)          # the biased part
     assert calibrate.choose_rule(m) == "1 vote" and calibrate.unvoted(items, v) == ["z"]
 
+
+def test_v2_items_reads_database_folders_or_their_parent(tmp_path):
+    d = tmp_path / "menu"
+    d.mkdir()
+    io.append_jsonl(str(d / "candidates.jsonl"), [{"id": "bird:menu:Menu:5:0", "instruction": "x", "actions": []},
+                                                  {"id": "bird:menu:Menu:6:0"}])
+    io.append_jsonl(str(d / "check.jsonl"), [{"id": "bird:menu:Menu:5:0", "ok": True}, {"id": "bird:menu:Menu:6:0", "ok": False}])
+    for root in (str(tmp_path), str(d)):
+        assert [(i["id"], i["db"]) for i in calibrate.v2_items([root])] == [("bird:menu:Menu:5:0", "bird:menu")]
+
+
+def test_dysql_entity_databases_get_the_entity_note():
+    from taskgen_v2 import verify
+    dbs = calibrate.Databases()
+    assert dbs.get("dysql:car")["notes"] == [verify.ENTITY_NOTE.format(label="car")]
+    assert dbs.get("dysql:chinook")["notes"] == []

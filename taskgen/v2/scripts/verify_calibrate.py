@@ -30,7 +30,11 @@ def cmd_build(a):
         sys.exit(f"{path} exists: the sets are built once, so votes and labels keep pointing at the same items")
     os.makedirs(a.dir, exist_ok=True)
     dbs = calibrate.Databases()
-    gold = calibrate.positives()
+    gold = calibrate.positives(a.env)
+    if a.skip:   # DySQL gold whose instruction and SQL disagree (data/dysql_entity_defects.json)
+        with open(a.skip, encoding="utf-8") as f:
+            skip = set(json.load(f)["ids"])
+        gold = [g for g in gold if g["id"] not in skip]
     lab = calibrate.v2_items(a.labeled)
     neg = (calibrate.negatives(gold, dbs, a.per_kind_dysql, random.Random(a.seed), "dysql")
            + calibrate.negatives(lab, dbs, a.per_kind_v2, random.Random(a.seed), "v2"))
@@ -152,6 +156,8 @@ def main():
     p = sub.add_parser("build"); p.add_argument("--dir", required=True); p.add_argument("--labeled", action="append", required=True)
     p.add_argument("--per-kind-dysql", type=int, default=60); p.add_argument("--per-kind-v2", type=int, default=40)
     p.add_argument("--positives", type=int, help="a random sample of this many DySQL gold (default: all)")
+    p.add_argument("--env", action="append", help="only these DySQL databases as positives (default: all 13)")
+    p.add_argument("--skip", help="JSON file whose 'ids' are DySQL gold to leave out")
     p.add_argument("--seed", type=int, default=0); p.set_defaults(f=cmd_build)
     p = sub.add_parser("vote"); p.add_argument("--dir", required=True); p.add_argument("--models", required=True)
     p.add_argument("--set", action="append", help="positives / negatives / labeled (default: all)")

@@ -235,3 +235,11 @@ def test_models_from_env_needs_a_model(monkeypatch):
     monkeypatch.setenv("TASKGEN_VERIFY_BASE_URL", "https://v/1"); monkeypatch.setenv("TASKGEN_VERIFY_API_KEY", "k")
     with pytest.raises(verify.llm.LLMError, match="TASKGEN_VERIFY_MODEL"):
         verify.models_from_env()
+
+
+def test_entity_profiles_tell_the_verifier_that_nobody_can_be_looked_up():
+    from v2_fixtures import MENUS_PROFILE, SHOP_PROFILE
+    assert verify.notes_for(SHOP_PROFILE) == []
+    notes = verify.notes_for({**MENUS_PROFILE, "quirks": ["prices are in dollars."]})
+    assert notes[0] == "prices are in dollars." and notes[1] == verify.ENTITY_NOTE.format(label="menu")
+    assert notes[1].startswith("This database has no table of people") and "one menu record" in notes[1]

@@ -13,7 +13,7 @@ ASK = re.compile(r"before (you|we|any|making|touching|applying)|can you (tell|co
 # an identifier the speaker hands over: 'id 129924', 'player_api_id', 'CustomerID', 'my email', '@', 'SSN', '#575041'
 ID_RE = re.compile(r"(?i:\bids?\b|_id\b|\bssn\b|\be-?mail\b|@|#\s?\d)|[a-z]I[Dd]\b")
 SUBQ = re.compile(r"\(\s*select\b", re.I)
-TYPES = ("1_self", "2_self_and_public", "3_public_only", "4_other_person", "5_proxy")
+TYPES = ("1_self", "2_self_and_public", "3_public_only", "4_other_person", "5_proxy", "6_entity")
 
 
 def statements(rec):
@@ -52,7 +52,7 @@ def compute(recs):
     lab = [r for r in recs if r.get("writes")]
     k = len(lab)
     ty = Counter(r["type"] for r in lab)
-    m["type 1/2/3/4/5/other"] = " / ".join(_pct(ty[t], k) for t in TYPES) + " / " + _pct(k - sum(ty[t] for t in TYPES), k)
+    m["type 1/2/3/4/5/6/other"] = " / ".join(_pct(ty[t], k) for t in TYPES) + " / " + _pct(k - sum(ty[t] for t in TYPES), k)
     lv = Counter(r["difficulty"]["level"] for r in lab if r.get("difficulty"))
     m["difficulty easy/medium/hard"] = " / ".join(_pct(lv[x], k) for x in ("easy", "medium", "hard"))
     m["≥2 tables written"] = _pct(sum(len({x["table"] for x in r["writes"]}) >= 2 for r in lab), k)

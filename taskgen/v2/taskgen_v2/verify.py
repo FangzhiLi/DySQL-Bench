@@ -51,6 +51,20 @@ Notes on this database's data (true of the stored rows; the SQL may rely on them
 """
 
 
+ENTITY_NOTE = ("This database has no table of people: the requester is not stored in it and cannot be looked up or "
+               "authenticated. The request is about one {label} record, named by its ID; the requester's name, role or "
+               "username is not used by the SQL.")
+
+
+def notes_for(profile):
+    """The data notes the verifier reads for a database: the profile's quirks, plus ENTITY_NOTE for an entity profile
+    (design 2026-10-04 §3.5)."""
+    notes = list(profile["quirks"])
+    if profile.get("kind") == "entity":
+        notes.append(ENTITY_NOTE.format(label=" or ".join(r["label"] for r in profile["roots"])))
+    return notes
+
+
 class Truncated(RuntimeError):
     """The model spent its tokens thinking and gave no verdict: not a vote, asked again on the next run."""
 

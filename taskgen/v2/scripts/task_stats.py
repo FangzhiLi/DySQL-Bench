@@ -14,6 +14,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--set", action="append", default=[], metavar="NAME=RESULTS_DIR")
     ap.add_argument("--no-dysql", action="store_true")
+    ap.add_argument("--dysql-env", action="append", help="only these DySQL databases in the DySQL column (car, cookbook)")
     ap.add_argument("--refresh-dysql", action="store_true")
     ap.add_argument("--out")
     a = ap.parse_args()
@@ -22,7 +23,10 @@ def main():
         cache = os.path.join(io.RESULTS, "dysql_metrics.jsonl")
         if a.refresh_dysql and os.path.exists(cache):
             os.remove(cache)
-        cols["DySQL"] = metrics.compute(metrics.from_dysql(cache))
+        recs = metrics.from_dysql(cache)
+        if a.dysql_env:
+            recs = [r for r in recs if r["db"] in a.dysql_env]
+        cols["DySQL" + (" " + "+".join(a.dysql_env) if a.dysql_env else "")] = metrics.compute(recs)
     for s in a.set:
         name, path = s.split("=", 1)
         cols[name] = metrics.compute(metrics.from_results(path))

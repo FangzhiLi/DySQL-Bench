@@ -45,7 +45,7 @@ def test_compute_on_a_small_set():
     assert m["statements with a subquery"] == "16.7%"
     assert m["read-only ask"] == "33.3%"
     assert m["ID/email in first 25 words"] == "66.7%"            # 'CustomerID' and an email; 'paid' is not an ID
-    assert m["type 1/2/3/4/5/other"] == "33.3% / 33.3% / 0.0% / 0.0% / 33.3% / 0.0%"
+    assert m["type 1/2/3/4/5/6/other"] == "33.3% / 33.3% / 0.0% / 0.0% / 33.3% / 0.0% / 0.0%"
     assert m["difficulty easy/medium/hard"] == "33.3% / 33.3% / 33.3%"
     assert m["≥2 tables written"] == "33.3%" and m[">10 rows changed"] == "33.3%"
     assert m["templates / largest share"] == "2 / 66.7%"
@@ -54,7 +54,7 @@ def test_compute_on_a_small_set():
 def test_empty_sets_unlabelled_tasks_and_missing_folders():
     assert metrics.compute([]) == {"tasks": "0"}
     m = metrics.compute([{**rec("x", ["UPDATE a SET b = 1"]), "writes": None}])     # nothing labelled by the check
-    assert m["type 1/2/3/4/5/other"] == "- / - / - / - / - / -" and m["templates / largest share"] == "0 / -"
+    assert m["type 1/2/3/4/5/6/other"] == "- / - / - / - / - / - / -" and m["templates / largest share"] == "0 / -"
     with pytest.raises(FileNotFoundError):
         metrics.from_results("/nonexistent/results")
 

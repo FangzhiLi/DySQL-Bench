@@ -9,10 +9,11 @@ says which database it runs on ("dysql:<env>" for DySQL-Bench's own, a db key su
 Every item gets three votes; RULES turn them into verdicts, so one run compares one, two and three votes."""
 import glob, os, random, sqlite3
 from collections import Counter, defaultdict
-from taskgen_v2 import check, corrupt, db_profile, dysql, io, schema
+from taskgen_v2 import check, corrupt, db_profile, dysql, io, schema, verify
 
 RULES = {"1 vote": 1, "2 votes, both Yes": 2, "3 votes, 2 Yes": 3}
 REASONS = ("missing", "extra", "unclear", "wrong_rows", "other")   # design §4.6: SQL misses / adds / instruction unclear / wrong rows / other
+DYSQL_ENTITY = {"car": "car", "cookbook": "recipe"}   # DySQL's databases without people
 
 
 class Databases:
@@ -25,15 +26,17 @@ class Databases:
     def get(self, key):
         if key not in self.cache:
             if key.startswith("dysql:"):
-                rec = dysql.db_rec(key.split(":", 1)[1])
+                env = key.split(":", 1)[1]
+                rec = dysql.db_rec(env)
                 path, prof = rec["path"], None
+                notes = [verify.ENTITY_NOTE.format(label=DYSQL_ENTITY[env])] if env in DYSQL_ENTITY else []
             else:
                 self.recs = self.recs or io.load_db_recs()
                 self.profiles = self.profiles or db_profile.load()
                 rec, prof = self.recs[key], self.profiles[key]
                 path = io.resolve_db_path(rec["path"])
-            self.cache[key] = {"rec": rec, "path": path, "profile": prof, "ddl": schema.ddl(path),
-                               "notes": list(prof["quirks"]) if prof else []}
+                notes = verify.notes_for(prof)
+            self.cache[key] = {"rec": rec, "path": path, "profile": prof, "ddl": schema.ddl(path), "notes": notes}
         return self.cache[key]
 
     def check(self, item):
@@ -57,10 +60,12 @@ def positives(envs=None):
 
 
 def v2_items(roots):
-    """The v2 candidates under roots (results/<run>/<db>/) that passed the check, as items keyed by db key (the id
-    is <db key>:<root table>:<key value>:<n>)."""
+    """The v2 candidates under roots (database folders such as results/<db>/, or folders of them) that passed the
+    check, as items keyed by db key (the id is <db key>:<root table>:<key value>:<n>)."""
     out = []
-    for d in sorted(p for root in roots for p in glob.glob(os.path.join(root, "*")) if os.path.isdir(p)):
+    dirs = [p for root in roots for p in ([root] if os.path.exists(os.path.join(root, "check.jsonl"))
+                                           else glob.glob(os.path.join(root, "*")))]
+    for d in sorted(p for p in dirs if os.path.isdir(p)):
         ok = {r["id"] for r in io.read_jsonl(os.path.join(d, "check.jsonl")) if r["ok"]}
         out += [{**c, "db": c["id"].rsplit(":", 3)[0], "set": "labeled"}
                 for c in io.read_jsonl(os.path.join(d, "candidates.jsonl")) if c["id"] in ok]

@@ -114,7 +114,7 @@ def cmd_verify(a):
         same_profile(f"{out}/candidates.jsonl", db_profile.version(prof), "candidates")
         cands = dedup.precap(io.read_jsonl(f"{out}/candidates.jsonl"), io.read_jsonl(f"{out}/check.jsonl"),
                              random.Random(a.seed), a.precap_template, a.precap_db)
-        ddl, quirks = schema.ddl(io.resolve_db_path(rec["path"])), prof["quirks"]
+        ddl, quirks = schema.ddl(io.resolve_db_path(rec["path"])), verify.notes_for(prof)
         t0 = time.time()
         s = verify.run(cands, models, f"{out}/verify.jsonl", workers=a.workers, context=lambda c: (ddl, quirks),
                        max_failures=a.max_failures)
