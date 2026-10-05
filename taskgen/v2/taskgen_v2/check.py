@@ -358,7 +358,7 @@ def name_mismatches(db, profile, tracer, cand, stmts, seen):
             if (hit := stored(db, cols, s))]
 
 
-def entity_reasons(db, profile, tracer, speaker_ids, cand, stmts, labels, writes, seen, new_public):
+def entity_reasons(db, profile, tracer, speaker_ids, cand, stmts, labels, writes, seen, new_public, deleted=()):
     """What an entity task may not do (design 2026-10-04 §3.4), checked on the database after its statements ran."""
     out = ["other_person"] if "other" in labels else []
     out += [f"root_insert: {w['table']}" for w in writes if w["label"] == "new_person"]
@@ -382,6 +382,18 @@ def entity_reasons(db, profile, tracer, speaker_ids, cand, stmts, labels, writes
                 out.append(f"lookup_name_taken: {table}")
         if table in lookups and not used:
             out.append(f"lookup_unreferenced: {table}")
+    for t, row in deleted:   # a deleted row other rows still point at (video_games pilot: game_publisher under game_platform)
+        for child, refs in tracer.up.items():
+            for cols, parent, ref_cols in refs:
+                if parent.lower() != t.lower() or any(row.get(r) in (None, "") for r in ref_cols):
+                    continue
+                try:
+                    hit = db.execute(f"SELECT 1 FROM {_q(child)} WHERE " + " AND ".join(f"{_q(c)} = ?" for c in cols) + " LIMIT 1",
+                                     [row.get(r) for r in ref_cols]).fetchone()
+                except sqlite3.Error:
+                    hit = None
+                if hit:
+                    out.append(f"orphans: {t}")
     name = ((cand.get("plan") or {}).get("style") or {}).get("name")
     if name and person_name_stored(db, name):
         out.append("speaker_name_taken")
@@ -430,7 +442,7 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
         if need:
             db.execute(f"CREATE TEMP TRIGGER {_q('_u_' + t)} BEFORE UPDATE ON main.{_q(t)} BEGIN "
                        f"INSERT INTO _old VALUES ('{t}', {_json_row(sorted(need))}); END")
-    seen, new_public = [], []   # rows the task touched (before and after); new public rows
+    seen, new_public, deleted = [], [], []   # rows the task touched (before and after); new public rows; deleted rows
     stmts, labels, executed = [], [], []   # executed: every statement that ran, in order (writes and DDL)
     copies = {}   # table -> rowids an INSERT ... SELECT added: the archived copies, which later writes must leave alone
     numbered = {}   # table -> INSERT ... SELECTs whose copies SQLite numbered, in statement order
@@ -520,9 +532,16 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
                 labels.append(lab)
                 if entity and lab == "public" and op == "INSERT":
                     new_public += [(table, dict(zip(rcols, r))) for r in rs]
+                if entity and op == "DELETE":
+                    deleted += [(table, dict(zip(rcols, r))) for r in rs]
                 out["writes"].append({"op": op, "table": table, "rows": len(rs), "label": lab})
         if entity:
-            out["reasons"] += entity_reasons(db, profile, tracer, speaker_ids, cand, stmts, labels, out["writes"], seen, new_public)
+            out["reasons"] += entity_reasons(db, profile, tracer, speaker_ids, cand, stmts, labels, out["writes"], seen,
+                                             new_public, deleted)
+            # writes that end where they started leave the eval hash nothing to compare (university pilot: five renames)
+            state = final_state(db_rec["path"], executed) if any(w["rows"] for w in out["writes"]) else None
+            if state is not None and not any(a or r for a, r in state.values()):
+                out["reasons"].append("net_noop")
         if any(NONDET.search(s) for s in executed) and not any(x.startswith("sql_error") for x in out["reasons"]):
             changed = rerun_changes(db, executed, {tracer.canon(write_target(s)[1]) for s in stmts})
             if changed:

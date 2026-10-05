@@ -41,6 +41,8 @@ def context(db_rec, profile):
     # key (beer_factory location) or a UNIQUE column would make the copy an orphan or a collision
     copyable = {t for t, v in pk.items() if v["omittable"] and not set(v["cols"]) & fks.get(t, set())
                 and t not in unique and t not in profile["no_insert"]}
+    if db_profile.kind(profile) == "entity":   # a copied-then-deleted parent row orphans its children (video_games pilot)
+        copyable -= {e.parent for e in sure + [e for _, e in single] if e.child != e.parent}
     return {"description": profile["description"], "quirks": profile["quirks"], "schema": schema.schema_block(path, scope),
             "keys": keys, "no_insert": set(profile["no_insert"]), "fixed": fixed, "copyable": copyable,
             "pk": {t: v["cols"] for t, v in pk.items()},

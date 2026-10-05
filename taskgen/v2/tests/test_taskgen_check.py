@@ -632,3 +632,17 @@ def test_name_mismatch_also_reads_the_profiles_own_name_columns(menus, monkeypat
                     ["UPDATE item SET price = 4.5 WHERE item_id = 13"]) == ["name_mismatch: menu.name"]
     assert mreasons(menus, "Menu ID 3: item 13 is 'dish 14' now priced 4.5.",
                     ["UPDATE item SET price = 4.5 WHERE item_id = 13"]) == ["name_mismatch: dish.name"]   # a new_lookup name column
+
+
+def test_an_entity_task_may_not_leave_rows_pointing_at_a_deleted_row(menus):
+    # video_games pilot: deleting a game_publisher that game_platform rows still use left them pointing nowhere
+    assert mreasons(menus, "Menu ID 3: delete page 13.", ["DELETE FROM page WHERE page_id = 13"]) == ["orphans: page"]
+    assert mreasons(menus, "Menu ID 3: delete page 13 with its items.",
+                    ["DELETE FROM item WHERE page_id = 13", "DELETE FROM page WHERE page_id = 13"]) == []
+    assert "orphans: menu" in mreasons(menus, "Menu ID 3: delete it.", ["DELETE FROM menu WHERE menu_id = 3"])
+
+
+def test_an_entity_task_that_ends_where_it_started_is_rejected(menus):
+    # university pilot: five renames that end at the current name leave nothing for the eval hash to compare
+    assert mreasons(menus, "Menu ID 3: rename it to 'Menu X', then back to 'Menu 3'.",
+                    ["UPDATE menu SET name = 'Menu X' WHERE menu_id = 3", "UPDATE menu SET name = 'Menu 3' WHERE menu_id = 3"]) == ["net_noop"]

@@ -164,3 +164,10 @@ def test_context_carries_the_entity_fields(tmp_path):
     assert m["keys"]["menu_stats"] == "- menu_stats: key (menu_id, year); a new row states every key column, in a combination not used yet"
     shop = {"source": "test", "db": "shop2", "path": make_db(tmp_path, "shop2", SHOP2), "anchors": [], "fks": FKS}
     assert generate.context(shop, SHOP_PROFILE)["speaker_roles"] == [] and generate.context(shop, SHOP_PROFILE)["new_lookup"] == []
+
+
+def test_an_entity_archive_never_copies_a_row_other_rows_point_at(tmp_path):
+    # copy-then-delete of a referenced row (game_publisher) orphans its children; in an entity database only leaf
+    # tables are copied
+    rec = {"source": "test", "db": "menus", "path": make_db(tmp_path, "menus", MENUS), "anchors": [], "fks": MENUS_FKS}
+    assert generate.context(rec, MENUS_PROFILE)["copyable"] == {"item"}
