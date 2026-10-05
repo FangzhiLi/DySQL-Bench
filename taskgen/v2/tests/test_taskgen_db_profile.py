@@ -1,8 +1,8 @@
 # tests/test_taskgen_db_profile.py
-import copy, sqlite3
+import copy, hashlib, json, sqlite3
 import pytest
 from taskgen_common.testing import make_db, rows
-from v2_fixtures import SHOP2, FKS, SHOP_PROFILE, SCHOOL, SCHOOL_FKS, SCHOOL_COMPOSITE, SCHOOL_PROFILE
+from v2_fixtures import SHOP2, FKS, SHOP_PROFILE, SCHOOL, SCHOOL_FKS, SCHOOL_COMPOSITE, SCHOOL_PROFILE, MENUS, MENUS_FKS, MENUS_PROFILE
 from taskgen_v2 import db_profile, owners, schema
 
 
@@ -152,3 +152,45 @@ def test_render_shows_roles_parents_keys_and_problems(school):
     assert "- 根 Student List\n  - dept ← Student List.dept" in text
     assert "主键：可省 ID：Student List, flags, teacher；非整数或复合主键：calendar(day), dept(dept_name), section(course, sec)；无主键：advisor, takes" in text
     assert "- Claude: moved dept to public" in text and "- persons.x: no table 'x'" in text
+
+
+@pytest.fixture
+def menus(tmp_path):
+    return sqlite3.connect(make_db(tmp_path, "menus", MENUS))
+
+
+def test_an_entity_profile_is_valid_and_person_versions_stay(menus):
+    assert db_profile.validate(MENUS_PROFILE, menus, MENUS_FKS) == []
+    assert db_profile.kind(MENUS_PROFILE) == "entity" and db_profile.kind(SHOP_PROFILE) == "person"
+    # the 23 confirmed person profiles have no kind, speaker_roles or new_lookup: their versions must not move
+    body = {k: SHOP_PROFILE.get(k) for k in db_profile.FIELDS if k != "confirmed"}
+    old = hashlib.sha1(json.dumps(body, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:10]
+    assert db_profile.version(SHOP_PROFILE) == old and db_profile.status(SHOP_PROFILE) == "confirmed"
+    fewer = {**MENUS_PROFILE, "speaker_roles": MENUS_PROFILE["speaker_roles"][:3] + ["a chef"]}
+    assert db_profile.version(fewer) != db_profile.version(MENUS_PROFILE)       # the new fields are part of what is confirmed
+
+
+def test_entity_profile_rules(menus, shop):
+    def errs(**kw):
+        return db_profile.validate({**copy.deepcopy(MENUS_PROFILE), **kw}, menus, MENUS_FKS)
+    assert errs(kind="thing") == ["kind: 'thing' is not one of person, entity",
+                                  "speaker_roles and new_lookup are for entity profiles only"]
+    assert errs(speaker_roles=["a librarian"]) == ["speaker_roles: an entity profile needs 4-6 roles, each a phrase"]
+    assert errs(new_lookup=[{"via": "item.page_id -> page.page_id", "name_cols": ["page_number"]}]) == ["new_lookup[0]: page is not public"]
+    assert errs(new_lookup=[{"via": "item.dish_id -> dish.dish_id", "name_cols": ["title"]}]) == ["new_lookup[0].name_cols: no column dish.title"]
+    assert errs(new_lookup=[{"via": "item.dish_id -> dish.dish_id", "name_cols": []}]) == ["new_lookup[0].name_cols: is empty"]
+    assert errs(no_insert=["dish"]) == ["new_lookup[0]: dish is closed to INSERT (no_insert)",
+                                        "new_lookup[1]: dish is closed to INSERT (no_insert)"]
+    assert errs(persons={"menu": {"key": "menu_id", "name_cols": [], "same_as": []}}) == []   # spider2 Airlines bookings: no name
+    extra = errs(persons={**MENUS_PROFILE["persons"], "dish": {"key": "dish_id", "name_cols": ["name"], "same_as": []}})
+    assert "persons: an entity profile lists its roots only, not dish" in extra
+    assert db_profile.validate({**SHOP_PROFILE, "speaker_roles": ["a", "b", "c", "d"]}, shop, FKS) == \
+        ["speaker_roles and new_lookup are for entity profiles only"]
+
+
+def test_render_shows_the_kind_roles_and_new_lookup_rows():
+    text = db_profile.render_md([{"key": "test:menus", "profile": MENUS_PROFILE, "errors": [], "pk": {}}])
+    assert "| 类型 | 实体（根是物，不是人） |" in text
+    assert "| 说话人角色 | a menu collection archivist cataloguing this menu；a volunteer transcriber" in text
+    assert "| 可新建的查找行 | item.dish_id -> dish.dish_id（名字列 name）；menu.house_dish -> dish.dish_id（名字列 name） |" in text
+    assert "| 类型 |" not in db_profile.render_md([{"key": "x", "profile": SHOP_PROFILE, "errors": [], "pk": {}}])

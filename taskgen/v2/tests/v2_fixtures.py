@@ -65,3 +65,46 @@ SCHOOL_PROFILE = {
     "public": ["dept", "section"], "exclude": ["calendar"], "no_insert": ["section"],
     "quirks": ["dept names are codes such as d0."], "description": "A small school.", "confirmed": True}
 SCHOOL_PROFILE["confirmed_version"] = version(SCHOOL_PROFILE)
+
+# an entity-rooted database (design 2026-10-04): menus with pages and items, dishes shared by every menu (public, each
+# with a cuisine) and pointed at by a menu's house dish, a 1:1 venue row, yearly view counts under a composite key,
+# and owner names a sampled speaker name could hit (menu 3 is owned by 'Grace Kim')
+MENUS = """
+CREATE TABLE cuisine (cuisine_id INTEGER PRIMARY KEY, name TEXT);
+CREATE TABLE dish (dish_id INTEGER PRIMARY KEY, name TEXT, cuisine_id INTEGER REFERENCES cuisine(cuisine_id));
+CREATE TABLE menu (menu_id INTEGER PRIMARY KEY, name TEXT, owner_name TEXT, house_dish INTEGER REFERENCES dish(dish_id));
+CREATE TABLE page (page_id INTEGER PRIMARY KEY, menu_id INTEGER REFERENCES menu(menu_id), page_number INTEGER);
+CREATE TABLE item (item_id INTEGER PRIMARY KEY, page_id INTEGER REFERENCES page(page_id),
+                   dish_id INTEGER REFERENCES dish(dish_id), price REAL);
+CREATE TABLE menu_stats (menu_id INTEGER REFERENCES menu(menu_id), year INTEGER, views INTEGER, PRIMARY KEY (menu_id, year));
+CREATE TABLE menu_venue (menu_id INTEGER PRIMARY KEY REFERENCES menu(menu_id), venue_name TEXT);
+""" + rows("cuisine", 3, lambda i: f"{i},'cuisine {i}'") + rows("dish", 30, lambda i: f"{i},'dish {i}',{i % 3}") \
+    + rows("menu", 10, lambda i: f"{i},'Menu {i}','{'Grace Kim' if i == 3 else f'Owner {i}'}',{i}") \
+    + rows("page", 20, lambda i: f"{i},{i % 10},{1 + i // 10}") \
+    + rows("item", 60, lambda i: f"{i},{i % 20},{i % 30},{1.5 + i}") \
+    + rows("menu_stats", 30, lambda i: f"{i % 10},{2000 + i // 10},{i}") \
+    + rows("menu_venue", 10, lambda i: f"{i},'Venue {i}'")
+MENUS_FKS = [{"table": "dish", "col": "cuisine_id", "ref_table": "cuisine", "ref_col": "cuisine_id", "hit": 1.0, "source": "declared"},
+             {"table": "menu_venue", "col": "menu_id", "ref_table": "menu", "ref_col": "menu_id", "hit": 1.0, "source": "declared"},
+             {"table": "menu", "col": "house_dish", "ref_table": "dish", "ref_col": "dish_id", "hit": 1.0, "source": "declared"},
+             {"table": "page", "col": "menu_id", "ref_table": "menu", "ref_col": "menu_id", "hit": 1.0, "source": "declared"},
+             {"table": "item", "col": "page_id", "ref_table": "page", "ref_col": "page_id", "hit": 1.0, "source": "declared"},
+             {"table": "item", "col": "dish_id", "ref_table": "dish", "ref_col": "dish_id", "hit": 1.0, "source": "declared"},
+             {"table": "menu_stats", "col": "menu_id", "ref_table": "menu", "ref_col": "menu_id", "hit": 1.0, "source": "declared"}]
+MENUS_PROFILE = {
+    "kind": "entity",
+    "roots": [{"table": "menu", "label": "menu",
+               "parents": [{"table": "dish", "via": "menu.house_dish -> dish.dish_id", "parents": []}]}],
+    "persons": {"menu": {"key": "menu_id", "name_cols": ["name"], "same_as": []}},
+    "events": [{"table": "page", "label": "pages", "path": ["page.menu_id -> menu.menu_id"], "parents": []},
+               {"table": "item", "label": "menu items", "path": ["page.menu_id -> menu.menu_id", "item.page_id -> page.page_id"],
+                "parents": [{"table": "dish", "via": "item.dish_id -> dish.dish_id", "parents": []}]},
+               {"table": "menu_stats", "label": "yearly views", "path": ["menu_stats.menu_id -> menu.menu_id"], "parents": []}],
+    "attributes": [{"table": "menu_venue", "of": "menu", "via": "menu_venue.menu_id -> menu.menu_id"}],
+    "public": ["dish", "cuisine"], "exclude": [], "no_insert": [], "quirks": [],
+    "speaker_roles": ["a menu collection archivist cataloguing this menu", "a volunteer transcriber who keyed in this menu",
+                      "a restaurant historian researching this menu", "a librarian correcting the catalogue"],
+    "new_lookup": [{"via": "item.dish_id -> dish.dish_id", "name_cols": ["name"]},
+                   {"via": "menu.house_dish -> dish.dish_id", "name_cols": ["name"]}],
+    "description": "Historical restaurant menus with their pages and items; dishes are shared by all menus.", "confirmed": True}
+MENUS_PROFILE["confirmed_version"] = version(MENUS_PROFILE)

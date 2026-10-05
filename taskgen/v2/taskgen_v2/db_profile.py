@@ -14,6 +14,9 @@ FIELDS = ("roots", "persons", "events", "attributes", "public", "exclude", "no_i
 MIN_EDGE_HIT = 0.3   # an edge that no recorded foreign key backs must match like a validated FK (db_select.all_fks)
 EDGE_SAMPLE = 2000   # child rows sampled for that match rate
 MAX_PATH = 3         # edges from an event to its root; ownership tracing (owners.MAX_HOPS) follows no more
+OPTIONAL = ("kind", "speaker_roles", "new_lookup")   # entity profiles only (design 2026-10-04 §3.1)
+KINDS = ("person", "entity")
+N_ROLES = (4, 6)     # speaker roles an entity profile lists
 
 Edge = namedtuple("Edge", "child cols parent ref_cols")
 
@@ -44,6 +47,11 @@ def edge_text(e):
     def side(t, cs):
         return f"{t}.{cs[0]}" if len(cs) == 1 else f"{t}.({', '.join(cs)})"
     return f"{side(e.child, e.cols)} -> {side(e.parent, e.ref_cols)}"
+
+
+def kind(profile):
+    """'person' (the 23 databases of plans 1-5: the roots are people) or 'entity' (the root is a thing, such as a menu)."""
+    return profile.get("kind") or "person"
 
 
 def load(path=PROFILES_JSON):
@@ -77,6 +85,7 @@ def get(db_key, path=PROFILES_JSON):
 def version(profile):
     """Short hash of what the profile says (the review fields left out), recorded in every tree."""
     body = {k: profile.get(k) for k in FIELDS if k != "confirmed"}
+    body.update({k: profile[k] for k in OPTIONAL if k in profile})   # absent from person profiles, so their versions stay
     return hashlib.sha1(json.dumps(body, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:10]
 
 
@@ -192,6 +201,7 @@ def _validate(profile, conn, fks, composite):
     shapes = [k for k in ("roots", "events", "attributes", "public", "exclude", "no_insert") if not isinstance(profile[k], list)]
     shapes += ["persons"] if not isinstance(profile["persons"], dict) else []
     shapes += [f"events[{i}].path" for i, e in enumerate(profile["events"] or []) if not isinstance(e.get("path"), list)]
+    shapes += ["new_lookup"] if not isinstance(profile.get("new_lookup", []), list) else []
     if shapes:
         return [f"{k}: wrong JSON type (see the field list)" for k in shapes]
     errs, tables = [], _tables(conn)
@@ -232,13 +242,15 @@ def _validate(profile, conn, fks, composite):
                         f"write it from the table that holds the reference")
         return e
 
-    persons = profile["persons"]
+    persons, entity = profile["persons"], profile.get("kind") == "entity"
+    if kind(profile) not in KINDS:
+        errs.append(f"kind: {profile.get('kind')!r} is not one of {', '.join(KINDS)}")
     for t, p in persons.items():
         if has(t, f"persons.{t}", [p.get("key")] + list(p.get("name_cols") or [])):
             n, d = conn.execute(f"SELECT COUNT(*), COUNT(DISTINCT {_q(p['key'])}) FROM {_q(t)}").fetchone()
             if n != d:
                 errs.append(f"persons.{t}: key {p['key']} has empty or repeated values ({d} distinct in {n} rows)")
-        if not p.get("name_cols"):
+        if not p.get("name_cols") and not entity:   # an entity may have no name (Airlines bookings)
             errs.append(f"persons.{t}: name_cols is empty")
         for s in p.get("same_as") or []:
             st, dot, sc = s.rpartition(".")
@@ -257,6 +269,8 @@ def _validate(profile, conn, fks, composite):
         if not r.get("label"):
             errs.append(f"roots[{i}]: label is empty")
     root_tables = {r.get("table") for r in roots}
+    if entity and set(persons) - root_tables:
+        errs.append(f"persons: an entity profile lists its roots only, not {', '.join(sorted(set(persons) - root_tables))}")
     event_tables = set()
     for i, ev in enumerate(profile["events"]):
         where, t = f"events[{i}]", ev.get("table")
@@ -312,6 +326,28 @@ def _validate(profile, conn, fks, composite):
         errs.append(f"tables without a role (list them in public or exclude): {', '.join(sorted(loose))}")
     if set(profile["no_insert"]) - (used - excl):
         errs.append(f"no_insert: {', '.join(sorted(set(profile['no_insert']) - (used - excl)))} are not in scope")
+    roles = profile.get("speaker_roles")
+    if entity:
+        if not (isinstance(roles, list) and N_ROLES[0] <= len(roles) <= N_ROLES[1]
+                and all(isinstance(r, str) and r.strip() for r in roles)):
+            errs.append(f"speaker_roles: an entity profile needs {N_ROLES[0]}-{N_ROLES[1]} roles, each a phrase")
+    elif roles is not None or profile.get("new_lookup") is not None:
+        errs.append("speaker_roles and new_lookup are for entity profiles only")
+    for i, x in enumerate(profile.get("new_lookup") or []):
+        where = f"new_lookup[{i}]"
+        e = edge(x.get("via"), f"{where}.via")
+        if e is None:
+            continue
+        if e.parent not in public:
+            errs.append(f"{where}: {e.parent} is not public")
+        if e.parent in profile["no_insert"]:
+            errs.append(f"{where}: {e.parent} is closed to INSERT (no_insert)")
+        if e.child not in owned | root_tables:
+            errs.append(f"{where}: {e.child} is neither a root nor one of its event, path or attribute tables")
+        if not x.get("name_cols"):
+            errs.append(f"{where}.name_cols: is empty")
+        else:
+            has(e.parent, f"{where}.name_cols", x["name_cols"])
     if not isinstance(profile["confirmed"], bool):
         errs.append("confirmed: must be true or false")
     if not isinstance(profile["quirks"], list) or not all(isinstance(q, str) for q in profile["quirks"]):
@@ -364,6 +400,10 @@ def render_md(entries):
                 ("属性表", "；".join(f"{a.get('table')} → {a.get('of')}" for a in p.get("attributes") or [])),
                 ("公共表", ", ".join(p.get("public") or [])), ("排除", ", ".join(p.get("exclude") or [])),
                 ("不出 INSERT", ", ".join(p.get("no_insert") or [])), ("数据怪异点", "；".join(p.get("quirks") or []))]
+        if kind(p) == "entity":
+            rows[1:1] = [("类型", "实体（根是物，不是人）"), ("说话人角色", "；".join(p.get("speaker_roles") or [])),
+                         ("可新建的查找行", "；".join(f"{x.get('via')}（名字列 {', '.join(x.get('name_cols') or [])}）"
+                                                for x in p.get("new_lookup") or []))]
         lines += ["| 项 | 内容 |", "|---|---|"] + [f"| {k} | {v or '—'} |" for k, v in rows] + [""]
         nested = []
         for r in p.get("roots") or []:

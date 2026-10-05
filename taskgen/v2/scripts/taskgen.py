@@ -204,7 +204,7 @@ def sample_trees(entries, recs, seed, n):
             for kv in trees.root_key_values(c, prof, r, rng, n):
                 t = trees.build_tree(c, prof, r, kv, rng, tracer)
                 refs = [[gi, j] for gi, g in enumerate(t["events"]) for j in range(len(g["rows"]))]
-                parts.append(f"# {x['key']} · {r['table']} {kv}\n\n" + prompt.data_blocks(t, refs, "the speaker's own row"))
+                parts.append(f"# {x['key']} · {r['table']} {kv}\n\n" + prompt.data_blocks(t, refs, "the record the request is about" if db_profile.kind(prof) == "entity" else "the speaker's own row"))
     return "\n\n".join(parts)
 
 
@@ -212,7 +212,7 @@ def cmd_profile(a):
     if a.action == "draft":
         return draft_profiles(a)
     profiles, recs = db_profile.load(a.profiles), io.load_db_recs(a.anchors)
-    keys = [a.db] if a.db else sorted(profiles)
+    keys = [a.db] if a.db else sorted(k for k, p in profiles.items() if not a.kind or db_profile.kind(p) == a.kind)
     missing = [k for k in keys if k not in profiles]
     if missing:
         sys.exit(f"no profile for {', '.join(missing)} in {a.profiles}")
@@ -261,6 +261,7 @@ def main():
     p.add_argument("--hints", default=profile_draft.HINTS_JSON); p.add_argument("--redo", action="store_true", help="draft again even if a profile exists")
     p.add_argument("--workers", type=int, default=5, help="GLM plan limit: 5 concurrent requests")
     p.add_argument("--out", help="render: the review page to write"); p.add_argument("--trees-out", help="render: sample trees for the reviewer (results/, not git)")
+    p.add_argument("--kind", choices=db_profile.KINDS, help="check/render: only profiles of this kind")
     p.add_argument("--sample-trees", type=int, default=1); p.add_argument("--seed", type=int, default=0); p.set_defaults(f=cmd_profile)
     p = sub.add_parser("trees"); common(p); p.add_argument("--n", type=int, default=50); p.add_argument("--anchor", help="one root table only"); p.set_defaults(f=cmd_trees)
     p = sub.add_parser("generate"); common(p); p.add_argument("--workers", type=int, default=5, help="GLM plan limit: 5 concurrent requests"); p.add_argument("--per-tree", type=int, default=1); p.add_argument("--retry-errors", action="store_true", help="regenerate candidates whose API call failed (e.g. 429)"); p.set_defaults(f=cmd_generate)

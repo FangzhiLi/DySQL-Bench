@@ -221,3 +221,11 @@ def test_dedup_leaves_out_the_tasks_a_review_excluded(tmp_path):
     io.append_jsonl(out / "excluded.jsonl", [{"id": rows[0]["id"], "reason": "unclear", "by": "claude"}])
     run("dedup", *args)
     assert sorted(r["id"] for r in io.read_jsonl(out / "selected.jsonl")) == sorted(r["id"] for r in rows[1:])
+
+
+def test_profile_render_keeps_one_kind(tmp_path):
+    args = setup(tmp_path)
+    common = ["--anchors", args[3], "--profiles", args[5]]
+    page = tmp_path / "p.md"
+    assert "0 profiles" in run("profile", "render", *common, "--kind", "entity", "--out", str(page)).stdout
+    assert "1 profiles" in run("profile", "render", *common, "--kind", "person", "--out", str(page)).stdout
