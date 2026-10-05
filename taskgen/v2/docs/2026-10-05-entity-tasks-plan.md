@@ -36,7 +36,7 @@
 
 1. **实体根没有名字列**（spider2 Airlines 的 `bookings`）。prompt 只要求给 ID，没有子查询，检查不崩。测试：Task 3 `test_entity_text_without_a_name_and_with_a_new_lookup_row`、Task 1 `name_cols` 为空的校验。
 2. **新查找行由根表自己引用**（`game.genre_id -> genre.id`、`generalinfo.city -> geographic.city`）。根行本身就是 own，所以新行算被用上。测试：Task 4 `test_a_new_lookup_row_may_hang_under_the_root_itself`。
-3. **题目里有撇号**（I'm、it's、3's），不能被当成引号，造成名字错配的误杀。测试：Task 4 `test_a_quoted_name_of_another_row_is_a_mismatch` 的最后一段。
+3. **题目里有撇号**（I'm、it's、3's），不能被当成引号，造成名字错配的误杀；**引用根的属性行或祖父行里的名字**（restaurant 的 `location.street_name`，university 的 `ranking_criteria → ranking_system`）也不能误杀。测试：Task 4 `test_a_quoted_name_of_another_row_is_a_mismatch`。
 4. **人物库的旧 profile、旧树、旧候选**。版本号不变（Task 1），没有 `kind`、`taken` 的旧树照常渲染（Task 2 原有测试），3,556 条候选重跑检查结果不变（Task 4 Step 7）。
 5. **超宽表**（card_games 的 `cards` 有 74 列）。实体模式下 UPDATE 触发器要记下整行，而 SQLite 一个函数最多 127 个参数。测试：Task 4 `test_a_row_wider_than_sqlite_function_arguments_is_still_recorded`。
 
@@ -44,6 +44,7 @@
 
 1. **名字和 ID 对不上，由检查拦，不靠校验模型。** 校验模型只看 DDL 和数据说明，看不到行数据，判断不了"菜谱 935 叫不叫 Grape Nuts"。所以 §3.5 里"改名字的负样本"改成检查规则 `name_mismatch`（§3.4）：题目引号里的名字如果是库里某个名字列的值，就必须出现在任务碰到的行或其父行里。校准集的负样本只用原有 5 种 SQL 破坏。
 2. **"已用的键值"放在树和数据块里，不放在键说明里。** 键说明按库生成，而已用的组合是按根行而不同的。所以 `trees.py` 和 `schema.py` 也要改（§5 原写"预计不改"）。
+3. **试跑用 3 个库（menu、video_games、university），关卡 2 换一个条件。** menu 和 video_games 几乎全是整数主键，碰不到"事件表无主键""根自己引用新查找行""祖父行"这几处难点，university 都有。3 个库约 57 题，也接近设计里"4B 跑 60 题、标注约 60 条"。设计里关卡 2 的"要求类型和算出类型不一致 ≤3%"在实体库上恒成立（检查把过检查的实体题一律记为 `6_entity`），所以换成"plan 是否要求新查找行，和检查结果里有没有 public INSERT 一致"。
 
 ---
 
@@ -68,22 +69,27 @@
 在 `tests/v2_fixtures.py` 末尾加：
 
 ```python
-# an entity-rooted database (design 2026-10-04): menus with pages and items, dishes shared by every menu (public) and
-# pointed at by a menu's house dish, yearly view counts under a composite key, and owner names a sampled speaker name
-# could hit (menu 3 is owned by 'Grace Kim')
+# an entity-rooted database (design 2026-10-04): menus with pages and items, dishes shared by every menu (public, each
+# with a cuisine) and pointed at by a menu's house dish, a 1:1 venue row, yearly view counts under a composite key,
+# and owner names a sampled speaker name could hit (menu 3 is owned by 'Grace Kim')
 MENUS = """
-CREATE TABLE dish (dish_id INTEGER PRIMARY KEY, name TEXT);
+CREATE TABLE cuisine (cuisine_id INTEGER PRIMARY KEY, name TEXT);
+CREATE TABLE dish (dish_id INTEGER PRIMARY KEY, name TEXT, cuisine_id INTEGER REFERENCES cuisine(cuisine_id));
 CREATE TABLE menu (menu_id INTEGER PRIMARY KEY, name TEXT, owner_name TEXT, house_dish INTEGER REFERENCES dish(dish_id));
 CREATE TABLE page (page_id INTEGER PRIMARY KEY, menu_id INTEGER REFERENCES menu(menu_id), page_number INTEGER);
 CREATE TABLE item (item_id INTEGER PRIMARY KEY, page_id INTEGER REFERENCES page(page_id),
                    dish_id INTEGER REFERENCES dish(dish_id), price REAL);
 CREATE TABLE menu_stats (menu_id INTEGER REFERENCES menu(menu_id), year INTEGER, views INTEGER, PRIMARY KEY (menu_id, year));
-""" + rows("dish", 30, lambda i: f"{i},'dish {i}'") \
+CREATE TABLE menu_venue (menu_id INTEGER PRIMARY KEY REFERENCES menu(menu_id), venue_name TEXT);
+""" + rows("cuisine", 3, lambda i: f"{i},'cuisine {i}'") + rows("dish", 30, lambda i: f"{i},'dish {i}',{i % 3}") \
     + rows("menu", 10, lambda i: f"{i},'Menu {i}','{'Grace Kim' if i == 3 else f'Owner {i}'}',{i}") \
     + rows("page", 20, lambda i: f"{i},{i % 10},{1 + i // 10}") \
     + rows("item", 60, lambda i: f"{i},{i % 20},{i % 30},{1.5 + i}") \
-    + rows("menu_stats", 30, lambda i: f"{i % 10},{2000 + i // 10},{i}")
-MENUS_FKS = [{"table": "menu", "col": "house_dish", "ref_table": "dish", "ref_col": "dish_id", "hit": 1.0, "source": "declared"},
+    + rows("menu_stats", 30, lambda i: f"{i % 10},{2000 + i // 10},{i}") \
+    + rows("menu_venue", 10, lambda i: f"{i},'Venue {i}'")
+MENUS_FKS = [{"table": "dish", "col": "cuisine_id", "ref_table": "cuisine", "ref_col": "cuisine_id", "hit": 1.0, "source": "declared"},
+             {"table": "menu_venue", "col": "menu_id", "ref_table": "menu", "ref_col": "menu_id", "hit": 1.0, "source": "declared"},
+             {"table": "menu", "col": "house_dish", "ref_table": "dish", "ref_col": "dish_id", "hit": 1.0, "source": "declared"},
              {"table": "page", "col": "menu_id", "ref_table": "menu", "ref_col": "menu_id", "hit": 1.0, "source": "declared"},
              {"table": "item", "col": "page_id", "ref_table": "page", "ref_col": "page_id", "hit": 1.0, "source": "declared"},
              {"table": "item", "col": "dish_id", "ref_table": "dish", "ref_col": "dish_id", "hit": 1.0, "source": "declared"},
@@ -97,7 +103,8 @@ MENUS_PROFILE = {
                {"table": "item", "label": "menu items", "path": ["page.menu_id -> menu.menu_id", "item.page_id -> page.page_id"],
                 "parents": [{"table": "dish", "via": "item.dish_id -> dish.dish_id", "parents": []}]},
                {"table": "menu_stats", "label": "yearly views", "path": ["menu_stats.menu_id -> menu.menu_id"], "parents": []}],
-    "attributes": [], "public": ["dish"], "exclude": [], "no_insert": [], "quirks": [],
+    "attributes": [{"table": "menu_venue", "of": "menu", "via": "menu_venue.menu_id -> menu.menu_id"}],
+    "public": ["dish", "cuisine"], "exclude": [], "no_insert": [], "quirks": [],
     "speaker_roles": ["a menu collection archivist cataloguing this menu", "a volunteer transcriber who keyed in this menu",
                       "a restaurant historian researching this menu", "a librarian correcting the catalogue"],
     "new_lookup": [{"via": "item.dish_id -> dish.dish_id", "name_cols": ["name"]},
@@ -116,6 +123,8 @@ Menu 3 的数据（后面的测试都依赖这些）：
 | 已有年份 | 2000、2001、2002 |
 | house_dish | 3 |
 | owner_name | 'Grace Kim' |
+| 场地（属性行） | 'Venue 3' |
+| 菜 3、13、23 的菜系 | cuisine 0、1、2（`dish_id % 3`） |
 
 - [ ] **Step 2: 写失败的测试**
 
@@ -601,6 +610,7 @@ def test_entity_messages_say_who_speaks_and_what_the_request_is_about():
         assert "no new row is added to menu (that would be another menu)" in u
         assert "## menu record (the record the request is about)" in u
         assert by[k]["shape"]["ownership_subquery"] or "identify the menu by menu_id = 3; names can repeat" in u
+        assert ("and no new row is added to a public table" in u) != bool(by[k]["shape"]["new_lookup"])
     st = by["name"]["style"]
     assert f"The speaker is not in the database, and nothing in it records who they are: {st['name']}, " in users["name"]
     assert f"a user with the username {by['username']['style']['username']}, who gives no other name" in users["username"]
@@ -617,10 +627,16 @@ def test_entity_text_without_a_name_and_with_a_new_lookup_row():
     assert not p["shape"]["ownership_subquery"]
     u = prompt.build_messages(DB, ENTITY_ANCHOR, nameless, p, ENTITY_MATERIALS)[1]["content"]
     assert "The request is about the menu in menu with menu_id = 3." in u and "the menu's name" not in u
-    assert "except the one new dish row the task shape asks for" in u
+    assert "except the one new dish row the task shape asks for" in u and "no new row is added to a public table" not in u
     assert ("- First add one new row to dish whose name no dish row has yet (say it in the instruction), then make one "
             "item row of this menu refer to it through item.dish_id: change an existing row or add a new one. "
             "No other dish row changes.") in u
+
+
+def test_a_new_lookup_row_under_the_root_takes_two_writes():
+    ctx = {**ENTITY_CTX, "new_lookup": [{"via": "menu.house_dish -> dish.dish_id", "name_cols": ["name"]}]}
+    look = [p for p in entity_plans(2000, ctx=ctx) if p["shape"]["new_lookup"]]
+    assert look and all(p["shape"]["n_writes"] == 2 and p["write_tables"] == ["dish", "menu"] for p in look)
 ```
 
 `tests/test_taskgen_generate.py`：fixtures 的 import 加上 `MENUS, MENUS_FKS, MENUS_PROFILE`，文件末尾加：
@@ -712,7 +728,8 @@ def entity_fmt(tree, plan):
              else f"Their first sentence says nothing about who they are and gives {record}")
     look = plan["shape"].get("new_lookup")
     return {"speaker": speaker, "label": label, "named": f" ({name})" if name else "", "first": first,
-            "lookup": f", except the one new {look['table']} row the task shape asks for" if look else ""}
+            "lookup": f", except the one new {look['table']} row the task shape asks for" if look
+                      else " and no new row is added to a public table"}
 ```
 
 - `sample_plan` 的改动按出现顺序如下。人物 plan 不能多调用 rng，这样已出的题仍可复现。
@@ -733,7 +750,9 @@ def entity_fmt(tree, plan):
         x = rng.choice(options)
         e = db_profile.parse_edge(x["via"])
         lookup = {"table": e.parent, "child": e.child, "via": x["via"], "name_cols": list(x["name_cols"])}
-        n_writes, pool = max(n_writes, 2), pool + [e.parent]
+        # under the root itself (game.genre_id) the entity has one row to point: more writes would update it again
+        n_writes = 2 if e.child == tree["anchor_table"] else max(n_writes, 2)
+        pool = pool + [e.parent]
 ```
 
   4. batch 的条件改成 `if task_type != "3_public_only" and not lookup and groups and rng.random() < cfg["BATCH"]:`。
@@ -827,7 +846,7 @@ Expected：只多了 4 个键；原有四类的示例不变（diff 里只有新�
 - [ ] **Step 6: 跑测试，确认通过**
 
 Run: `$P -m pytest -q`
-Expected: 全部通过，为 202 + 5 = 207 passed（示例测试是改名替换，不算新增）。
+Expected: 全部通过，为 202 + 6 = 208 passed（示例测试是改名替换，不算新增）。
 
 - [ ] **Step 7: 提交**
 
@@ -846,7 +865,7 @@ git commit -m "feat(taskgen v2): entity tasks: sampled speakers, a new lookup ro
 
 **Interfaces:**
 - Consumes：
-  - `db_profile.kind`、`db_profile.parse_edge`、`db_profile.scope_tables`；
+  - `db_profile.kind`、`db_profile.parse_edge`、`db_profile.scope_tables`、`owners.MAX_HOPS`；
   - 候选的 `plan.task_type == "6_entity"`、`plan.style.name`；
   - profile 的 `new_lookup`。
 - Produces：
@@ -958,7 +977,16 @@ def test_a_quoted_name_of_another_row_is_a_mismatch(menus):
     assert mreasons(menus, "Menu ID 3: on item 13, replace 'dish 13' with dish 5.", ["UPDATE item SET dish_id = 5 WHERE item_id = 13"]) == []
     assert mreasons(menus, "Menu ID 3: rename it to 'Menu 4'.", ["UPDATE menu SET name = 'Menu 4' WHERE menu_id = 3"]) == []
     assert mreasons(menus, "I'm Ann and it's menu ID 3's item 13: set its price to 4.5.", sql) == []   # apostrophes
+    assert mreasons(menus, "Menu ID 3 at 'Venue 3': set the price of item 13 to 4.5.", sql) == []     # the root's attribute row
+    assert mreasons(menus, "Menu ID 3: item 13 is a 'cuisine 1' dish; set its price to 4.5.", sql) == []   # item -> dish -> cuisine
+    assert mreasons(menus, "Menu ID 3: item 13 is a 'cuisine 2' dish; set its price to 4.5.", sql) == ["name_mismatch: cuisine.name"]
     assert check.quoted("I'm Ann, it's 'Menu 3' and “dish 2”") == {"menu 3", "dish 2"}
+
+
+def test_name_columns_are_names_and_titles_only(tmp_path):
+    db = sqlite3.connect(make_db(tmp_path, "nc", "CREATE TABLE b (business_id INTEGER, name TEXT, owner_name TEXT, owner_city TEXT, "
+                                 "owner_zip TEXT, name_id TEXT, LongTitle TEXT, price_name REAL);"))
+    assert check.name_columns(db, ["b"]) == [("b", "name"), ("b", "owner_name"), ("b", "LongTitle")]
 
 
 def test_a_row_wider_than_sqlite_function_arguments_is_still_recorded(tmp_path):
@@ -978,7 +1006,7 @@ def test_a_row_wider_than_sqlite_function_arguments_is_still_recorded(tmp_path):
 - [ ] **Step 3: 跑测试，确认失败**
 
 Run: `$P -m pytest -q tests/test_taskgen_check.py`
-Expected: FAIL。实体任务被算成 `1_self` 或 `3_public_only`，没有新原因；`check.quoted` 不存在；宽表在实体模式下没有被处理。
+Expected: FAIL。实体任务被算成 `1_self` 或 `3_public_only`，没有新原因；`check.quoted`、`check.name_columns` 不存在。宽表那条在实现前就会通过（那时不是实体模式，触发器只记几列）：它防的是实现后整行记录不分块而崩溃。
 
 - [ ] **Step 4: 实现 check.py：常量和辅助函数**
 
@@ -986,7 +1014,8 @@ Expected: FAIL。实体任务被算成 `1_self` 或 `3_public_only`，没有新�
 
 ```python
 ENTITY = "6_entity"
-NAME_COL = re.compile(r"(?i)name$|^name|title$|owner|author|artist|director|commander|alderman")   # where names are kept
+# where names are kept: owner_name, LongTitle, artist; not owner_city (food_inspection) or name_id (imdb_movies)
+NAME_COL = re.compile(r"(?i)(name|title)$|^owner$|author|artist|director|commander")
 # a quote opened by an apostrophe (I'm, it's) is not a quote: it needs a non-letter before ' and after the closing '
 QUOTED = re.compile(r"(?<![A-Za-z])'([^'\n]{2,80})'(?![A-Za-z])|\"([^\"\n]{2,80})\"|“([^”\n]{2,80})”|‘([^’\n]{2,80})’")
 JSON_ARGS = 60   # columns per json_object(): SQLite lets a function take 127 arguments (card_games.cards has 74 columns)
@@ -1046,22 +1075,30 @@ def _json_row(cols, ref="OLD"):
 
 ```python
 def name_mismatches(db, profile, tracer, cand, stmts, seen):
-    """A quoted name the database stores, but in no row the task touches (before or after it) and in none of their
-    parent rows (design 2026-10-04 §3.4): DySQL's cookbook named one ingredient and wrote another's ID in 16 of 51
-    tasks, and the verifier sees no rows. Values the SQL itself writes or matches are new names, not claims."""
-    key = profile["persons"][cand["anchor_table"]]["key"]
-    cur = db.execute(f"SELECT * FROM {_q(cand['anchor_table'])} WHERE {_q(key)} = ?", (cand["key_value"],))
-    rows = [(cand["anchor_table"], dict(zip([d[0] for d in cur.description], r))) for r in cur.fetchall()] + list(seen)
-    for t, r in list(rows):
-        for cols, parent, ref_cols in tracer.up.get(t, []):
-            vals = [r.get(c) for c in cols]
-            if any(v in (None, "") for v in vals):
-                continue
-            try:
-                cur = db.execute(f"SELECT * FROM {_q(parent)} WHERE " + " AND ".join(f"{_q(c)} = ?" for c in ref_cols) + " LIMIT 3", vals)
-            except sqlite3.Error:
-                continue
-            rows += [(parent, dict(zip([d[0] for d in cur.description], x))) for x in cur.fetchall()]
+    """A quoted name the database stores, but in none of the rows near the task (design 2026-10-04 §3.4): the root's
+    row and its attribute rows, the rows the task touches (before and after), and every row these lead to within
+    owners.MAX_HOPS foreign keys (region_sales -> game_platform -> platform). DySQL's cookbook named one ingredient and
+    wrote another's ID in 16 of 51 tasks, and the verifier sees no rows. Values the SQL itself writes or matches are
+    new names, not claims about a row."""
+    def fetch(table, cols, vals, limit=3):
+        try:
+            cur = db.execute(f"SELECT * FROM {_q(table)} WHERE " + " AND ".join(f"{_q(c)} = ?" for c in cols) + f" LIMIT {limit}", vals)
+        except sqlite3.Error:
+            return []
+        names = [d[0] for d in cur.description]
+        return [(table, dict(zip(names, r))) for r in cur.fetchall()]
+    root = cand["anchor_table"]
+    rows = fetch(root, [profile["persons"][root]["key"]], [cand["key_value"]], 1)
+    for a in profile["attributes"]:
+        e = db_profile.parse_edge(a["via"])
+        if a["of"] == root and rows:
+            rows += fetch(e.child, e.cols, [rows[0][1].get(c) for c in e.ref_cols], 50)
+    rows += list(seen)
+    frontier = rows
+    for _ in range(owners.MAX_HOPS):
+        frontier = [x for t, r in frontier for cols, parent, ref_cols in tracer.up.get(t, [])
+                    if all(r.get(c) not in (None, "") for c in cols) for x in fetch(parent, ref_cols, [r.get(c) for c in cols])]
+        rows += frontier
     near = {norm_literal(v) for _, r in rows for v in r.values() if isinstance(v, str)}
     written = {norm_literal(x) for s in stmts for x in literals(s)}
     cols = name_columns(db, db_profile.scope_tables(profile))
@@ -1158,7 +1195,7 @@ def entity_reasons(db, profile, tracer, speaker_ids, cand, stmts, labels, writes
 - [ ] **Step 6: 跑测试，确认通过**
 
 Run: `$P -m pytest -q`
-Expected: 全部通过，为 207 + 7 = 214 passed。
+Expected: 全部通过，为 208 + 8 = 216 passed。
 
 - [ ] **Step 7: 确认人物库候选的检查结果不变**
 
@@ -1167,7 +1204,7 @@ Step 1 的后台任务跑完以后：
 ```bash
 cd $REPO/taskgen/v2 && $P $S/recheck.py $S/recheck_after.jsonl && cmp $S/recheck_before.jsonl $S/recheck_after.jsonl && echo SAME
 ```
-Expected: `SAME`。不一样就用 `diff <(...) <(...) | head` 找出不同的 id，修到一样为止。改动只能影响实体 profile。
+Expected: `SAME`，并且两个文件里都没有 crash（`grep -c '"crash: ' $S/recheck_before.jsonl $S/recheck_after.jsonl` 两个都是 0；两边一起崩时 cmp 也会报 SAME）。before 里有 crash 的话，先和 `results/<db>/check.jsonl` 里存的结果对一下是不是原本就有。不一样就用 `diff <(...) <(...) | head` 找出不同的 id，修到一样为止。改动只能影响实体 profile。
 
 - [ ] **Step 8: 提交**
 
@@ -1342,7 +1379,7 @@ def notes_for(profile):
 - [ ] **Step 4: 跑测试，确认通过**
 
 Run: `$P -m pytest -q`
-Expected: 全部通过，为 214 + 3 = 217 passed。再看一下 DySQL 的正样本数：
+Expected: 全部通过，为 216 + 3 = 219 passed。再看一下 DySQL 的正样本数：
 
 ```bash
 $P -c "
@@ -1364,9 +1401,10 @@ Expected: 表头一列叫 `DySQL car+cookbook`，`tasks` 是 78。
 
 在 `docs/2026-10-04-entity-tasks-design.md` 里：
 - §3.4 的拒绝列表加一条：题目引号里的名字如果是库里某个名字列的值，却不在任务碰到的行（改前改后）或它们的父行里，就拒（`name_mismatch`）。理由：cookbook 16/51 的毛病，而且校验模型看不到行数据。
-- §3.5 的"负样本"一段改成：只用原有 5 种 SQL 破坏；名字和 ID 对不上由 §3.4 的检查拦，理由同上。正样本是 car/cookbook 过检查的题，去掉 `data/dysql_entity_defects.json` 里的 22 条，剩 46 条。
+- §3.5 的"负样本"一段改成：只用原有 5 种 SQL 破坏；名字和 ID 对不上由 §3.4 的检查拦，理由同上。正样本是 car/cookbook 过检查的 60 条题；`data/dysql_entity_defects.json` 列了 22 条有毛病的题，其中 14 条在这 60 条里，去掉后剩 46 条。
 - §5 的表：`trees.py`、`schema.py` 也改（kind、root_label、已用的键值），`verify.py` 加 `notes_for`。
 - §6 末条：已用的组合列在树的数据块里（`trees.taken`），不在键说明里，因为键说明按库生成，而已用组合按根行而不同。
+- §4 关卡 2：试跑改成 menu、video_games、university 三个库；"要求类型和算出类型不一致 ≤3%"换成"plan 是否要求新查找行，和检查结果里有没有 public INSERT 一致"，理由见本计划开头的偏差第 3 条。
 
 - [ ] **Step 7: 提交**
 
@@ -1399,14 +1437,14 @@ git commit -m "feat(taskgen v2): the verifier knows entity databases have no peo
 | bird:airline | `Air Carriers`（carrier） | `Airlines`（父 Airports，ORIGIN/DEST） | Airports | — | Airlines 无主键，航班要靠日期加航班号定位；先数有航班的承运人有几个 |
 | bird:chicago_crime | `District`（police district） | `Crime`（父 IUCR、FBI_Code、Ward、Community_Area） | IUCR, FBI_Code, Ward, Community_Area, Neighborhood | — | 只有 22 个分局，树最多 22 棵；Ward 存市议员姓名（说话人名字规则会用到） |
 | bird:college_completion | `institution_details`（institution） | `institution_grads` | — | — | state_sector_* 和学校之间没有可用的边，放 exclude 或 public；62 列 |
-| bird:food_inspection | `businesses`（business） | `inspections`；`violations` | — | — | owner_name 存的是真人名 |
+| bird:food_inspection | `businesses`（business） | `inspections`；`violations` | — | — | owner_name 存的是真人名；事件表无主键 |
 | bird:restaurant | `generalinfo`（restaurant），父 geographic | —；属性 `location` | geographic | `generalinfo.city -> geographic.city`（city） | 表少，多是 1–2 条写 |
 | bird:shakespeare | `works`（work） | `chapters`；`paragraphs`（2 跳，父 characters） | characters | `paragraphs.character_id -> characters.id`（CharName） | 段落文本长（MAX_VALUE_CHARS 会截断） |
-| bird:university | `university`（university），父 country | `university_year`；`university_ranking_year`（父 ranking_criteria → ranking_system） | country, ranking_system, ranking_criteria | `university.country_id -> country.id`（country_name） | |
+| bird:university | `university`（university），父 country | `university_year`；`university_ranking_year`（父 ranking_criteria → ranking_system） | country, ranking_system, ranking_criteria | `university.country_id -> country.id`（country_name） | 事件表无主键；有祖父行；根自己引用新查找行；第三个试跑库 |
 | bird:california_schools | `schools`（school） | —；属性 `frpm`、`satscores` | — | — | CDSCode 是文本键；49 列 |
 | bird:card_games | `cards`（card），父 sets | `foreign_data`、`legalities`、`rulings`（经 uuid） | sets, set_translations | — | 262 MB；74 列（Review Focus 5） |
 | spider2:Airlines | `bookings`（booking） | `tickets`；`ticket_flights`（2 跳，父 flights）；`boarding_passes`（2 跳） | flights, airports_data, aircrafts_data, seats | — | 没有声明的外键，边靠命中率；bookings 没有名字列（Review Focus 1）；表大，建树慢 |
-| spider2:imdb_movies | `movies`（movie） | `genre`、`role_mapping`、`director_mapping`（父 names）；属性 `ratings` | names | — | ERD 放 exclude；names 是真人，说话人名字规则会查到 |
+| spider2:imdb_movies | `movies`（movie） | `genre`、`role_mapping`、`director_mapping`（父 names）；属性 `ratings` | names | — | ERD 放 exclude；names 是真人，说话人名字规则会查到；所有表都无主键 |
 | spider1:bike_1 | `station`（station） | `status`；`trip`（经 start_station_id） | weather | — | 70 个站 |
 | spider1:csu_1 | `Campuses`（campus） | `degrees`、`discipline_enrollments`、`enrollments`、`faculty`；属性 `csu_fees` | — | — | 23 个校区；复合主键（会用到已用的键值） |
 | spider1:flight_4 | `airlines`（airline） | `routes`（父 airports，src/dst） | airports | `routes.dst_apid -> airports.apid`（name） | |
@@ -1503,26 +1541,26 @@ git commit -m "data(taskgen v2): entity profiles confirmed by the user"
 
 ---
 
-### Task 7: 试跑 menu 和 video_games（关卡 2）
+### Task 7: 试跑 menu、video_games、university（关卡 2）
 
-**Files:** 只写 `results/menu/`、`results/video_games/`（不进 git）和 `$S/`。
+**Files:** 只写 `results/menu/`、`results/video_games/`、`results/university/`（不进 git）和 `$S/`。
 
 **Interfaces:**
 - Consumes：Task 6 确认的 profile 和 Q。
-- Produces：两个库的候选和检查结果；`$S/pilot_read.md`，里面是 Claude 对每条过检查的题的判断（good，或 bad 加原因）。Task 8 把它转成 labels。
+- Produces：三个库的候选和检查结果；`$S/pilot_read.md`，里面是 Claude 对每条过检查的题的判断（good，或 bad 加原因）。Task 8 把它转成 labels。
 
 - [ ] **Step 1: 出题和检查**
 
 ```bash
 cd $REPO/taskgen/v2
-for DB in bird:menu bird:video_games; do
+for DB in bird:menu bird:video_games bird:university; do
   $P scripts/taskgen.py trees --db $DB --n $Q --seed 0 && \
   $P scripts/taskgen.py generate --db $DB --workers 5 && \
   $P scripts/taskgen.py generate --db $DB --workers 5 --retry-errors && \
   $P scripts/taskgen.py check --db $DB
 done
 ```
-Expected：每库写出 Q 棵树和 Q 个候选，`checked Q, passed …`。GLM 合计约 5 分钟。
+Expected：每库写出 Q 棵树和 Q 个候选，`checked Q, passed …`。GLM 合计约 7 分钟。
 
 - [ ] **Step 2: 统计**
 
@@ -1531,26 +1569,29 @@ $P - <<'EOF'
 import sys; sys.path[:0] = [".", "../common"]
 from collections import Counter
 from taskgen_v2 import io
-for db in ("menu", "video_games"):
+for db in ("menu", "video_games", "university"):
     cands = {c["id"]: c for c in io.read_jsonl(f"results/{db}/candidates.jsonl")}
     chk = io.read_jsonl(f"results/{db}/check.jsonl"); ok = [r for r in chk if r["ok"]]
     print(db, "candidates", len(cands), "pass", len(ok), f"{len(ok) / len(chk):.0%}")
     print("  reasons", Counter(x.split(":")[0] for r in chk for x in r["reasons"]).most_common())
-    print("  computed types", Counter(r["task_type"] for r in ok))
     print("  speakers", Counter(c["plan"]["style"]["speaker"] for c in cands.values()))
-    print("  new_lookup", sum(bool(c["plan"]["shape"].get("new_lookup")) for c in cands.values()),
-          "words", sorted(len(c["instruction"].split()) for c in cands.values() if c.get("instruction"))[len(cands) // 2])
+    # the plan asked for a new lookup row  vs  the checked task inserts a public row (the share is counted from the check)
+    print("  (asked, public INSERT)", Counter((bool(cands[r["id"]]["plan"]["shape"].get("new_lookup")),
+                                              any(w["label"] == "public" and w["op"] == "INSERT" for w in r["writes"])) for r in ok))
+    print("  words median", sorted(len(c["instruction"].split()) for c in cands.values() if c.get("instruction"))[len(cands) // 2])
 EOF
 ```
 
-- [ ] **Step 3: 改名探针（名字和 ID 对不上，检查必须拦住）**
+- [ ] **Step 3: 改名冒烟测试**
+
+它换的正是带引号、库里存在的名字，也就是规则本来就拦的那种，所以结果应接近 100%；它只验证规则在真实库上能跑通（名字列识别、库大时的速度），测不到没加引号的名字。没加引号的情况在 Step 4 人工数。
 
 ```bash
 $P - <<'EOF'
 import random, re, sys; sys.path[:0] = [".", "../common"]
 from taskgen_v2 import check, db_profile, io
 recs, n, caught = io.load_db_recs(), 0, 0
-for key in ("bird:menu", "bird:video_games"):
+for key in ("bird:menu", "bird:video_games", "bird:university"):
     rec, prof = recs[key], db_profile.get(key)
     db = check._memory_copy(io.resolve_db_path(rec["path"]))
     cols = check.name_columns(db, db_profile.scope_tables(prof))
@@ -1574,7 +1615,7 @@ for key in ("bird:menu", "bird:video_games"):
 print(f"renamed {n}, rejected {caught}")
 EOF
 ```
-Expected: `rejected == renamed`。漏掉的逐条看：如果名字没加引号，检查本来就管不到，记进试跑记录；其他原因要修检查。
+Expected: `rejected == renamed`。漏掉的要查原因并修检查。
 
 - [ ] **Step 4: Claude 逐条读过检查的题**
 
@@ -1583,16 +1624,20 @@ Expected: `rejected == renamed`。漏掉的逐条看：如果名字没加引号�
 - 实体名和 ID 是否对得上；
 - 新查找行的名字是否真是新的；
 - 有没有改到别的实体；
-- 题目给的信息是否足够 agent 走到同一个终态。
+- 题目给的信息是否足够 agent 走到同一个终态；
+- 题目提到了库里存在的名字、却没加引号的条数（检查管不到这种，记进试跑记录）。
+
+另外把检查以 `name_mismatch` 拒掉的候选逐条读一遍，判断是真错配还是误杀，误杀的条数和原因记进 `$S/pilot_read.md` 末尾。
 
 - [ ] **Step 5: 关卡 2 —— 判断能不能继续**
 
 通过条件，三条都满足：
-- 两库合计过检查 ≥ 90%；
-- 过检查的题里算出的类型都是 `6_entity`（不一致 ≤ 3%）；
+- 三库合计过检查 ≥ 90%；
+- plan 和检查结果一致：要求了新查找行的题，检查结果里有一条 public INSERT；没要求的题没有。不一致 ≤ 5%（Step 2 的 `(asked, public INSERT)` 计数里，(True, False) 加 (False, True) 的占比）；
+- `name_mismatch` 的误杀不超过它拒掉条数的一半（超过就放宽"附近的行"再重检）；
 - Step 4 读出的坏题 ≤ 10%，而且没有系统性的问题（同一个毛病出现 3 次以上算系统性）。
 
-不满足就停下：把数字和典型问题（只给 id 和问题描述）报告给用户，提出要改 prompt 还是改 profile。改完对这两个库删掉 `results/<db>/` 重跑。
+不满足就停下：把数字和典型问题（只给 id 和问题描述）报告给用户，提出要改 prompt 还是改 profile。改完对这三个库删掉 `results/<db>/` 重跑。
 
 ---
 
@@ -1609,9 +1654,9 @@ Expected: `rejected == renamed`。漏掉的逐条看：如果名字没加引号�
 ```bash
 cd $REPO/taskgen/v2 && D=results/entity_calib
 $P scripts/verify_calibrate.py build --dir $D --env car --env cookbook --skip data/dysql_entity_defects.json \
-  --labeled results/menu --labeled results/video_games --per-kind-dysql 10 --per-kind-v2 10
+  --labeled results/menu --labeled results/video_games --labeled results/university --per-kind-dysql 10 --per-kind-v2 10
 ```
-Expected：打出的计数里，positives 约 46，labeled 约等于两库过检查的条数，negatives 中 dysql 和 v2 每种最多 10 条。
+Expected：打出的计数里，positives 约 46，labeled 约等于三库过检查的条数（约 70），negatives 中 dysql 和 v2 每种最多 10 条。
 
 - [ ] **Step 2: 写 labels**
 
@@ -1624,7 +1669,7 @@ $P scripts/verify_calibrate.py vote --dir $D --models deepseek-v4.1-flash:2 --wo
 $P scripts/verify_calibrate.py vote --dir $D --models deepseek-v4.1-flash:3 --undecided --workers 3
 $P scripts/verify_calibrate.py report --dir $D
 ```
-Expected：约 400 票，约 25 分钟；`report.md` 有三种规则的各项比例。
+Expected：约 450 票，约 30 分钟；`report.md` 有三种规则的各项比例。
 
 - [ ] **Step 4: 分歧给用户复核**
 
@@ -1650,13 +1695,13 @@ $P scripts/verify_calibrate.py review --dir $D --votes 3
 
 **Interfaces:**
 - Consumes：Task 7 的候选，Task 6 的 CAP。
-- Produces：两库的 `output/<db>/tasks.jsonl`，manifest 里多两个库；4B 的通过率。
+- Produces：三库的 `output/<db>/tasks.jsonl`，manifest 里多三个库；4B 的通过率。
 
 - [ ] **Step 1: 校验、去重、转换**
 
 ```bash
 cd $REPO/taskgen/v2
-for DB in bird:menu bird:video_games; do
+for DB in bird:menu bird:video_games bird:university; do
   $P scripts/taskgen.py verify --db $DB --workers 3 && \
   $P scripts/taskgen.py dedup --db $DB --per-db $CAP && \
   $P scripts/taskgen.py convert --db $DB && \
@@ -1672,7 +1717,7 @@ Expected：`n_verify_unvoted` 是 0；每库 selected ≤ CAP。
 ```bash
 for p in 8001 8002; do curl -s -m 5 http://127.0.0.1:$p/v1/models; echo; done
 cd $REPO/DySQL-Bench
-for DB in menu video_games; do
+for DB in menu video_games university; do
   OUT=results/taskgen_v2/entity_pilot/$DB && mkdir -p $OUT
   TASKGEN_MANIFEST=$REPO/taskgen/v2/output/manifest.json $P run.py --env gen:$DB --task-split train --num-trials 1 \
     --model qwen3-4b --model-api http://127.0.0.1:8002 \
@@ -1681,11 +1726,11 @@ for DB in menu video_games; do
 done
 $P scripts/summarize.py "results/taskgen_v2/entity_pilot/*/*.json" | tee results/taskgen_v2/entity_pilot/summary.md
 ```
-Expected：约 2 × CAP 题全部跑完，`summary.md` 有 overall。
+Expected：约 3 × CAP（约 57）题全部跑完，`summary.md` 有 overall。
 
 - [ ] **Step 3: 关卡 4**
 
-拿通过率和这几个数对照：DySQL 上的 car 44.4%、cookbook 17.6%，4B 在 DySQL 上总体 29.8%，以及 v2 人物题试点的值（`docs/2026-10-02-pilot.md`）。约 40 题的误差约 ±15 个百分点。
+拿通过率和这几个数对照：DySQL 上的 car 44.4%、cookbook 17.6%，4B 在 DySQL 上总体 29.8%，以及 v2 人物题试点的值（`docs/2026-10-02-pilot.md`）。约 57 题的误差约 ±13 个百分点。
 - 低于 10% 或高于 70%：停下。抽 10 条轨迹看是题的问题还是 agent 的问题，然后报告用户。
 - 特别看一项：agent 因为"无法验证身份"而拒绝或转人工的题有几条（在轨迹里搜 authenticat、identity），记进记录。这是设计里保留策略文本的那个取舍。
 
@@ -1707,7 +1752,7 @@ Expected：约 2 × CAP 题全部跑完，`summary.md` 有 overall。
 ```bash
 cd $REPO/taskgen/v2 && cat > $S/entity_generate.sh <<EOF
 P=$P; cd $REPO/taskgen/v2
-for DB in <除 menu、video_games 外确认留下的库，空格分隔>; do
+for DB in <除 menu、video_games、university 外确认留下的库，空格分隔>; do
   \$P scripts/taskgen.py trees --db \$DB --n $Q --seed 0 && \
   \$P scripts/taskgen.py generate --db \$DB --workers 5 && \
   \$P scripts/taskgen.py generate --db \$DB --workers 5 --retry-errors && \
@@ -1715,7 +1760,7 @@ for DB in <除 menu、video_games 外确认留下的库，空格分隔>; do
 done > $S/entity_generate.log 2>&1
 echo "DONE \$(date)" >> $S/entity_generate.log
 EOF
-bash $S/entity_generate.sh    # run_in_background; ~14 × Q GLM calls, about 30–40 minutes
+bash $S/entity_generate.sh    # run_in_background; ~13 × Q GLM calls, about 30–40 minutes
 ```
 
 - [ ] **Step 2: 逐库闸门**
@@ -1750,7 +1795,8 @@ m = json.load(open("output/manifest.json"))
 rows = [r for k, v in m.items() for r in io.read_jsonl("output/" + v["tasks"]) if r["meta"].get("task_type") == "6_entity"]
 print("entity tasks", len(rows), Counter(r["meta"]["db"] for r in rows))
 print("speakers", Counter(r["meta"]["plan"]["style"]["speaker"] for r in rows))
-print("new_lookup", sum(bool(r["meta"]["plan"]["shape"].get("new_lookup")) for r in rows))
+sel = [r for d in {r["meta"]["db"] for r in rows} for r in io.read_jsonl(f"results/{d}/selected.jsonl")]
+print("new lookup rows (from the check)", sum(any(w["label"] == "public" and w["op"] == "INSERT" for w in r["writes"]) for r in sel), "of", len(sel))
 EOF
 ```
 Expected：合计 270–330 题。说话人比例接近 55/17/28（name / role+username / none）。
