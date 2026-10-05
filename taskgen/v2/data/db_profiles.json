@@ -84,6 +84,76 @@
   },
   "confirmed_version": "78a4b48687"
  },
+ "bird:airline": {
+  "kind": "entity",
+  "roots": [
+   {
+    "table": "Air Carriers",
+    "label": "air carrier",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "Air Carriers": {
+    "key": "Code",
+    "name_cols": [
+     "Description"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "Airlines",
+    "label": "flights",
+    "path": [
+     "Airlines.OP_CARRIER_AIRLINE_ID -> Air Carriers.Code"
+    ],
+    "parents": [
+     {
+      "table": "Airports",
+      "via": "Airlines.ORIGIN -> Airports.Code",
+      "parents": []
+     },
+     {
+      "table": "Airports",
+      "via": "Airlines.DEST -> Airports.Code",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "Airports"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "FL_DATE is written 'YYYY/M/D' without leading zeros ('2018/8/1').",
+   "Times (CRS_DEP_TIME, DEP_TIME, ARR_TIME and the like) are integers in HHMM form without a colon (1649 means 16:49).",
+   "Airlines has no key: a flight is one (FL_DATE, OP_CARRIER_AIRLINE_ID, OP_CARRIER_FL_NUM, ORIGIN).",
+   "Air Carriers.Description ends with the carrier's code after a colon ('Mackey International Inc.: MAC').",
+   "CANCELLED is 0 or 1; the delay columns are minutes and NULL when not reported."
+  ],
+  "description": "US domestic flight records for August 2018. Each air carrier (Air Carriers) operates flights (Airlines, one row per flight) between airports (Airports). A task is about one carrier and its flights; airports are a shared list.",
+  "speaker_roles": [
+   "an operations analyst at this carrier correcting its flight records",
+   "a data steward for the carrier's on-time performance reports",
+   "a dispatcher who handled these flights",
+   "an aviation statistics clerk"
+  ],
+  "new_lookup": [],
+  "confirmed": false,
+  "notes": [
+   "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
+  ],
+  "draft": {
+   "model": "claude",
+   "rounds": 1,
+   "errors": []
+  }
+ },
  "bird:beer_factory": {
   "roots": [
    {
@@ -401,6 +471,65 @@
   },
   "confirmed_version": "b65d2359b5"
  },
+ "bird:california_schools": {
+  "kind": "entity",
+  "roots": [
+   {
+    "table": "schools",
+    "label": "school",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "schools": {
+    "key": "CDSCode",
+    "name_cols": [
+     "School"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [],
+  "attributes": [
+   {
+    "table": "frpm",
+    "of": "schools",
+    "via": "frpm.CDSCode -> schools.CDSCode"
+   },
+   {
+    "table": "satscores",
+    "of": "schools",
+    "via": "satscores.cds -> schools.CDSCode"
+   }
+  ],
+  "public": [],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "CDSCode is a 14-digit text code with leading zeros ('01100170109835'); satscores.cds holds the same code.",
+   "Many frpm column names contain spaces and punctuation ('Percent (%) Eligible Free (K-12)'); quote them in SQL.",
+   "The frpm 'Percent (%)' columns are fractions between 0 and 1, not percentages.",
+   "schools.School is NULL for 1,369 rows that are district or county offices, not schools.",
+   "satscores.rtype is 'S' for a school and 'D' for a district; AvgScrRead, AvgScrMath and AvgScrWrite are average SAT section scores."
+  ],
+  "description": "California public schools. Each school (schools) has its directory details, and may have one row of free and reduced-price meal figures (frpm) and one row of SAT results (satscores). A task is about one school.",
+  "speaker_roles": [
+   "the office manager at this school",
+   "a district data coordinator responsible for this school",
+   "a county office of education analyst",
+   "a state reporting specialist correcting this school's records"
+  ],
+  "new_lookup": [],
+  "confirmed": false,
+  "notes": [
+   "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
+  ],
+  "draft": {
+   "model": "claude",
+   "rounds": 1,
+   "errors": []
+  }
+ },
  "bird:car_retails": {
   "roots": [
    {
@@ -506,6 +635,296 @@
    "errors": []
   },
   "confirmed_version": "5cdf28959e"
+ },
+ "bird:card_games": {
+  "kind": "entity",
+  "roots": [
+   {
+    "table": "cards",
+    "label": "card",
+    "parents": [
+     {
+      "table": "sets",
+      "via": "cards.setCode -> sets.code",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "persons": {
+   "cards": {
+    "key": "id",
+    "name_cols": [
+     "name"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "rulings",
+    "label": "rulings",
+    "path": [
+     "rulings.uuid -> cards.uuid"
+    ],
+    "parents": []
+   },
+   {
+    "table": "legalities",
+    "label": "format legalities",
+    "path": [
+     "legalities.uuid -> cards.uuid"
+    ],
+    "parents": []
+   },
+   {
+    "table": "foreign_data",
+    "label": "foreign-language printings",
+    "path": [
+     "foreign_data.uuid -> cards.uuid"
+    ],
+    "parents": []
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "sets",
+   "set_translations"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "A card is one printing: the same name appears on several cards (56,822 cards have 21,738 names), so a card is named by its id.",
+   "rulings, legalities and foreign_data link to a card by uuid, not by id.",
+   "legalities.status is 'Legal', 'Banned' or 'Restricted'; format is a play format such as 'commander' or 'legacy'.",
+   "Many cards columns are 0/1 flags (isPromo, hasFoil, isReprint).",
+   "cards.setCode holds the set's short code (sets.code, such as '10E')."
+  ],
+  "description": "Magic: The Gathering cards. Each card row is one printing of a card in a set, with its rulings, its legality in each play format and its foreign-language versions. A task is about one card printing; sets and their translations are shared lists.",
+  "speaker_roles": [
+   "a card database maintainer correcting this printing",
+   "a collector who catalogues this card",
+   "a tournament judge updating this card's rulings",
+   "a translator checking this card's foreign-language data"
+  ],
+  "new_lookup": [],
+  "confirmed": false,
+  "notes": [
+   "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
+  ],
+  "draft": {
+   "model": "claude",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "bird:chicago_crime": {
+  "kind": "entity",
+  "roots": [
+   {
+    "table": "District",
+    "label": "police district",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "District": {
+    "key": "district_no",
+    "name_cols": [
+     "district_name"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "Crime",
+    "label": "crime reports",
+    "path": [
+     "Crime.district_no -> District.district_no"
+    ],
+    "parents": [
+     {
+      "table": "IUCR",
+      "via": "Crime.iucr_no -> IUCR.iucr_no",
+      "parents": []
+     },
+     {
+      "table": "FBI_Code",
+      "via": "Crime.fbi_code_no -> FBI_Code.fbi_code_no",
+      "parents": []
+     },
+     {
+      "table": "Ward",
+      "via": "Crime.ward_no -> Ward.ward_no",
+      "parents": []
+     },
+     {
+      "table": "Community_Area",
+      "via": "Crime.community_area_no -> Community_Area.community_area_no",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "IUCR",
+   "FBI_Code",
+   "Ward",
+   "Community_Area",
+   "Neighborhood"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "Crime.date is text 'M/D/YYYY H:MM' ('1/1/2018 2:46').",
+   "Crime.arrest and Crime.domestic are the strings 'TRUE' and 'FALSE'.",
+   "District.email and District.twitter begin with a non-breaking space; never copy it into a new value.",
+   "Community_Area.population is text with thousands commas ('54,991').",
+   "FBI codes mix digits and letters ('01A', '2')."
+  ],
+  "description": "Chicago police crime reports from 2018. Each of the 22 police districts (District) has its crime reports (Crime), each classified by an IUCR code and an FBI code and placed in a ward and a community area. A task is about one district and its reports; codes, wards, community areas and neighborhoods are shared lists.",
+  "speaker_roles": [
+   "a records clerk at this district's police station",
+   "a data quality analyst for this district's crime reports",
+   "this district's community policing liaison",
+   "a police department auditor reviewing this district's reports"
+  ],
+  "new_lookup": [],
+  "confirmed": false,
+  "notes": [
+   "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
+  ],
+  "draft": {
+   "model": "claude",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "bird:college_completion": {
+  "kind": "entity",
+  "roots": [
+   {
+    "table": "institution_details",
+    "label": "institution",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "institution_details": {
+    "key": "unitid",
+    "name_cols": [
+     "chronname"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "institution_grads",
+    "label": "graduation cohorts",
+    "path": [
+     "institution_grads.unitid -> institution_details.unitid"
+    ],
+    "parents": []
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "state_sector_details",
+   "state_sector_grads"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "Missing values are the text 'NULL', not SQL NULL, in most columns (grad_100 is 'NULL' in 69% of institution_grads rows).",
+   "institution_grads has no key: a row is one (unitid, year, gender, race, cohort); gender is 'B' (both), 'M' or 'F'; race is 'X' (all), 'W', 'B', 'H', 'Ai' or 'A'; cohort is '2y all', '4y bach' or '4y other'.",
+   "grad_100 and grad_150 count students who graduated within 100% and 150% of normal time; grad_100_rate and grad_150_rate are those counts as percentages of grad_cohort.",
+   "institution_details.state is the full state name ('Alabama')."
+  ],
+  "description": "US college completion data. Each institution (institution_details) has profile figures and graduation cohorts (institution_grads, one row per year, gender, race and cohort type). A task is about one institution and its cohorts; the state and sector tables are shared summaries.",
+  "speaker_roles": [
+   "an institutional research analyst at this college",
+   "a registrar's office data coordinator",
+   "a state higher-education reporting officer",
+   "a data steward for this institution's completion reports"
+  ],
+  "new_lookup": [],
+  "confirmed": false,
+  "notes": [
+   "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
+  ],
+  "draft": {
+   "model": "claude",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "bird:food_inspection": {
+  "kind": "entity",
+  "roots": [
+   {
+    "table": "businesses",
+    "label": "business",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "businesses": {
+    "key": "business_id",
+    "name_cols": [
+     "name"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "inspections",
+    "label": "inspections",
+    "path": [
+     "inspections.business_id -> businesses.business_id"
+    ],
+    "parents": []
+   },
+   {
+    "table": "violations",
+    "label": "violations",
+    "path": [
+     "violations.business_id -> businesses.business_id"
+    ],
+    "parents": []
+   }
+  ],
+  "attributes": [],
+  "public": [],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "inspections and violations have no key; dates are 'YYYY-MM-DD'.",
+   "146 inspections share business_id, date and type with another inspection, so a task naming one such inspection gives its score as well.",
+   "inspections.score is NULL for inspections that are not scored (46% of them, such as follow-ups).",
+   "violations.risk_category is 'Low Risk', 'Moderate Risk' or 'High Risk'.",
+   "owner_name is the business's legal owner, often a company ('Tiramisu LLC'), not necessarily the person speaking."
+  ],
+  "description": "San Francisco restaurant health inspections. Each business (businesses) has inspections (with a score and a type) and violations (with a risk category). A task is about one business and its inspection records.",
+  "speaker_roles": [
+   "the manager of this restaurant",
+   "a health inspector who visited this business",
+   "a compliance consultant hired by this business",
+   "a clerk at the city's environmental health office"
+  ],
+  "new_lookup": [],
+  "confirmed": false,
+  "notes": [
+   "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
+  ],
+  "draft": {
+   "model": "claude",
+   "rounds": 1,
+   "errors": []
+  }
  },
  "bird:food_inspection_2": {
   "roots": [
@@ -659,6 +1078,88 @@
    "errors": []
   },
   "confirmed_version": "d45d29c1fc"
+ },
+ "bird:menu": {
+  "kind": "entity",
+  "roots": [
+   {
+    "table": "Menu",
+    "label": "menu",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "Menu": {
+    "key": "id",
+    "name_cols": [
+     "sponsor"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "MenuPage",
+    "label": "pages",
+    "path": [
+     "MenuPage.menu_id -> Menu.id"
+    ],
+    "parents": []
+   },
+   {
+    "table": "MenuItem",
+    "label": "menu items",
+    "path": [
+     "MenuPage.menu_id -> Menu.id",
+     "MenuItem.menu_page_id -> MenuPage.id"
+    ],
+    "parents": [
+     {
+      "table": "Dish",
+      "via": "MenuItem.dish_id -> Dish.id",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "Dish"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "Menu.name is empty (NULL or '') for 82% of menus; the sponsor column usually names the restaurant, hotel or host, about half of the time in upper case ('HOTEL EASTMAN').",
+   "Menu.event, venue, place and occasion are transcriptions with brackets and trailing semicolons ('[DINNER]', 'EASTER;'); copy them exactly.",
+   "MenuItem.price and high_price are numbers or NULL.",
+   "Dish.menus_appeared, times_appeared, first_appeared, last_appeared, lowest_price and highest_price are statistics over all menus, not facts of one menu.",
+   "Menu.page_count and dish_count are counts kept on the menu row; adding or removing a page or an item does not change them by itself."
+  ],
+  "description": "The New York Public Library's collection of historical restaurant menus. Each menu (Menu) has pages (MenuPage), and each page lists items (MenuItem) that point to a dish (Dish) with a price. A task is about one menu: its catalogue details, its pages and the items on them; dishes are shared by all menus.",
+  "speaker_roles": [
+   "a volunteer transcriber who keyed in this menu for the library's collection",
+   "a menu collection archivist cataloguing this menu",
+   "a culinary historian researching this menu",
+   "a librarian correcting this menu's catalogue record",
+   "a descendant of the restaurant's owner who donated the original menu"
+  ],
+  "new_lookup": [
+   {
+    "via": "MenuItem.dish_id -> Dish.id",
+    "name_cols": [
+     "name"
+    ]
+   }
+  ],
+  "confirmed": false,
+  "notes": [
+   "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
+  ],
+  "draft": {
+   "model": "claude",
+   "rounds": 1,
+   "errors": []
+  }
  },
  "bird:movie": {
   "roots": [
@@ -1106,6 +1607,74 @@
   },
   "confirmed_version": "88742c3998"
  },
+ "bird:restaurant": {
+  "kind": "entity",
+  "roots": [
+   {
+    "table": "generalinfo",
+    "label": "restaurant",
+    "parents": [
+     {
+      "table": "geographic",
+      "via": "generalinfo.city -> geographic.city",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "persons": {
+   "generalinfo": {
+    "key": "id_restaurant",
+    "name_cols": [
+     "label"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [],
+  "attributes": [
+   {
+    "table": "location",
+    "of": "generalinfo",
+    "via": "location.id_restaurant -> generalinfo.id_restaurant"
+   }
+  ],
+  "public": [
+   "geographic"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "All text is lower case ('sparky's diner', 'san francisco', 'church st'); keep new values lower case.",
+   "review is a score between 1.3 and 4.5 with one decimal.",
+   "location.street_num is the house number and street_name the street only.",
+   "geographic.city is the key of geographic: a new city row states city, county and region."
+  ],
+  "description": "A Bay Area restaurant directory. Each restaurant (generalinfo) has a food type, a city and a review score, and one address row (location). A task is about one restaurant; cities (geographic, with county and region) are a shared list.",
+  "speaker_roles": [
+   "the owner of this restaurant",
+   "a food guide editor maintaining this restaurant's listing",
+   "a local reviewer who curates the bay area listings",
+   "a data entry clerk for the restaurant directory"
+  ],
+  "new_lookup": [
+   {
+    "via": "generalinfo.city -> geographic.city",
+    "name_cols": [
+     "city"
+    ]
+   }
+  ],
+  "confirmed": false,
+  "notes": [
+   "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
+  ],
+  "draft": {
+   "model": "claude",
+   "rounds": 1,
+   "errors": []
+  }
+ },
  "bird:retail_complains": {
   "roots": [
    {
@@ -1187,6 +1756,86 @@
    "errors": []
   },
   "confirmed_version": "648699911c"
+ },
+ "bird:shakespeare": {
+  "kind": "entity",
+  "roots": [
+   {
+    "table": "works",
+    "label": "work",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "works": {
+    "key": "id",
+    "name_cols": [
+     "Title"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "chapters",
+    "label": "scenes",
+    "path": [
+     "chapters.work_id -> works.id"
+    ],
+    "parents": []
+   },
+   {
+    "table": "paragraphs",
+    "label": "paragraphs",
+    "path": [
+     "chapters.work_id -> works.id",
+     "paragraphs.chapter_id -> chapters.id"
+    ],
+    "parents": [
+     {
+      "table": "characters",
+      "via": "paragraphs.character_id -> characters.id",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "characters"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "chapters are scenes: Act and Scene are numbers; 270 scene descriptions use the curly apostrophe (’), so copy them exactly.",
+   "paragraphs.PlainText often spans several lines and includes stage directions in square brackets.",
+   "characters is one list for all works; 1,266 rows hold 957 distinct names, so a character is named by its id.",
+   "works.GenreType is 'Comedy', 'Tragedy', 'History', 'Poem' or 'Sonnet'; works.Date is a year."
+  ],
+  "description": "The works of Shakespeare. Each work (works) has scenes (chapters, by act and scene) and each scene has paragraphs of text, each spoken by a character. A task is about one work, its scenes and its paragraphs; characters are a shared list.",
+  "speaker_roles": [
+   "an editor of this work's digital edition",
+   "a dramaturg preparing this work for a production",
+   "a literature professor correcting the text for a course reader",
+   "a volunteer proofreader for the Shakespeare corpus"
+  ],
+  "new_lookup": [
+   {
+    "via": "paragraphs.character_id -> characters.id",
+    "name_cols": [
+     "CharName"
+    ]
+   }
+  ],
+  "confirmed": false,
+  "notes": [
+   "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
+  ],
+  "draft": {
+   "model": "claude",
+   "rounds": 1,
+   "errors": []
+  }
  },
  "bird:shipping": {
   "roots": [
@@ -1746,6 +2395,286 @@
   },
   "confirmed_version": "02a6a29e39"
  },
+ "bird:university": {
+  "kind": "entity",
+  "roots": [
+   {
+    "table": "university",
+    "label": "university",
+    "parents": [
+     {
+      "table": "country",
+      "via": "university.country_id -> country.id",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "persons": {
+   "university": {
+    "key": "id",
+    "name_cols": [
+     "university_name"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "university_year",
+    "label": "yearly figures",
+    "path": [
+     "university_year.university_id -> university.id"
+    ],
+    "parents": []
+   },
+   {
+    "table": "university_ranking_year",
+    "label": "ranking scores",
+    "path": [
+     "university_ranking_year.university_id -> university.id"
+    ],
+    "parents": [
+     {
+      "table": "ranking_criteria",
+      "via": "university_ranking_year.ranking_criteria_id -> ranking_criteria.id",
+      "parents": [
+       {
+        "table": "ranking_system",
+        "via": "ranking_criteria.ranking_system_id -> ranking_system.id",
+        "parents": []
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "country",
+   "ranking_system",
+   "ranking_criteria"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "university_year and university_ranking_year have no key: a yearly row is one (university_id, year), a score row one (university_id, ranking_criteria_id, year).",
+   "pct_international_students and pct_female_students are whole percentages; student_staff_ratio is students per staff member.",
+   "score is an integer, NULL for 130 rows.",
+   "A new ranking_criteria row states its ranking_system_id and criteria_name."
+  ],
+  "description": "World university rankings. Each university has a country, yearly figures (students, staff ratio, international and female shares) and ranking scores per year and criterion, where each criterion belongs to a ranking system. A task is about one university; countries, ranking systems and criteria are shared lists.",
+  "speaker_roles": [
+   "a data officer in this university's planning office",
+   "an analyst at a ranking agency correcting this university's scores",
+   "this university's international office coordinator",
+   "a higher-education researcher maintaining this dataset"
+  ],
+  "new_lookup": [
+   {
+    "via": "university_ranking_year.ranking_criteria_id -> ranking_criteria.id",
+    "name_cols": [
+     "criteria_name"
+    ]
+   }
+  ],
+  "confirmed": false,
+  "notes": [
+   "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
+  ],
+  "draft": {
+   "model": "claude",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "bird:video_games": {
+  "kind": "entity",
+  "roots": [
+   {
+    "table": "game",
+    "label": "game",
+    "parents": [
+     {
+      "table": "genre",
+      "via": "game.genre_id -> genre.id",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "persons": {
+   "game": {
+    "key": "id",
+    "name_cols": [
+     "game_name"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "game_publisher",
+    "label": "publishers of the game",
+    "path": [
+     "game_publisher.game_id -> game.id"
+    ],
+    "parents": [
+     {
+      "table": "publisher",
+      "via": "game_publisher.publisher_id -> publisher.id",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "game_platform",
+    "label": "platform releases",
+    "path": [
+     "game_publisher.game_id -> game.id",
+     "game_platform.game_publisher_id -> game_publisher.id"
+    ],
+    "parents": [
+     {
+      "table": "platform",
+      "via": "game_platform.platform_id -> platform.id",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "region_sales",
+    "label": "regional sales",
+    "path": [
+     "game_publisher.game_id -> game.id",
+     "game_platform.game_publisher_id -> game_publisher.id",
+     "region_sales.game_platform_id -> game_platform.id"
+    ],
+    "parents": [
+     {
+      "table": "region",
+      "via": "region_sales.region_id -> region.id",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "genre",
+   "publisher",
+   "platform",
+   "region"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "A game reaches its platforms through game_publisher: game_platform.game_publisher_id points to a game_publisher row, not to the game.",
+   "region_sales has no key: a row is one (region_id, game_platform_id); by the database's notes, games sold = num_sales * 100000."
+  ],
+  "description": "A video game sales catalogue. Each game has a genre and one or more publishers (game_publisher); each publisher's release of the game on a platform is a game_platform row with a release year, and region_sales gives its sales per region. A task is about one game; genres, publishers, platforms and regions are shared lists.",
+  "speaker_roles": [
+   "a catalog manager at the game's publisher",
+   "a video game archivist maintaining this game's entry",
+   "a sales analyst updating this game's regional figures",
+   "a community wiki editor who maintains this game's page"
+  ],
+  "new_lookup": [
+   {
+    "via": "game.genre_id -> genre.id",
+    "name_cols": [
+     "genre_name"
+    ]
+   },
+   {
+    "via": "game_publisher.publisher_id -> publisher.id",
+    "name_cols": [
+     "publisher_name"
+    ]
+   },
+   {
+    "via": "game_platform.platform_id -> platform.id",
+    "name_cols": [
+     "platform_name"
+    ]
+   }
+  ],
+  "confirmed": false,
+  "notes": [
+   "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
+  ],
+  "draft": {
+   "model": "claude",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "spider1:bike_1": {
+  "kind": "entity",
+  "roots": [
+   {
+    "table": "station",
+    "label": "station",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "station": {
+    "key": "id",
+    "name_cols": [
+     "name"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "status",
+    "label": "availability readings",
+    "path": [
+     "status.station_id -> station.id"
+    ],
+    "parents": []
+   },
+   {
+    "table": "trip",
+    "label": "trips started here",
+    "path": [
+     "trip.start_station_id -> station.id"
+    ],
+    "parents": []
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "weather"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "installation_date and trip dates are 'M/D/YYYY' ('8/21/2015 17:03' for trips); status.time is 'YYYY-MM-DD HH:MM:SS'.",
+   "status has no key: a row is one (station_id, time).",
+   "trip.start_station_name and end_station_name copy the station's name at trip time and differ from station.name for 213 trips.",
+   "trip.duration is in seconds."
+  ],
+  "description": "A Bay Area bike-share system. Each station has minute-by-minute availability readings (status) and the trips that started there (trip). A task is about one station; daily weather is a shared table.",
+  "speaker_roles": [
+   "an operations coordinator for this bike-share station",
+   "a rebalancing crew lead responsible for this station",
+   "a data analyst at the bike-share program",
+   "a city transportation planner who oversees this station"
+  ],
+  "new_lookup": [],
+  "confirmed": false,
+  "notes": [
+   "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
+  ],
+  "draft": {
+   "model": "claude",
+   "rounds": 1,
+   "errors": []
+  }
+ },
  "spider1:college_2": {
   "roots": [
    {
@@ -1886,6 +2815,167 @@
   },
   "confirmed_version": "7373065766"
  },
+ "spider1:csu_1": {
+  "kind": "entity",
+  "roots": [
+   {
+    "table": "Campuses",
+    "label": "campus",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "Campuses": {
+    "key": "Id",
+    "name_cols": [
+     "Campus"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "degrees",
+    "label": "degrees awarded",
+    "path": [
+     "degrees.Campus -> Campuses.Id"
+    ],
+    "parents": []
+   },
+   {
+    "table": "enrollments",
+    "label": "yearly enrollments",
+    "path": [
+     "enrollments.Campus -> Campuses.Id"
+    ],
+    "parents": []
+   },
+   {
+    "table": "discipline_enrollments",
+    "label": "enrollments by discipline",
+    "path": [
+     "discipline_enrollments.Campus -> Campuses.Id"
+    ],
+    "parents": []
+   },
+   {
+    "table": "faculty",
+    "label": "faculty counts",
+    "path": [
+     "faculty.Campus -> Campuses.Id"
+    ],
+    "parents": []
+   }
+  ],
+  "attributes": [
+   {
+    "table": "csu_fees",
+    "of": "Campuses",
+    "via": "csu_fees.Campus -> Campuses.Id"
+   }
+  ],
+  "public": [],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "The Campus column of every other table holds Campuses.Id (a number), not the campus name.",
+   "degrees and enrollments are keyed by year and campus; discipline_enrollments by campus and Discipline, a number code.",
+   "faculty has no key: a row is one (Campus, Year); Faculty is a full-time-equivalent count with a decimal."
+  ],
+  "description": "The California State University campuses. Each campus has its yearly degrees, enrollments, enrollments by discipline, faculty counts and one fee row. A task is about one campus.",
+  "speaker_roles": [
+   "an institutional research analyst at this campus",
+   "the campus registrar's data coordinator",
+   "a system-wide CSU reporting officer",
+   "a budget analyst who tracks this campus's fees"
+  ],
+  "new_lookup": [],
+  "confirmed": false,
+  "notes": [
+   "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
+  ],
+  "draft": {
+   "model": "claude",
+   "rounds": 1,
+   "errors": []
+  }
+ },
+ "spider1:flight_4": {
+  "kind": "entity",
+  "roots": [
+   {
+    "table": "airlines",
+    "label": "airline",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "airlines": {
+    "key": "alid",
+    "name_cols": [
+     "name"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "routes",
+    "label": "routes",
+    "path": [
+     "routes.alid -> airlines.alid"
+    ],
+    "parents": [
+     {
+      "table": "airports",
+      "via": "routes.src_apid -> airports.apid",
+      "parents": []
+     },
+     {
+      "table": "airports",
+      "via": "routes.dst_apid -> airports.apid",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "airports"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "routes.airline, src_ap and dst_ap repeat codes as text and do not always match airlines.iata or airports.iata (airline code '2' for '2L'); routes are tied to airlines and airports by alid, src_apid and dst_apid.",
+   "airlines.active is 'Y' or 'N'; alid -1 is 'Unknown'.",
+   "routes.codeshare is 'Y' or NULL.",
+   "airports.x and airports.y are longitude and latitude."
+  ],
+  "description": "A world airline route map. Each airline operates routes from a source airport to a destination airport. A task is about one airline and its routes; airports are a shared list.",
+  "speaker_roles": [
+   "a network planner at this airline",
+   "the airline's schedules data manager",
+   "an aviation database volunteer who maintains this airline's routes",
+   "an airport slot coordinator working with this airline"
+  ],
+  "new_lookup": [
+   {
+    "via": "routes.dst_apid -> airports.apid",
+    "name_cols": [
+     "name"
+    ]
+   }
+  ],
+  "confirmed": false,
+  "notes": [
+   "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
+  ],
+  "draft": {
+   "model": "claude",
+   "rounds": 1,
+   "errors": []
+  }
+ },
  "spider1:hr_1": {
   "roots": [
    {
@@ -1980,6 +3070,97 @@
    "errors": []
   },
   "confirmed_version": "ce8cad8383"
+ },
+ "spider2:Airlines": {
+  "kind": "entity",
+  "roots": [
+   {
+    "table": "bookings",
+    "label": "booking",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "bookings": {
+    "key": "book_ref",
+    "name_cols": [],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "tickets",
+    "label": "tickets",
+    "path": [
+     "tickets.book_ref -> bookings.book_ref"
+    ],
+    "parents": []
+   },
+   {
+    "table": "ticket_flights",
+    "label": "ticket flights",
+    "path": [
+     "tickets.book_ref -> bookings.book_ref",
+     "ticket_flights.ticket_no -> tickets.ticket_no"
+    ],
+    "parents": [
+     {
+      "table": "flights",
+      "via": "ticket_flights.flight_id -> flights.flight_id",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "boarding_passes",
+    "label": "boarding passes",
+    "path": [
+     "tickets.book_ref -> bookings.book_ref",
+     "boarding_passes.ticket_no -> tickets.ticket_no"
+    ],
+    "parents": [
+     {
+      "table": "flights",
+      "via": "boarding_passes.flight_id -> flights.flight_id",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [],
+  "public": [
+   "flights",
+   "airports_data",
+   "aircrafts_data",
+   "seats"
+  ],
+  "exclude": [],
+  "no_insert": [],
+  "quirks": [
+   "book_ref and ticket_no are text codes with leading zeros ('00000F', '0005435212351'); copy them exactly.",
+   "book_date and flight times carry a +03 time zone ('2017-07-05 03:12:00+03').",
+   "total_amount and amount are whole rubles.",
+   "fare_conditions is 'Economy', 'Comfort' or 'Business'.",
+   "tickets.passenger_id is a document number with a space ('8149 604011'); passengers' names are not stored.",
+   "airports_data and aircrafts_data names are JSON text with English and Russian ('{\"en\": \"Boeing 777-300\", \"ru\": ...}')."
+  ],
+  "description": "A Russian airline's bookings from 2017. Each booking has tickets, one per passenger; each ticket covers flights (ticket_flights, with fare class and amount) and may have boarding passes with seats. A task is about one booking; flights, airports, aircraft and seats are shared lists.",
+  "speaker_roles": [
+   "the customer who made this booking",
+   "a travel agent who manages this booking",
+   "a call-centre agent at the airline handling this booking",
+   "a corporate travel coordinator who booked these tickets"
+  ],
+  "new_lookup": [],
+  "confirmed": false,
+  "notes": [
+   "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
+  ],
+  "draft": {
+   "model": "claude",
+   "rounds": 1,
+   "errors": []
+  }
  },
  "spider2:IPL": {
   "roots": [
@@ -2246,6 +3427,101 @@
    "errors": []
   },
   "confirmed_version": "8644508f9b"
+ },
+ "spider2:imdb_movies": {
+  "kind": "entity",
+  "roots": [
+   {
+    "table": "movies",
+    "label": "movie",
+    "parents": []
+   }
+  ],
+  "persons": {
+   "movies": {
+    "key": "id",
+    "name_cols": [
+     "title"
+    ],
+    "same_as": []
+   }
+  },
+  "events": [
+   {
+    "table": "genre",
+    "label": "genres",
+    "path": [
+     "genre.movie_id -> movies.id"
+    ],
+    "parents": []
+   },
+   {
+    "table": "role_mapping",
+    "label": "cast",
+    "path": [
+     "role_mapping.movie_id -> movies.id"
+    ],
+    "parents": [
+     {
+      "table": "names",
+      "via": "role_mapping.name_id -> names.id",
+      "parents": []
+     }
+    ]
+   },
+   {
+    "table": "director_mapping",
+    "label": "directors",
+    "path": [
+     "director_mapping.movie_id -> movies.id"
+    ],
+    "parents": [
+     {
+      "table": "names",
+      "via": "director_mapping.name_id -> names.id",
+      "parents": []
+     }
+    ]
+   }
+  ],
+  "attributes": [
+   {
+    "table": "ratings",
+    "of": "movies",
+    "via": "ratings.movie_id -> movies.id"
+   }
+  ],
+  "public": [
+   "names"
+  ],
+  "exclude": [
+   "ERD"
+  ],
+  "no_insert": [],
+  "quirks": [
+   "Ids are text: movies 'tt0012494', people 'nm0000002'.",
+   "The column worlwide_gross_income is misspelled and holds text such as '$ 12156'.",
+   "genre has one row per movie and genre ('Drama'); role_mapping.category is 'actor' or 'actress'.",
+   "date_published is 'YYYY-MM-DD 00:00:00'.",
+   "No table has a declared key; movies.id and names.id are unique."
+  ],
+  "description": "A movie database. Each movie has genres, a rating row, cast members (role_mapping) and directors (director_mapping), who are people in names. A task is about one movie; people are a shared list.",
+  "speaker_roles": [
+   "a film database editor maintaining this movie's entry",
+   "the distributor's metadata manager for this movie",
+   "a film archivist cataloguing this title",
+   "a volunteer contributor who curates this movie's page"
+  ],
+  "new_lookup": [],
+  "confirmed": false,
+  "notes": [
+   "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
+  ],
+  "draft": {
+   "model": "claude",
+   "rounds": 1,
+   "errors": []
+  }
  },
  "spider2:school_scheduling": {
   "roots": [
