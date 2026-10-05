@@ -3,7 +3,7 @@ import sqlite3, time
 import pytest
 from taskgen_common.testing import make_db, SHOP, rows
 from test_taskgen_trees import SHOP2, FKS, CUSTOMER
-from v2_fixtures import SHOP_PROFILE, SCHOOL, SCHOOL_FKS, SCHOOL_COMPOSITE, SCHOOL_PROFILE
+from v2_fixtures import SHOP_PROFILE, SCHOOL, SCHOOL_FKS, SCHOOL_COMPOSITE, SCHOOL_PROFILE, MENUS, MENUS_FKS, MENUS_PROFILE
 from taskgen_v2 import check
 
 STAFF_ANCHOR = {"table": "staff", "key": "staff_id", "kind": "person_named", "rows": 5, "names": ["name"],
@@ -505,3 +505,104 @@ def test_a_double_quoted_now_reads_the_clock(rental):
     assert r["reasons"] == ["nondeterministic: rental"]
     assert check.at_instant("UPDATE r SET d = datetime(\"NOW\", 'localtime')", "2000-01-01 13:37:42") == (
         "UPDATE r SET d = datetime('2000-01-01 13:37:42', 'localtime')")
+
+
+@pytest.fixture
+def menus(tmp_path):
+    return {"source": "test", "db": "menus", "path": make_db(tmp_path, "menus", MENUS), "anchors": [], "fks": MENUS_FKS}
+
+
+def mcand(instruction, sqls, speaker=None, key_value=3):
+    style = {"tone": "x", "speaker": "name" if speaker else "none", "name": speaker, "role": None, "username": None}
+    return {"id": "m", "anchor_table": "menu", "anchor_key": "menu_id", "key_value": key_value,
+            "plan": {"task_type": "6_entity", "style": style}, "instruction": instruction, "actions": [{"sql": s} for s in sqls]}
+
+
+def mreasons(menus, ins, sqls, profile=MENUS_PROFILE, **kw):
+    return check.run_check(menus, mcand(ins, sqls, **kw), profile=profile)["reasons"]
+
+
+def test_an_entity_task_on_its_own_rows_is_type_6(menus):
+    r = check.run_check(menus, mcand("Menu ID 3: set the price of item 13 to 4.5 and add the year 2003 with 7 views.",
+                                     ["UPDATE item SET price = 4.5 WHERE item_id = 13",
+                                      "INSERT INTO menu_stats VALUES (3, 2003, 7)"]), profile=MENUS_PROFILE)
+    assert r["ok"], r["reasons"]
+    assert [w["label"] for w in r["writes"]] == ["own", "own"] and r["task_type"] == "6_entity"
+    assert r["template"] == "6_entity|INSERT menu_stats+UPDATE item"
+
+
+def test_an_entity_task_may_not_touch_another_entity_or_public_rows(menus):
+    assert mreasons(menus, "Menu ID 3: set item 14 to 4.5.", ["UPDATE item SET price = 4.5 WHERE item_id = 14"]) == \
+        ["other_person", "no_own_write"]                                               # item 14 is on menu 4's page
+    assert mreasons(menus, "Menu ID 3: rename dish 3 to 'Tea' and set item 3 to 4.5.",
+                    ["UPDATE dish SET name = 'Tea' WHERE dish_id = 3", "UPDATE item SET price = 4.5 WHERE item_id = 3"]) == \
+        ["public_write: UPDATE dish"]
+    assert mreasons(menus, "Menu ID 3: add menu 10 called 'New'.", ["INSERT INTO menu (menu_id, name) VALUES (10, 'New')"]) == \
+        ["root_insert: menu", "no_own_write"]
+
+
+def test_a_new_lookup_row_must_be_new_and_used_by_the_entity(menus):
+    ok = check.run_check(menus, mcand("Menu ID 3: add the dish 'Smoked Trout' and put it on item 13.",
+                                      ["INSERT INTO dish (name) VALUES ('Smoked Trout')",
+                                       "UPDATE item SET dish_id = (SELECT dish_id FROM dish WHERE name = 'Smoked Trout') WHERE item_id = 13"]),
+                         profile=MENUS_PROFILE)
+    assert ok["ok"], ok["reasons"]
+    assert [w["label"] for w in ok["writes"]] == ["public", "own"] and ok["task_type"] == "6_entity"
+    assert mreasons(menus, "Menu ID 3: add the dish 'Smoked Trout' and set item 13 to 4.5.",
+                    ["INSERT INTO dish (name) VALUES ('Smoked Trout')", "UPDATE item SET price = 4.5 WHERE item_id = 13"]) == \
+        ["lookup_unreferenced: dish"]
+    assert mreasons(menus, "Menu ID 3: add the dish 'Dish 5' and put it on item 13.",      # 'dish 5' exists
+                    ["INSERT INTO dish (name) VALUES ('Dish 5')", "UPDATE item SET dish_id = 30 WHERE item_id = 13"]) == \
+        ["lookup_name_taken: dish"]
+    assert mreasons(menus, "Menu ID 3: add the dish 'Smoked Trout' and put it on item 13.",
+                    ["INSERT INTO dish (name) VALUES ('Smoked Trout')", "UPDATE item SET dish_id = 30 WHERE item_id = 13"],
+                    profile={**MENUS_PROFILE, "new_lookup": []}) == ["public_write: INSERT dish"]
+
+
+def test_a_new_lookup_row_may_hang_under_the_root_itself(menus):
+    # video_games game.genre_id -> genre.id: the root row is the entity's own, so it uses the new row
+    r = check.run_check(menus, mcand("Menu ID 3: add the dish 'Smoked Trout' and make it the house dish.",
+                                     ["INSERT INTO dish (name) VALUES ('Smoked Trout')",
+                                      "UPDATE menu SET house_dish = 30 WHERE menu_id = 3"]), profile=MENUS_PROFILE)
+    assert r["ok"], r["reasons"]
+
+
+def test_a_sampled_speaker_name_stored_in_the_database_is_rejected(menus):
+    ins, sql = "I'm {} and menu ID 3 is mine: set the price of item 13 to 4.5.", ["UPDATE item SET price = 4.5 WHERE item_id = 13"]
+    assert mreasons(menus, ins.format("Grace Kim"), sql, speaker="Grace Kim") == ["speaker_name_taken"]
+    assert mreasons(menus, ins.format("Grace Kimura"), sql, speaker="Grace Kimura") == []
+
+
+def test_a_quoted_name_of_another_row_is_a_mismatch(menus):
+    sql = ["UPDATE item SET price = 4.5 WHERE item_id = 13"]
+    assert mreasons(menus, "Menu ID 3, 'Menu 3': on item 13 ('dish 13') set the price to 4.5.", sql) == []
+    assert mreasons(menus, "Menu ID 3, 'Menu 3': on item 13 ('dish 14') set the price to 4.5.", sql) == ["name_mismatch: dish.name"]
+    assert mreasons(menus, "Menu ID 3, 'Menu 4': set the price of item 13 to 4.5.", sql) == ["name_mismatch: menu.name"]
+    # the old dish is the item's parent before the change; a new name the SQL writes is no claim about a row
+    assert mreasons(menus, "Menu ID 3: on item 13, replace 'dish 13' with dish 5.", ["UPDATE item SET dish_id = 5 WHERE item_id = 13"]) == []
+    assert mreasons(menus, "Menu ID 3: rename it to 'Menu 4'.", ["UPDATE menu SET name = 'Menu 4' WHERE menu_id = 3"]) == []
+    assert mreasons(menus, "I'm Ann and it's menu ID 3's item 13: set its price to 4.5.", sql) == []   # apostrophes
+    assert mreasons(menus, "Menu ID 3 at 'Venue 3': set the price of item 13 to 4.5.", sql) == []     # the root's attribute row
+    assert mreasons(menus, "Menu ID 3: item 13 is a 'cuisine 1' dish; set its price to 4.5.", sql) == []   # item -> dish -> cuisine
+    assert mreasons(menus, "Menu ID 3: item 13 is a 'cuisine 2' dish; set its price to 4.5.", sql) == ["name_mismatch: cuisine.name"]
+    assert check.quoted("I'm Ann, it's 'Menu 3' and “dish 2”") == {"menu 3", "dish 2"}
+
+
+def test_name_columns_are_names_and_titles_only(tmp_path):
+    db = sqlite3.connect(make_db(tmp_path, "nc", "CREATE TABLE b (business_id INTEGER, name TEXT, owner_name TEXT, owner_city TEXT, "
+                                 "owner_zip TEXT, name_id TEXT, LongTitle TEXT, price_name REAL);"))
+    assert check.name_columns(db, ["b"]) == [("b", "name"), ("b", "owner_name"), ("b", "LongTitle")]
+
+
+def test_a_row_wider_than_sqlite_function_arguments_is_still_recorded(tmp_path):
+    cols = ", ".join(f"c{i} TEXT" for i in range(70))         # card_games.cards has 74 columns; a function takes 127 arguments
+    path = make_db(tmp_path, "wide", f"CREATE TABLE card (id INTEGER PRIMARY KEY, name TEXT, {cols});"
+                   "INSERT INTO card (id, name) VALUES (1, 'Lotus'), (2, 'Bolt');")
+    prof = {"kind": "entity", "roots": [{"table": "card", "label": "card", "parents": []}],
+            "persons": {"card": {"key": "id", "name_cols": ["name"], "same_as": []}}, "events": [], "attributes": [],
+            "public": [], "exclude": [], "no_insert": [], "quirks": [], "description": "Cards.", "confirmed": True,
+            "speaker_roles": ["a", "b", "c", "d"]}
+    c = {"id": "w", "anchor_table": "card", "anchor_key": "id", "key_value": 1, "plan": {"task_type": "6_entity", "style": {}},
+         "instruction": "Card ID 1, 'Lotus': set c69 to 'x1'.", "actions": [{"sql": "UPDATE card SET c69 = 'x1' WHERE id = 1"}]}
+    r = check.run_check({"source": "test", "db": "wide", "path": path, "anchors": [], "fks": []}, c, profile=prof)
+    assert r["ok"], r["reasons"]

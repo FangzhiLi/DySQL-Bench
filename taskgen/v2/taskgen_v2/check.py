@@ -28,6 +28,63 @@ VOLATILE_COL_RE = re.compile(
 # values precise to the hour, minute or second differ (the 1.1-second rerun of plan 1 let minutes and hours through)
 INSTANTS = ("2000-01-01 00:00:00", "2000-01-01 13:37:42")
 
+ENTITY = "6_entity"
+# where names are kept: owner_name, LongTitle, artist; not owner_city (food_inspection) or name_id (imdb_movies)
+NAME_COL = re.compile(r"(?i)(name|title)$|^owner$|author|artist|director|commander")
+# a quote opened by an apostrophe (I'm, it's) is not a quote: it needs a non-letter before ' and after the closing '
+QUOTED = re.compile(r"(?<![A-Za-z])'([^'\n]{2,80})'(?![A-Za-z])|\"([^\"\n]{2,80})\"|“([^”\n]{2,80})”|‘([^’\n]{2,80})’")
+JSON_ARGS = 60   # columns per json_object(): SQLite lets a function take 127 arguments (card_games.cards has 74 columns)
+
+
+def quoted(text):
+    """The normalized strings an instruction puts in quotes ('Smoked Trout', "Menu 3")."""
+    return {norm_literal(next(g for g in m.groups() if g is not None)) for m in QUOTED.finditer(text or "")}
+
+
+def name_columns(db, tables):
+    """[(table, column)] of the text columns that hold names or titles (NAME_COL) in the given tables."""
+    out = []
+    for t in sorted(tables):
+        for r in db.execute(f"PRAGMA table_info({_q(t)})"):
+            if NAME_COL.search(r[1]) and not re.search(r"(?i)int|real|num|float|double", r[2] or ""):
+                out.append((t, r[1]))
+    return out
+
+
+def stored(db, cols, value):
+    """The first (table, column) of cols where some row holds value (trimmed, case-insensitive), else None."""
+    for t, c in cols:
+        if db.execute(f"SELECT 1 FROM {_q(t)} WHERE lower(trim({_q(c)})) = ? LIMIT 1", (value,)).fetchone():
+            return t, c
+    return None
+
+
+def person_name_stored(db, name):
+    """Whether a sampled speaker name is stored in the database: as a whole value of a name column, or split over a
+    first-name and a last-name column of one row (chicago_crime's alderman_first_name, alderman_last_name)."""
+    n = norm_literal(name)
+    tables = [t for (t,) in db.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")]
+    if stored(db, name_columns(db, tables), n):
+        return True
+    first, _, last = n.partition(" ")
+    for t in tables:
+        cols = [r[1] for r in db.execute(f"PRAGMA table_info({_q(t)})")]
+        f = next((c for c in cols if re.search(r"(?i)first.?name", c)), None)
+        l = next((c for c in cols if re.search(r"(?i)last.?name|surname", c)), None)
+        if f and l and db.execute(f"SELECT 1 FROM {_q(t)} WHERE lower(trim({_q(f)})) = ? AND lower(trim({_q(l)})) = ? LIMIT 1",
+                                  (first, last)).fetchone():
+            return True
+    return False
+
+
+def _json_row(cols, ref="OLD"):
+    """json_object(...) of the columns, in chunks of JSON_ARGS merged with json_patch."""
+    parts = [", ".join(f"'{c}', {ref}.{_q(c)}" for c in cols[i:i + JSON_ARGS]) for i in range(0, len(cols), JSON_ARGS)]
+    expr = f"json_object({parts[0]})"
+    for p in parts[1:]:
+        expr = f"json_patch({expr}, json_object({p}))"
+    return expr
+
 
 def split_statements(sql):
     """Statements with comments removed (a trailing '-- note' would swallow the appended RETURNING *)."""
@@ -264,6 +321,69 @@ def final_state(db_path, stmts):
         db.close()
 
 
+def name_mismatches(db, profile, tracer, cand, stmts, seen):
+    """A quoted name the database stores, but in none of the rows near the task (design 2026-10-04 §3.4): the root's
+    row and its attribute rows, the rows the task touches (before and after), and every row these lead to within
+    owners.MAX_HOPS foreign keys (region_sales -> game_platform -> platform). DySQL's cookbook named one ingredient and
+    wrote another's ID in 16 of 51 tasks, and the verifier sees no rows. Values the SQL itself writes or matches are
+    new names, not claims about a row."""
+    def fetch(table, cols, vals, limit=3):
+        try:
+            cur = db.execute(f"SELECT * FROM {_q(table)} WHERE " + " AND ".join(f"{_q(c)} = ?" for c in cols) + f" LIMIT {limit}", vals)
+        except sqlite3.Error:
+            return []
+        names = [d[0] for d in cur.description]
+        return [(table, dict(zip(names, r))) for r in cur.fetchall()]
+    root = cand["anchor_table"]
+    rows = fetch(root, [profile["persons"][root]["key"]], [cand["key_value"]], 1)
+    for a in profile["attributes"]:
+        e = db_profile.parse_edge(a["via"])
+        if a["of"] == root and rows:
+            rows += fetch(e.child, e.cols, [rows[0][1].get(c) for c in e.ref_cols], 50)
+    rows += list(seen)
+    frontier = rows
+    for _ in range(owners.MAX_HOPS):
+        frontier = [x for t, r in frontier for cols, parent, ref_cols in tracer.up.get(t, [])
+                    if all(r.get(c) not in (None, "") for c in cols) for x in fetch(parent, ref_cols, [r.get(c) for c in cols])]
+        rows += frontier
+    near = {norm_literal(v) for _, r in rows for v in r.values() if isinstance(v, str)}
+    written = {norm_literal(x) for s in stmts for x in literals(s)}
+    cols = name_columns(db, db_profile.scope_tables(profile))
+    return [f"name_mismatch: {hit[0]}.{hit[1]}" for s in sorted(quoted(cand["instruction"]) - near - written)
+            if (hit := stored(db, cols, s))]
+
+
+def entity_reasons(db, profile, tracer, speaker_ids, cand, stmts, labels, writes, seen, new_public):
+    """What an entity task may not do (design 2026-10-04 §3.4), checked on the database after its statements ran."""
+    out = ["other_person"] if "other" in labels else []
+    out += [f"root_insert: {w['table']}" for w in writes if w["label"] == "new_person"]
+    lookups = {}
+    for x in profile.get("new_lookup") or []:
+        e = db_profile.parse_edge(x["via"])
+        lookups.setdefault(e.parent, []).append((e, x["name_cols"]))
+    out += [f"public_write: {w['op']} {w['table']}" for w in writes
+            if w["label"] == "public" and (w["op"] != "INSERT" or w["table"] not in lookups)]
+    if "own" not in labels and any(x != "noop" for x in labels):
+        out.append("no_own_write")
+    for table, new in new_public:
+        used = False
+        for e, names in lookups.get(table, []):
+            cur = db.execute(f"SELECT * FROM {_q(e.child)} WHERE " + " AND ".join(f"{_q(c)} = ?" for c in e.cols) + " LIMIT 50",
+                             [new.get(c) for c in e.ref_cols])
+            cols = [d[0] for d in cur.description]
+            used = used or any(tracer.trace(e.child, dict(zip(cols, r))) & speaker_ids for r in cur.fetchall())
+            same = " AND ".join(f"lower(trim({_q(c)})) = lower(trim(?))" for c in names)
+            if db.execute(f"SELECT COUNT(*) FROM {_q(table)} WHERE {same}", [new.get(c) for c in names]).fetchone()[0] > 1:
+                out.append(f"lookup_name_taken: {table}")
+        if table in lookups and not used:
+            out.append(f"lookup_unreferenced: {table}")
+    name = ((cand.get("plan") or {}).get("style") or {}).get("name")
+    if name and person_name_stored(db, name):
+        out.append("speaker_name_taken")
+    out += name_mismatches(db, profile, tracer, cand, stmts, seen)
+    return list(dict.fromkeys(out))   # one reason per kind and table
+
+
 def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
     """With a profile (generated candidates), scope, people and ownership come from it, INSERT into no_insert tables
     and writes to another person's data are rejected; without one (DySQL gold, v1 candidates), as in v1."""
@@ -280,6 +400,8 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
         # DySQL's validated property (2432/2432 gold writes) is "in SOME anchor's scope", not the speaker's anchor:
         # customers also edit public tables only another anchor reaches (chinook playlist_track)
         scope = {t for a in db_rec["anchors"] for t in (a["table"], *a["down"], *a["up"])}
+    entity = bool(profile) and db_profile.kind(profile) == "entity"
+    # 6_entity is not 5_proxy, so speaker_in_db holds: the entity's rows are "own" the way a speaker's are
     speaker_in_db = (cand.get("plan") or {}).get("task_type", "1_self") != "5_proxy" if "plan" in cand else cand.get("speaker_in_db", True)
     db = _memory_copy(db_rec["path"])
     tracer = owners.Tracer.from_profile(profile, db_rec, db) if profile else owners.Tracer.from_rec(db_rec, db)
@@ -298,10 +420,12 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
     db.execute("CREATE TEMP TABLE _old (tbl TEXT, j TEXT)")
     for t in scope:
         need = {c for cols, _, _ in tracer.up.get(t, []) for c in cols} | ({tracer.persons[t]} if t in tracer.persons else set())
+        if entity:   # the whole row before the change: the names it held belong to the task (name_mismatches)
+            need = {r[1] for r in db.execute(f"PRAGMA table_info({_q(t)})")}
         if need:
-            obj = ", ".join(f"'{c}', OLD.{_q(c)}" for c in sorted(need))
             db.execute(f"CREATE TEMP TRIGGER {_q('_u_' + t)} BEFORE UPDATE ON main.{_q(t)} BEGIN "
-                       f"INSERT INTO _old VALUES ('{t}', json_object({obj})); END")
+                       f"INSERT INTO _old VALUES ('{t}', {_json_row(sorted(need))}); END")
+    seen, new_public = [], []   # rows the task touched (before and after); new public rows
     stmts, labels, executed = [], [], []   # executed: every statement that ran, in order (writes and DDL)
     copies = {}   # table -> rowids an INSERT ... SELECT added: the archived copies, which later writes must leave alone
     numbered = {}   # table -> INSERT ... SELECTs whose copies SQLite numbered, in statement order
@@ -360,7 +484,10 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
                 for r in rs[:50]:
                     holders |= tracer.trace(table, dict(zip(rcols, r)))
                 for (j,) in db.execute("SELECT j FROM _old WHERE tbl = ? LIMIT 50", (table,)).fetchall():
-                    holders |= tracer.trace(table, json.loads(j))
+                    old = json.loads(j)
+                    holders |= tracer.trace(table, old)
+                    seen.append((table, old))
+                seen += [(table, dict(zip(rcols, r))) for r in rs[:50]]
                 db.execute("DELETE FROM _old")
                 if not rs:
                     lab = "noop"
@@ -379,7 +506,11 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
                 if len(rs) > cfg["MAX_ROWS_PER_STMT"]:
                     out["reasons"].append(f"bulk: {len(rs)} rows in {op} {table}")
                 labels.append(lab)
+                if entity and lab == "public" and op == "INSERT":
+                    new_public += [(table, dict(zip(rcols, r))) for r in rs]
                 out["writes"].append({"op": op, "table": table, "rows": len(rs), "label": lab})
+        if entity:
+            out["reasons"] += entity_reasons(db, profile, tracer, speaker_ids, cand, stmts, labels, out["writes"], seen, new_public)
         if any(NONDET.search(s) for s in executed) and not any(x.startswith("sql_error") for x in out["reasons"]):
             changed = rerun_changes(db, executed, {tracer.canon(write_target(s)[1]) for s in stmts})
             if changed:
@@ -392,6 +523,8 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
                              and not any(r.startswith("noop_write") for r in out["reasons"])):
         out["reasons"].append("no_write")   # nothing written, or only zero-row INSERT ... SELECT
     out["task_type"] = task_group(speaker_in_db, labels) if out["writes"] else None
+    if entity and out["task_type"] not in (None, "7_no_change"):
+        out["task_type"] = ENTITY
     if profile and out["task_type"] == "4_other_person":
         out["reasons"].append("other_person")   # design D6: the agent policy denies requests about another person
     if out["task_type"]:
