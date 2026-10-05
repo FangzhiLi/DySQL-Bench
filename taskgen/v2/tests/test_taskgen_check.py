@@ -1,5 +1,5 @@
 # tests/test_taskgen_check.py
-import sqlite3, time
+import re, sqlite3, time
 import pytest
 from taskgen_common.testing import make_db, SHOP, rows
 from test_taskgen_trees import SHOP2, FKS, CUSTOMER
@@ -606,3 +606,29 @@ def test_a_row_wider_than_sqlite_function_arguments_is_still_recorded(tmp_path):
          "instruction": "Card ID 1, 'Lotus': set c69 to 'x1'.", "actions": [{"sql": "UPDATE card SET c69 = 'x1' WHERE id = 1"}]}
     r = check.run_check({"source": "test", "db": "wide", "path": path, "anchors": [], "fks": []}, c, profile=prof)
     assert r["ok"], r["reasons"]
+
+
+def test_an_entity_task_may_not_upsert(menus):
+    # REPLACE / ON CONFLICT on a shared row renames another menu's dish; on an item it takes over menu 4's item 14
+    assert "upsert: dish" in mreasons(menus, "Menu ID 3: dish 5 becomes 'Owl Soup' and goes on item 13.",
+                                      ["INSERT OR REPLACE INTO dish (dish_id, name) VALUES (5, 'Owl Soup')",
+                                       "UPDATE item SET dish_id = 5 WHERE item_id = 13"])
+    assert "upsert: item" in mreasons(menus, "Menu ID 3: item 14 goes on page 13 with dish 5 at 2.0.",
+                                      ["INSERT OR REPLACE INTO item (item_id, page_id, dish_id, price) VALUES (14, 13, 5, 2.0)"])
+    assert "upsert: dish" in mreasons(menus, "Menu ID 3: dish 5 becomes 'Owl Soup' and goes on item 13.",
+                                      ["INSERT INTO dish (dish_id, name) VALUES (5, 'Owl Soup') ON CONFLICT (dish_id) DO UPDATE SET name = 'Owl Soup'",
+                                       "UPDATE item SET dish_id = 5 WHERE item_id = 13"])
+
+
+def test_moving_another_entitys_row_to_this_one_is_another_persons_data(menus):
+    # item 14 is on menu 4's page 14; moving it onto menu 3's page 13 takes it from menu 4
+    assert mreasons(menus, "Menu ID 3: move item 14 to page 13.", ["UPDATE item SET page_id = 13 WHERE item_id = 14"]) == ["other_person", "no_own_write"]
+
+
+def test_name_mismatch_also_reads_the_profiles_own_name_columns(menus, monkeypatch):
+    # Menu.sponsor, Air Carriers.Description, generalinfo.label: the root's names need not match NAME_COL
+    monkeypatch.setattr(check, "NAME_COL", re.compile(r"^$"))
+    assert mreasons(menus, "Menu ID 3, 'Menu 4': set the price of item 13 to 4.5.",
+                    ["UPDATE item SET price = 4.5 WHERE item_id = 13"]) == ["name_mismatch: menu.name"]
+    assert mreasons(menus, "Menu ID 3: item 13 is 'dish 14' now priced 4.5.",
+                    ["UPDATE item SET price = 4.5 WHERE item_id = 13"]) == ["name_mismatch: dish.name"]   # a new_lookup name column

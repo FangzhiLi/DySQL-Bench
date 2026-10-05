@@ -295,8 +295,9 @@ def sample_plan(rng, tree, anchor, cfg=CFG, ctx=None):
         style.update(entity_speaker(rng, ctx.get("speaker_roles") or [], cfg))
     return {"task_type": task_type, "difficulty": difficulty, "shape": shape, "write_tables": write_tables,
             "events": refs, "tables": tabs, "scope": pool,
-            "targets": _targets(rng, rows_by_table(tree, refs),
-                                [t for t in (write_tables or pool) if not lookup or t != lookup["table"]], fixed),
+            # a new lookup row is used by pointing the child's foreign key at it, so that is what an UPDATE changes
+            "targets": ([f"{lookup['child']}.{c}" for c in db_profile.parse_edge(lookup["via"]).cols] if lookup
+                        else _targets(rng, rows_by_table(tree, refs), write_tables or pool, fixed)),
             "example": rng.choice(load_examples()[f"{ENTITY}/{style['speaker']}" if entity else task_type]), "style": style}
 
 
@@ -378,9 +379,11 @@ def shape_text(anchor, tree, plan, cfg=CFG):
         lines.append(f"- In the SQL, identify the {noun} by {anchor['key']} = {sql_value(tree['key_value'])}; names can repeat.")
     if s.get("new_lookup"):
         x = s["new_lookup"]
+        via = x["via"].split("->")[0].strip()
+        then = (f"then point this {noun}'s own {x['child']} row at it through {via}." if x["child"] == tree["anchor_table"]
+                else f"then make one {x['child']} row of this {noun} refer to it through {via}: change an existing row or add a new one.")
         lines.append(f"- First add one new row to {x['table']} whose {' and '.join(x['name_cols'])} no {x['table']} row has yet "
-                     f"(say it in the instruction), then make one {x['child']} row of this {noun} refer to it through "
-                     f"{x['via'].split('->')[0].strip()}: change an existing row or add a new one. No other {x['table']} row changes.")
+                     f"(say it in the instruction), {then} No other {x['table']} row changes.")
     if plan["targets"]:
         lines.append(f"- If you UPDATE, change {' or '.join(plan['targets'])}.")
     return "\n".join(lines)

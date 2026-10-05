@@ -33,6 +33,8 @@ ENTITY = "6_entity"
 NAME_COL = re.compile(r"(?i)(name|title)$|^owner$|author|artist|director|commander")
 # a quote opened by an apostrophe (I'm, it's) is not a quote: it needs a non-letter before ' and after the closing '
 QUOTED = re.compile(r"(?<![A-Za-z])'([^'\n]{2,80})'(?![A-Za-z])|\"([^\"\n]{2,80})\"|“([^”\n]{2,80})”|‘([^’\n]{2,80})’")
+# an upsert replaces a row whatever it held: in an entity task it could rename a shared row or take another entity's
+UPSERT = re.compile(r"(?is)^\s*(?:replace|insert\s+or\s+replace)\b|\bon\s+conflict\b")
 JSON_ARGS = 60   # columns per json_object(): SQLite lets a function take 127 arguments (card_games.cards has 74 columns)
 
 
@@ -349,6 +351,9 @@ def name_mismatches(db, profile, tracer, cand, stmts, seen):
     near = {norm_literal(v) for _, r in rows for v in r.values() if isinstance(v, str)}
     written = {norm_literal(x) for s in stmts for x in literals(s)}
     cols = name_columns(db, db_profile.scope_tables(profile))
+    cols += [(t, c) for t, p in profile["persons"].items() for c in p["name_cols"]]   # Menu.sponsor, generalinfo.label
+    cols += [(db_profile.parse_edge(x["via"]).parent, c) for x in profile.get("new_lookup") or [] for c in x["name_cols"]]
+    cols = list(dict.fromkeys(cols))
     return [f"name_mismatch: {hit[0]}.{hit[1]}" for s in sorted(quoted(cand["instruction"]) - near - written)
             if (hit := stored(db, cols, s))]
 
@@ -475,6 +480,8 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
                         allowed.add(norm_literal(v)); nxt += 1
                 if table not in scope:
                     out["reasons"].append(f"out_of_scope: {table}")
+                if entity and UPSERT.search(st):
+                    out["reasons"].append(f"upsert: {table}")
                 if profile and op == "INSERT" and table in profile["no_insert"]:
                     out["reasons"].append(f"no_insert: {table}")
                 for lit in literals(st):
@@ -483,9 +490,12 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
                 holders = set()
                 for r in rs[:50]:
                     holders |= tracer.trace(table, dict(zip(rcols, r)))
+                moved = False   # an UPDATE that took a row belonging to another entity only (item 14 onto my page)
                 for (j,) in db.execute("SELECT j FROM _old WHERE tbl = ? LIMIT 50", (table,)).fetchall():
                     old = json.loads(j)
-                    holders |= tracer.trace(table, old)
+                    was = tracer.trace(table, old)
+                    holders |= was
+                    moved = moved or (entity and bool(was) and not was & speaker_ids)
                     seen.append((table, old))
                 seen += [(table, dict(zip(rcols, r))) for r in rs[:50]]
                 db.execute("DELETE FROM _old")
@@ -505,6 +515,8 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
                     lab = "person_obj" if holders else "public"
                 if len(rs) > cfg["MAX_ROWS_PER_STMT"]:
                     out["reasons"].append(f"bulk: {len(rs)} rows in {op} {table}")
+                if moved and lab == "own":
+                    lab = "other"
                 labels.append(lab)
                 if entity and lab == "public" and op == "INSERT":
                     new_public += [(table, dict(zip(rcols, r))) for r in rs]

@@ -318,3 +318,13 @@ def test_a_new_lookup_row_under_the_root_takes_two_writes():
     ctx = {**ENTITY_CTX, "new_lookup": [{"via": "menu.house_dish -> dish.dish_id", "name_cols": ["name"]}]}
     look = [p for p in entity_plans(2000, ctx=ctx) if p["shape"]["new_lookup"]]
     assert look and all(p["shape"]["n_writes"] == 2 and p["write_tables"] == ["dish", "menu"] for p in look)
+
+
+def test_a_new_lookup_row_under_the_root_points_the_root_row_at_it():
+    ctx = {**ENTITY_CTX, "new_lookup": [{"via": "menu.house_dish -> dish.dish_id", "name_cols": ["name"]}]}
+    p = next(p for p in entity_plans(2000, ctx=ctx) if p["shape"]["new_lookup"])
+    assert p["targets"] == ["menu.house_dish"]
+    u = prompt.build_messages(DB, ENTITY_ANCHOR, ENTITY_TREE, p, ENTITY_MATERIALS)[1]["content"]
+    assert "then point this menu's own menu row at it through menu.house_dish." in u and "add a new one" not in u
+    q = next(p for p in entity_plans(3000) if p["shape"]["new_lookup"])          # item.dish_id: a child table
+    assert q["targets"] == ["item.dish_id"]
