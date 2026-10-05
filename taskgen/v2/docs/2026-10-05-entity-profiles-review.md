@@ -2,10 +2,10 @@
 
 2026-10-05。对应实施计划 `2026-10-05-entity-tasks-plan.md` 的 Task 6。
 
-16 份 profile 由 Claude 读 schema 和数据起草：
+16 份 profile 由 Claude 读 schema 和数据起草，用户 2026-10-05 确认：
 - 每条数据怪异点都用 SQL 核对过；
 - 都通过了 `profile check`；
-- 都还没有确认。
+- 用户的唯一改动：california_schools 的 frpm 和 satscores 从属性表改成事件表，让建树优先挑有这两张表数据的学校。
 
 ## 请你看的
 
@@ -47,8 +47,7 @@
 | bird:college_completion | 缺失值是文本 'NULL'；毕业队列表无主键，一行要五列定位 |
 
 ---
-
-## bird:airline　未确认　校验通过
+## bird:airline　已确认　校验通过
 
 > US domestic flight records for August 2018. Each air carrier (Air Carriers) operates flights (Airlines, one row per flight) between airports (Airports). A task is about one carrier and its flights; airports are a shared list.
 
@@ -79,9 +78,9 @@ Claude 的改动：
 
 起草：claude，1 轮
 
-## bird:california_schools　未确认　校验通过
+## bird:california_schools　已确认　校验通过
 
-> California public schools. Each school (schools) has its directory details, and may have one row of free and reduced-price meal figures (frpm) and one row of SAT results (satscores). A task is about one school.
+> California public schools. Each school (schools) has its directory details, and may have one row of free and reduced-price meal figures (frpm) and one row of SAT results (satscores), each kept as an event of the school. A task is about one school.
 
 | 项 | 内容 |
 |---|---|
@@ -90,8 +89,8 @@ Claude 的改动：
 | 说话人角色 | the office manager at this school；a district data coordinator responsible for this school；a county office of education analyst；a state reporting specialist correcting this school's records |
 | 可新建的查找行 | — |
 | 人物表 | schools（CDSCode；School） |
-| 事件 | — |
-| 属性表 | frpm → schools；satscores → schools |
+| 事件 | frpm（free and reduced-price meal figures）：frpm.CDSCode -> schools.CDSCode；satscores（SAT results）：satscores.cds -> schools.CDSCode |
+| 属性表 | — |
 | 公共表 | — |
 | 排除 | — |
 | 不出 INSERT | — |
@@ -101,10 +100,11 @@ Claude 的改动：
 
 Claude 的改动：
 - Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL
+- Claude: frpm and satscores moved from attributes to events (user, 2026-10-05), so trees pick schools that have them
 
 起草：claude，1 轮
 
-## bird:card_games　未确认　校验通过
+## bird:card_games　已确认　校验通过
 
 > Magic: The Gathering cards. Each card row is one printing of a card in a set, with its rulings, its legality in each play format and its foreign-language versions. A task is about one card printing; sets and their translations are shared lists.
 
@@ -134,7 +134,7 @@ Claude 的改动：
 
 起草：claude，1 轮
 
-## bird:chicago_crime　未确认　校验通过
+## bird:chicago_crime　已确认　校验通过
 
 > Chicago police crime reports from 2018. Each of the 22 police districts (District) has its crime reports (Crime), each classified by an IUCR code and an FBI code and placed in a ward and a community area. A task is about one district and its reports; codes, wards, community areas and neighborhoods are shared lists.
 
@@ -167,7 +167,7 @@ Claude 的改动：
 
 起草：claude，1 轮
 
-## bird:college_completion　未确认　校验通过
+## bird:college_completion　已确认　校验通过
 
 > US college completion data. Each institution (institution_details) has profile figures and graduation cohorts (institution_grads, one row per year, gender, race and cohort type). A task is about one institution and its cohorts; the state and sector tables are shared summaries.
 
@@ -192,7 +192,7 @@ Claude 的改动：
 
 起草：claude，1 轮
 
-## bird:food_inspection　未确认　校验通过
+## bird:food_inspection　已确认　校验通过
 
 > San Francisco restaurant health inspections. Each business (businesses) has inspections (with a score and a type) and violations (with a risk category). A task is about one business and its inspection records.
 
@@ -217,7 +217,7 @@ Claude 的改动：
 
 起草：claude，1 轮
 
-## bird:menu　未确认　校验通过
+## bird:menu　已确认　校验通过
 
 > The New York Public Library's collection of historical restaurant menus. Each menu (Menu) has pages (MenuPage), and each page lists items (MenuItem) that point to a dish (Dish) with a price. A task is about one menu: its catalogue details, its pages and the items on them; dishes are shared by all menus.
 
@@ -247,7 +247,7 @@ Claude 的改动：
 
 起草：claude，1 轮
 
-## bird:restaurant　未确认　校验通过
+## bird:restaurant　已确认　校验通过
 
 > A Bay Area restaurant directory. Each restaurant (generalinfo) has a food type, a city and a review score, and one address row (location). A task is about one restaurant; cities (geographic, with county and region) are a shared list.
 
@@ -277,7 +277,7 @@ Claude 的改动：
 
 起草：claude，1 轮
 
-## bird:shakespeare　未确认　校验通过
+## bird:shakespeare　已确认　校验通过
 
 > The works of Shakespeare. Each work (works) has scenes (chapters, by act and scene) and each scene has paragraphs of text, each spoken by a character. A task is about one work, its scenes and its paragraphs; characters are a shared list.
 
@@ -307,7 +307,7 @@ Claude 的改动：
 
 起草：claude，1 轮
 
-## bird:university　未确认　校验通过
+## bird:university　已确认　校验通过
 
 > World university rankings. Each university has a country, yearly figures (students, staff ratio, international and female shares) and ranking scores per year and criterion, where each criterion belongs to a ranking system. A task is about one university; countries, ranking systems and criteria are shared lists.
 
@@ -340,7 +340,7 @@ Claude 的改动：
 
 起草：claude，1 轮
 
-## bird:video_games　未确认　校验通过
+## bird:video_games　已确认　校验通过
 
 > A video game sales catalogue. Each game has a genre and one or more publishers (game_publisher); each publisher's release of the game on a platform is a game_platform row with a release year, and region_sales gives its sales per region. A task is about one game; genres, publishers, platforms and regions are shared lists.
 
@@ -376,7 +376,7 @@ Claude 的改动：
 
 起草：claude，1 轮
 
-## spider1:bike_1　未确认　校验通过
+## spider1:bike_1　已确认　校验通过
 
 > A Bay Area bike-share system. Each station has minute-by-minute availability readings (status) and the trips that started there (trip). A task is about one station; daily weather is a shared table.
 
@@ -401,7 +401,7 @@ Claude 的改动：
 
 起草：claude，1 轮
 
-## spider1:csu_1　未确认　校验通过
+## spider1:csu_1　已确认　校验通过
 
 > The California State University campuses. Each campus has its yearly degrees, enrollments, enrollments by discipline, faculty counts and one fee row. A task is about one campus.
 
@@ -426,7 +426,7 @@ Claude 的改动：
 
 起草：claude，1 轮
 
-## spider1:flight_4　未确认　校验通过
+## spider1:flight_4　已确认　校验通过
 
 > A world airline route map. Each airline operates routes from a source airport to a destination airport. A task is about one airline and its routes; airports are a shared list.
 
@@ -457,7 +457,7 @@ Claude 的改动：
 
 起草：claude，1 轮
 
-## spider2:Airlines　未确认　校验通过
+## spider2:Airlines　已确认　校验通过
 
 > A Russian airline's bookings from 2017. Each booking has tickets, one per passenger; each ticket covers flights (ticket_flights, with fare class and amount) and may have boarding passes with seats. A task is about one booking; flights, airports, aircraft and seats are shared lists.
 
@@ -489,7 +489,7 @@ Claude 的改动：
 
 起草：claude，1 轮
 
-## spider2:imdb_movies　未确认　校验通过
+## spider2:imdb_movies　已确认　校验通过
 
 > A movie database. Each movie has genres, a rating row, cast members (role_mapping) and directors (director_mapping), who are people in names. A task is about one movie; people are a shared list.
 

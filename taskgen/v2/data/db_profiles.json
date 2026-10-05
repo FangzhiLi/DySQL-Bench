@@ -144,7 +144,7 @@
    "an aviation statistics clerk"
   ],
   "new_lookup": [],
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
   ],
@@ -152,7 +152,8 @@
    "model": "claude",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "0b1ce962f5"
  },
  "bird:beer_factory": {
   "roots": [
@@ -489,19 +490,25 @@
     "same_as": []
    }
   },
-  "events": [],
-  "attributes": [
+  "events": [
    {
     "table": "frpm",
-    "of": "schools",
-    "via": "frpm.CDSCode -> schools.CDSCode"
+    "label": "free and reduced-price meal figures",
+    "path": [
+     "frpm.CDSCode -> schools.CDSCode"
+    ],
+    "parents": []
    },
    {
     "table": "satscores",
-    "of": "schools",
-    "via": "satscores.cds -> schools.CDSCode"
+    "label": "SAT results",
+    "path": [
+     "satscores.cds -> schools.CDSCode"
+    ],
+    "parents": []
    }
   ],
+  "attributes": [],
   "public": [],
   "exclude": [],
   "no_insert": [],
@@ -512,7 +519,7 @@
    "schools.School is NULL for 1,369 rows that are district or county offices, not schools.",
    "satscores.rtype is 'S' for a school and 'D' for a district; AvgScrRead, AvgScrMath and AvgScrWrite are average SAT section scores."
   ],
-  "description": "California public schools. Each school (schools) has its directory details, and may have one row of free and reduced-price meal figures (frpm) and one row of SAT results (satscores). A task is about one school.",
+  "description": "California public schools. Each school (schools) has its directory details, and may have one row of free and reduced-price meal figures (frpm) and one row of SAT results (satscores), each kept as an event of the school. A task is about one school.",
   "speaker_roles": [
    "the office manager at this school",
    "a district data coordinator responsible for this school",
@@ -520,15 +527,17 @@
    "a state reporting specialist correcting this school's records"
   ],
   "new_lookup": [],
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
-   "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
+   "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL",
+   "Claude: frpm and satscores moved from attributes to events (user, 2026-10-05), so trees pick schools that have them"
   ],
   "draft": {
    "model": "claude",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "575e33194e"
  },
  "bird:car_retails": {
   "roots": [
@@ -708,7 +717,7 @@
    "a translator checking this card's foreign-language data"
   ],
   "new_lookup": [],
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
   ],
@@ -716,7 +725,8 @@
    "model": "claude",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "a2c2177a21"
  },
  "bird:chicago_crime": {
   "kind": "entity",
@@ -792,7 +802,7 @@
    "a police department auditor reviewing this district's reports"
   ],
   "new_lookup": [],
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
   ],
@@ -800,7 +810,8 @@
    "model": "claude",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "25ca71059b"
  },
  "bird:college_completion": {
   "kind": "entity",
@@ -851,7 +862,7 @@
    "a data steward for this institution's completion reports"
   ],
   "new_lookup": [],
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
   ],
@@ -859,7 +870,8 @@
    "model": "claude",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "e25d06316f"
  },
  "bird:food_inspection": {
   "kind": "entity",
@@ -916,7 +928,7 @@
    "a clerk at the city's environmental health office"
   ],
   "new_lookup": [],
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
   ],
@@ -924,7 +936,8 @@
    "model": "claude",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "91f12fe947"
  },
  "bird:food_inspection_2": {
   "roots": [
@@ -1151,7 +1164,7 @@
     ]
    }
   ],
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
   ],
@@ -1159,7 +1172,8 @@
    "model": "claude",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "1b747666da"
  },
  "bird:movie": {
   "roots": [
@@ -1665,7 +1679,7 @@
     ]
    }
   ],
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
   ],
@@ -1673,7 +1687,8 @@
    "model": "claude",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "798ee0b5e8"
  },
  "bird:retail_complains": {
   "roots": [
@@ -1827,7 +1842,7 @@
     ]
    }
   ],
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
   ],
@@ -1835,7 +1850,8 @@
    "model": "claude",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "c4e3d22aa2"
  },
  "bird:shipping": {
   "roots": [
@@ -2478,7 +2494,7 @@
     ]
    }
   ],
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
   ],
@@ -2486,7 +2502,8 @@
    "model": "claude",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "dabc8a2c92"
  },
  "bird:video_games": {
   "kind": "entity",
@@ -2599,7 +2616,7 @@
     ]
    }
   ],
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
   ],
@@ -2607,7 +2624,8 @@
    "model": "claude",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "33754d9552"
  },
  "spider1:bike_1": {
   "kind": "entity",
@@ -2665,7 +2683,7 @@
    "a city transportation planner who oversees this station"
   ],
   "new_lookup": [],
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
   ],
@@ -2673,7 +2691,8 @@
    "model": "claude",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "8312dc8bc0"
  },
  "spider1:college_2": {
   "roots": [
@@ -2890,7 +2909,7 @@
    "a budget analyst who tracks this campus's fees"
   ],
   "new_lookup": [],
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
   ],
@@ -2898,7 +2917,8 @@
    "model": "claude",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "ae15bd371b"
  },
  "spider1:flight_4": {
   "kind": "entity",
@@ -2966,7 +2986,7 @@
     ]
    }
   ],
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
   ],
@@ -2974,7 +2994,8 @@
    "model": "claude",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "58a48f9b9e"
  },
  "spider1:hr_1": {
   "roots": [
@@ -3152,7 +3173,7 @@
    "a corporate travel coordinator who booked these tickets"
   ],
   "new_lookup": [],
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
   ],
@@ -3160,7 +3181,8 @@
    "model": "claude",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "f532697dc6"
  },
  "spider2:IPL": {
   "roots": [
@@ -3513,7 +3535,7 @@
    "a volunteer contributor who curates this movie's page"
   ],
   "new_lookup": [],
-  "confirmed": false,
+  "confirmed": true,
   "notes": [
    "Claude: drafted from the schema and data on 2026-10-05; every quirk checked with SQL"
   ],
@@ -3521,7 +3543,8 @@
    "model": "claude",
    "rounds": 1,
    "errors": []
-  }
+  },
+  "confirmed_version": "162ae5df97"
  },
  "spider2:school_scheduling": {
   "roots": [
