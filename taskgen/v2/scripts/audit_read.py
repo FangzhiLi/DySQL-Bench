@@ -12,7 +12,8 @@ Usage (from taskgen/v2/):
   $P scripts/audit_read.py query   --db books "SELECT ..."   # read-only, 30 rows
   $P scripts/audit_read.py status
   $P scripts/audit_read.py --round risky risky          # 2026-10-07: the riskier subset, files in results/audit/read_risky/
-  (every other command takes --round risky the same way)"""
+  $P scripts/audit_read.py --round random2 random      # 2026-10-07: 300 random tasks no round has read yet
+  (every other command takes --round the same way)"""
 import argparse, json, math, os, random, re, sqlite3, sys
 from collections import Counter, defaultdict
 V2 = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -27,6 +28,8 @@ PERSON_SAMPLE = 260  # random person tasks read, spread over the databases by si
 ENTITY_EACH = 2     # random entity tasks per entity database (each was spot-read 10 per database on 2026-10-05)
 DOUBLE = 40         # random-sample tasks read a second time by another reader
 BATCH = 32
+RANDOM_N = 300      # second random round (2026-10-07), read by Opus
+RANDOM_BATCHES = 10
 
 
 def manifest():
@@ -118,6 +121,44 @@ def cmd_risky(a):
     json.dump(batches, open(os.path.join(READ, "batches.json"), "w"), indent=1)
     c = Counter(w for i in ids for w in why[i])
     print(f"{len(ids)} tasks in {len(batches)} batches: {dict(c)}")
+
+
+def read_before():
+    """Ids some earlier reading round sampled."""
+    out = set()
+    for d in os.listdir(os.path.join(io.RESULTS, "audit")):
+        f = os.path.join(io.RESULTS, "audit", d, "sample.jsonl")
+        if d.startswith("read") and os.path.join(io.RESULTS, "audit", d) != READ and os.path.exists(f):
+            out |= {r["id"] for r in io.read_jsonl(f)}
+    return out
+
+
+def cmd_random(a):
+    """RANDOM_N tasks drawn uniformly from those no earlier round read, spread over the databases by size, to estimate
+    the bad rate of the unread rest (2026-10-07). Tasks already found bad (read_risky/bad.json) are left out."""
+    os.makedirs(READ, exist_ok=True)
+    rng = random.Random(1)
+    ts = tasks()
+    bad = {r["id"] for r in json.load(open(os.path.join(io.RESULTS, "audit", "read_risky", "bad.json")))}
+    pool, skip = defaultdict(list), read_before() | bad
+    for i, t in ts.items():
+        if i not in skip:
+            pool[t["meta"]["db"]].append(i)
+    total = sum(len(v) for v in pool.values())
+    # largest remainder, so the shares add up to RANDOM_N exactly
+    share = {d: RANDOM_N * len(v) / total for d, v in pool.items()}
+    k = {d: int(x) for d, x in share.items()}
+    for d in sorted(share, key=lambda d: k[d] - share[d])[:RANDOM_N - sum(k.values())]:
+        k[d] += 1
+    ids = sorted((i for d, v in pool.items() for i in rng.sample(sorted(v), k[d])), key=lambda i: (ts[i]["meta"]["db"], i))
+    with open(os.path.join(READ, "sample.jsonl"), "w") as f:
+        for i in ids:
+            f.write(json.dumps({"id": i, "db": ts[i]["meta"]["db"], "why": ["random"]}) + "\n")
+    size = math.ceil(len(ids) / RANDOM_BATCHES)
+    batches = {str(n): ids[s:s + size] for n, s in enumerate(range(0, len(ids), size))}
+    json.dump(batches, open(os.path.join(READ, "batches.json"), "w"), indent=1)
+    print(f"{len(ids)} of {total} unread tasks in {len(batches)} batches; "
+          f"entity {sum(ts[i]['meta']['task_type'] == '6_entity' for i in ids)}")
 
 
 def batch_ids(b):
@@ -284,7 +325,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--round", help="a later reading round; its files go to results/audit/read_<round>/")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("sample"); sub.add_parser("status"); sub.add_parser("risky")
+    sub.add_parser("sample"); sub.add_parser("status"); sub.add_parser("risky"); sub.add_parser("random")
     for c in ("blind", "reveal"):
         sub.add_parser(c).add_argument("--batch", required=True)
     for c in ("predict", "verdict"):
@@ -293,7 +334,7 @@ def main():
     a = ap.parse_args()
     if a.round:
         READ = os.path.join(io.RESULTS, "audit", "read_" + a.round)
-    {"sample": cmd_sample, "risky": cmd_risky, "blind": cmd_blind, "predict": cmd_predict, "verdict": cmd_verdict, "reveal": cmd_reveal,
+    {"sample": cmd_sample, "risky": cmd_risky, "random": cmd_random, "blind": cmd_blind, "predict": cmd_predict, "verdict": cmd_verdict, "reveal": cmd_reveal,
      "query": cmd_query, "status": cmd_status}[a.cmd](a)
 
 

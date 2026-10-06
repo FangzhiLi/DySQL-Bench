@@ -15,6 +15,7 @@ Usage (from taskgen/v2/):
   P=~/miniconda3/envs/dysql/bin/python
   $P scripts/fix_audit_tasks.py --plan                 # results/audit/fix_plan.json, every database
   $P scripts/fix_audit_tasks.py --plan-c               # adds the 11 IPL tasks (C, 2026-10-07)
+  $P scripts/fix_audit_tasks.py --plan-risky           # adds the 35 of the riskier subset (report section 9)
   $P scripts/fix_audit_tasks.py --db bird:movie        # new candidates, originals excluded
   $P scripts/taskgen.py check --db bird:movie          # then verify (x3), then:
   $P scripts/fix_audit_tasks.py --db bird:movie --validate"""
@@ -83,6 +84,30 @@ IPL_REGENERATE = ["spider2:IPL:player:374:0", "spider2:IPL:player:323:0", "spide
                   "spider2:IPL:player:182:0", "spider2:IPL:player:52:0", "spider2:IPL:player:296:0"]
 INVARIANTS = {"spider2:IPL": [("ball_by_ball", "team_batting", "team_bowling"), ("match", "team_1", "team_2")]}   # never equal
 
+# The 35 bad tasks of the riskier subset (report section 9, results/audit/read_risky/bad.json; 2026-10-07, user's
+# decision: fix first, drop what cannot be fixed). Substitutions here change only the text: the SQL never holds them.
+RISKY_SUBSTITUTE = {
+    "bird:car_retails:customers:161:0": {"racing cars.'": "racing cars'."},   # the gold writes no final period
+    "bird:car_retails:customers:256:0": {"die-cast metal.'": "die-cast metal'."},
+    "bird:beer_factory:customers:817159:0": {"Wisconsin honey.'": "Wisconsin honey'."},
+    "bird:shakespeare:works:24:0": {"described as a servant in the Ford household": "described as 'servant in the Ford household'"},
+    "bird:professional_basketball:players:lewisfr01:0": {"PostfgAttempted 23": "PostfgAttempted 0"},   # 23 is PostfgMade
+}
+_ORDER_ONLY = ("The SQL copies only the row(s) in orders, not the order's lines in orderdetails, and the request reads as "
+               "if a copy of the order brought its lines along. Say plainly that only the order record itself (its row in "
+               "orders) is to be copied, without its order lines.")
+RISKY_REWRITE = {
+    **{f"bird:car_retails:customers:{n}:0": _ORDER_ONLY for n in (144, 146, 157, 211, 347, 385)},
+    "bird:student_club:member:rec2a03QXbFQAUZ7X:0":
+        "zip_code is the table's key, so the copy of the ZIP 8021 row gets a new zip_code the database assigns, and the "
+        "request does not say what ZIP code the copy gets. Say that the backup copy is to be stored under a new zip code "
+        "the system assigns.",
+    "bird:beer_factory:customers:132454:1":
+        "After copying transactions 100392 and 101215 the SQL deletes the two originals (the rebooking replaces them), "
+        "but the request does not say the originals go. Say plainly that the two original transactions are to be "
+        "removed once their copies exist. Keep the transactions in the order 100392, 101215.",
+}
+
 
 def build_plan():
     d = json.load(open(os.path.join(AUDIT, "drop_candidates.json")))
@@ -142,6 +167,24 @@ def add_c_plan():
     print(f"{len(IPL_DROP) + len(IPL_REGENERATE)} IPL fixes added; {len(plan)} in the plan")
 
 
+def add_risky_plan():
+    plan = json.load(open(PLAN))
+    bad = json.load(open(os.path.join(AUDIT, "read_risky", "bad.json")))
+    for b in bad:
+        i, cls = b["id"], "risky read: " + b["class"]
+        if i in RISKY_SUBSTITUTE:
+            plan[i] = {"kind": "substitute", "class": cls, "map": RISKY_SUBSTITUTE[i], "text_only": True}
+        elif i in RISKY_REWRITE:
+            plan[i] = {"kind": "rewrite", "class": cls, "note": RISKY_REWRITE[i]}
+        else:
+            plan[i] = {"kind": "regenerate", "class": cls}
+    json.dump(plan, open(PLAN, "w"), indent=1)
+    c = {}
+    for b in bad:
+        c[plan[b["id"]]["kind"]] = c.get(plan[b["id"]]["kind"], 0) + 1
+    print(f"{len(bad)} fixes added {c}; {len(plan)} in the plan")
+
+
 def _db_path(db_key):
     return io.resolve_db_path(io.load_db_recs(io.ANCHORS_JSON)[db_key]["path"])
 
@@ -182,7 +225,7 @@ def apply(db_key, workers, seed):
     for i, p in plan.items():
         c = cands[i]
         if p["kind"] == "substitute":
-            sql = edit_sql(stmts_of(c), p["map"])
+            sql = stmts_of(c) if p.get("text_only") else edit_sql(stmts_of(c), p["map"])
             ins = fixes.substitute(c["instruction"], p["map"])
             if any(old in c["instruction"] and new not in ins for old, new in p["map"].items()) or ins == c["instruction"]:
                 sys.exit(f"{i}: the instruction does not name {list(p['map'])}")
@@ -272,7 +315,7 @@ def validate(db_key):
         except sqlite3.Error:
             pass
         allowed = {check.norm_literal(v) for v in (row or ()) if v not in (None, "")}
-        flags, _ = a.run(c["instruction"], stmts_of(c), allowed)
+        flags, _ = a.run(c["instruction"], stmts_of(c), allowed, ((c.get("plan") or {}).get("tables") or {}).get("public"))
         kinds = sorted({f["k"] for f in flags} & DROPPED)
         for t, x, y in INVARIANTS.get(db_key, []):
             if any(tb == t and any(r.get(x) is not None and r.get(x) == r.get(y) for r in new) for _, _, tb, _, new in a.last):
@@ -288,6 +331,7 @@ def validate(db_key):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--plan", action="store_true"); ap.add_argument("--plan-c", action="store_true")
+    ap.add_argument("--plan-risky", action="store_true")
     ap.add_argument("--db"); ap.add_argument("--validate", action="store_true")
     ap.add_argument("--workers", type=int, default=5, help="GLM plan limit: 5 concurrent requests"); ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
@@ -295,6 +339,8 @@ def main():
         build_plan()
     elif a.plan_c:
         add_c_plan()
+    elif a.plan_risky:
+        add_risky_plan()
     elif a.db and a.validate:
         validate(a.db)
     elif a.db:
