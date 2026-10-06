@@ -59,3 +59,9 @@ def test_a_repaired_task_says_where_it_came_from():
                                   "repair": {"from": "k:t:1:0", "kind": "cascade"}})
     assert row["meta"]["repair"] == {"from": "k:t:1:0", "kind": "cascade"}
     assert convert.to_task_row(0, {"instruction": "x", "actions": []})["meta"]["repair"] is None
+
+
+def test_a_fixed_task_says_where_it_came_from():
+    from taskgen_v2 import convert
+    row = convert.to_task_row(0, {"instruction": "x", "actions": [], "fix": {"from": "k:t:1:0", "kind": "reorder"}})
+    assert row["meta"]["fix"] == {"from": "k:t:1:0", "kind": "reorder"}
