@@ -6248,7 +6248,22 @@
     "source": "name"
    }
   ],
-  "fks_composite": []
+  "fks_composite": [
+   {
+    "table": "boarding_passes",
+    "cols": [
+     "ticket_no",
+     "flight_id"
+    ],
+    "ref_table": "ticket_flights",
+    "ref_cols": [
+     "ticket_no",
+     "flight_id"
+    ],
+    "hit": 1.0,
+    "source": "manual"
+   }
+  ]
  },
  "spider2:Brazilian_E_Commerce": {
   "source": "spider2",
