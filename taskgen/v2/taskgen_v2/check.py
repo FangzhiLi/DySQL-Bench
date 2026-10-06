@@ -358,7 +358,28 @@ def name_mismatches(db, profile, tracer, cand, stmts, seen):
             if (hit := stored(db, cols, s))]
 
 
-def entity_reasons(db, profile, tracer, speaker_ids, cand, stmts, labels, writes, seen, new_public, deleted=(), updated=()):
+def orphan_reasons(db, tracer, deleted, updated):
+    """A deleted row, or the old key of an updated row, that other rows still point at while no row holds it any more
+    (video_games pilot: a deleted game_publisher; spider2 Airlines: a renumbered ticket_no or book_ref; student_loan:
+    a deleted person whose enrolment rows stay). Every profiled database (2026-10-05)."""
+    out = []
+    for t, row in list(deleted) + list(updated):
+        for child, refs in tracer.up.items():
+            for cols, parent, ref_cols in refs:
+                vals = [row.get(r) for r in ref_cols]
+                if parent.lower() != t.lower() or any(v in (None, "") for v in vals):
+                    continue
+                try:
+                    pointed = db.execute(f"SELECT 1 FROM {_q(child)} WHERE " + " AND ".join(f"{_q(c)} = ?" for c in cols) + " LIMIT 1", vals).fetchone()
+                    held = db.execute(f"SELECT 1 FROM {_q(t)} WHERE " + " AND ".join(f"{_q(r)} = ?" for r in ref_cols) + " LIMIT 1", vals).fetchone()
+                except sqlite3.Error:
+                    pointed = held = None
+                if pointed and not held:
+                    out.append(f"orphans: {t}")
+    return list(dict.fromkeys(out))
+
+
+def entity_reasons(db, profile, tracer, speaker_ids, cand, stmts, labels, writes, seen, new_public):
     """What an entity task may not do (design 2026-10-04 §3.4), checked on the database after its statements ran."""
     out = ["other_person"] if "other" in labels else []
     out += [f"root_insert: {w['table']}" for w in writes if w["label"] == "new_person"]
@@ -382,21 +403,6 @@ def entity_reasons(db, profile, tracer, speaker_ids, cand, stmts, labels, writes
                 out.append(f"lookup_name_taken: {table}")
         if table in lookups and not used:
             out.append(f"lookup_unreferenced: {table}")
-    # a deleted row, or the old key of an updated row, that other rows still point at while no row holds it any more
-    # (video_games pilot: a deleted game_publisher; spider2 Airlines: a renumbered ticket_no or book_ref)
-    for t, row in list(deleted) + list(updated):
-        for child, refs in tracer.up.items():
-            for cols, parent, ref_cols in refs:
-                vals = [row.get(r) for r in ref_cols]
-                if parent.lower() != t.lower() or any(v in (None, "") for v in vals):
-                    continue
-                try:
-                    pointed = db.execute(f"SELECT 1 FROM {_q(child)} WHERE " + " AND ".join(f"{_q(c)} = ?" for c in cols) + " LIMIT 1", vals).fetchone()
-                    held = db.execute(f"SELECT 1 FROM {_q(t)} WHERE " + " AND ".join(f"{_q(r)} = ?" for r in ref_cols) + " LIMIT 1", vals).fetchone()
-                except sqlite3.Error:
-                    pointed = held = None
-                if pointed and not held:
-                    out.append(f"orphans: {t}")
     name = ((cand.get("plan") or {}).get("style") or {}).get("name")
     if name and person_name_stored(db, name):
         out.append("speaker_name_taken")
@@ -440,6 +446,8 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
     db.execute("CREATE TEMP TABLE _old (tbl TEXT, j TEXT)")
     for t in scope:
         need = {c for cols, _, _ in tracer.up.get(t, []) for c in cols} | ({tracer.persons[t]} if t in tracer.persons else set())
+        if profile:   # the key values other rows point at, for orphan_reasons
+            need |= {r for refs in tracer.up.values() for _, parent, ref_cols in refs if parent == t for r in ref_cols}
         if entity:   # the whole row before the change: the names it held belong to the task (name_mismatches)
             need = {r[1] for r in db.execute(f"PRAGMA table_info({_q(t)})")}
         if need:
@@ -512,7 +520,8 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
                     holders |= was
                     moved = moved or (entity and bool(was) and not was & speaker_ids)
                     seen.append((table, old))
-                    updated.append((table, old))
+                    if profile:
+                        updated.append((table, old))
                 seen += [(table, dict(zip(rcols, r))) for r in rs[:50]]
                 db.execute("DELETE FROM _old")
                 if not rs:
@@ -536,13 +545,15 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
                 labels.append(lab)
                 if entity and lab == "public" and op == "INSERT":
                     new_public += [(table, dict(zip(rcols, r))) for r in rs]
-                if entity and op == "DELETE":
+                if profile and op == "DELETE":
                     deleted += [(table, dict(zip(rcols, r))) for r in rs]
                 out["writes"].append({"op": op, "table": table, "rows": len(rs), "label": lab})
         if entity:
-            out["reasons"] += entity_reasons(db, profile, tracer, speaker_ids, cand, stmts, labels, out["writes"], seen,
-                                             new_public, deleted, updated)
-            # writes that end where they started leave the eval hash nothing to compare (university pilot: five renames)
+            out["reasons"] += entity_reasons(db, profile, tracer, speaker_ids, cand, stmts, labels, out["writes"], seen, new_public)
+        if profile:
+            out["reasons"] += orphan_reasons(db, tracer, deleted, updated)
+            # writes that end where they started leave the eval hash nothing to compare (university pilot: five renames;
+            # address: a first_name set to the value it already had)
             state = final_state(db_rec["path"], executed) if any(w["rows"] for w in out["writes"]) else None
             if state is not None and not any(a or r for a, r in state.values()):
                 out["reasons"].append("net_noop")

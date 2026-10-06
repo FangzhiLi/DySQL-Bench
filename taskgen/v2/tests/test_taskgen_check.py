@@ -654,3 +654,19 @@ def test_changing_a_key_other_rows_point_at_is_an_orphan_too(menus):
     assert mreasons(menus, "Menu ID 3: renumber page 13 as 99 and move its items along.",
                     ["UPDATE item SET page_id = 99 WHERE page_id = 13", "UPDATE page SET page_id = 99 WHERE page_id = 13"]) == []
     assert "orphans: menu" in mreasons(menus, "Menu ID 3: renumber it as 99.", ["UPDATE menu SET menu_id = 99 WHERE menu_id = 3"])
+
+
+def test_person_profiles_also_reject_orphans_and_net_noops(db):
+    # 2026-10-05: on the 3,131 person tasks the two rules found 57 orphaning deletes (student_loan account
+    # closures) and 15 net no-ops (address first_name set to the value it already had)
+    assert "orphans: orders" in check.run_check(db, cand("I am a5 b5. Delete my order 5.",
+                                                          ["DELETE FROM orders WHERE order_id = 5 AND customer_id = 5"]),
+                                                 profile=SHOP_PROFILE)["reasons"]
+    r = check.run_check(db, cand("I am a5 b5. Delete my order 5 with its items.",
+                                 ["DELETE FROM order_items WHERE order_id = 5", "DELETE FROM orders WHERE order_id = 5 AND customer_id = 5"]),
+                        profile=SHOP_PROFILE)
+    assert r["ok"], r["reasons"]
+    assert check.run_check(db, cand("I am a5 b5. Set the qty of my order 5 to 1.", ["UPDATE orders SET qty = 1 WHERE order_id = 5"]),
+                           profile=SHOP_PROFILE)["reasons"] == ["net_noop"]
+    # without a profile (DySQL gold, v1 candidates) nothing changes
+    assert check.run_check(db, cand("I am a5 b5. Delete my order 5.", ["DELETE FROM orders WHERE order_id = 5 AND customer_id = 5"]))["ok"]
