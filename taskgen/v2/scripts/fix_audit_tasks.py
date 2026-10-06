@@ -14,6 +14,7 @@ After check and verify, --validate audits the fixes and excludes those that stil
 Usage (from taskgen/v2/):
   P=~/miniconda3/envs/dysql/bin/python
   $P scripts/fix_audit_tasks.py --plan                 # results/audit/fix_plan.json, every database
+  $P scripts/fix_audit_tasks.py --plan-c               # adds the 11 IPL tasks (C, 2026-10-07)
   $P scripts/fix_audit_tasks.py --db bird:movie        # new candidates, originals excluded
   $P scripts/taskgen.py check --db bird:movie          # then verify (x3), then:
   $P scripts/fix_audit_tasks.py --db bird:movie --validate"""
@@ -60,6 +61,27 @@ REWRITE = {
 SCREENTIME = ["bird:movie:actor:913:0", "bird:movie:actor:1616:0", "bird:movie:actor:407:0", "bird:movie:actor:2503:0",
               "bird:movie:actor:1274:0"]   # 'N minutes' unquoted in the instruction; the column holds H:MM:SS
 REGENERATE_EXTRA = ["spider1:college_2:instructor:3199:0"]   # the new advisees do not exist, and every student has an advisor
+
+# C (2026-10-07, user's decision): IPL tasks whose "correction" makes a ball's batting team its bowling team, or a
+# match's two teams one team; the stored values were right. With other requests the change is dropped from the SQL
+# and the text; alone, the tree is generated again.
+_IPL_NOTE = ("The request also asks to change {what}. The stored value is right: the new one would make {why}. The SQL "
+             "no longer makes that change. Remove that request from the text and keep everything else as it is.")
+IPL_DROP = {
+    "spider2:IPL:player:370:1": ("SET team_batting = 13", "team_batting on ball 1 of over 15, innings 2 of match 980950",
+                                 "the batting team the same as the bowling team (13)"),
+    "spider2:IPL:player:397:0": ('SET "team_bowling" = 1', "team_bowling on ball 6 of over 15, innings 1 of match 829718",
+                                 "the bowling team the same as the batting team (1)"),
+    "spider2:IPL:player:151:0": ("SET team_batting = 8", "team_batting on ball 5 of over 18, innings 2 of match 419115",
+                                 "the batting team the same as the bowling team (8)"),
+    "spider2:IPL:player:381:0": ("SET team_bowling = 6", "team_bowling on ball 3 of over 10, innings 1 of match 734024",
+                                 "the bowling team the same as the batting team (6)"),
+    "spider2:IPL:player:315:0": ("SET team_1 = 7", "team_1 of match 733976",
+                                 "a match whose toss winner, winner and 206 balls belong to team 3, which would no longer play in it"),
+}
+IPL_REGENERATE = ["spider2:IPL:player:374:0", "spider2:IPL:player:323:0", "spider2:IPL:player:339:0",
+                  "spider2:IPL:player:182:0", "spider2:IPL:player:52:0", "spider2:IPL:player:296:0"]
+INVARIANTS = {"spider2:IPL": [("ball_by_ball", "team_batting", "team_bowling"), ("match", "team_1", "team_2")]}   # never equal
 
 
 def build_plan():
@@ -110,6 +132,16 @@ def build_plan():
     print(f"{len(plan)} fixes planned: {c}")
 
 
+def add_c_plan():
+    plan = json.load(open(PLAN))
+    for i, (key, what, why) in IPL_DROP.items():
+        plan[i] = {"kind": "rewrite", "class": "ipl_impossible", "sql": {key: None}, "note": _IPL_NOTE.format(what=what, why=why)}
+    for i in IPL_REGENERATE:
+        plan[i] = {"kind": "regenerate", "class": "ipl_impossible"}
+    json.dump(plan, open(PLAN, "w"), indent=1)
+    print(f"{len(IPL_DROP) + len(IPL_REGENERATE)} IPL fixes added; {len(plan)} in the plan")
+
+
 def _db_path(db_key):
     return io.resolve_db_path(io.load_db_recs(io.ANCHORS_JSON)[db_key]["path"])
 
@@ -119,8 +151,14 @@ def stmts_of(cand):
 
 
 def edit_sql(stmts, mapping):
+    """Each mapping: a whole statement or a quoted value replaced as text, a bare value as a whole token; None drops
+    every statement containing the key."""
+    drop = [k for k, v in mapping.items() if v is None]
+    mapping = {k: v for k, v in mapping.items() if v is not None}
     out = []
     for s in stmts:
+        if any(k in s for k in drop):
+            continue
         for old, new in mapping.items():
             s = s.replace(old, new) if old.startswith(("INSERT", "UPDATE", "DELETE")) or "'" in old else fixes.substitute(s, {old: new})
         out.append(s)
@@ -236,6 +274,9 @@ def validate(db_key):
         allowed = {check.norm_literal(v) for v in (row or ()) if v not in (None, "")}
         flags, _ = a.run(c["instruction"], stmts_of(c), allowed)
         kinds = sorted({f["k"] for f in flags} & DROPPED)
+        for t, x, y in INVARIANTS.get(db_key, []):
+            if any(tb == t and any(r.get(x) is not None and r.get(x) == r.get(y) for r in new) for _, _, tb, _, new in a.last):
+                kinds.append(f"{t}.{x} = {y}")
         if kinds:
             bad.append({"id": i, "reason": f"fix failed the audit: {', '.join(kinds)}", "by": "claude"})
         else:
@@ -246,11 +287,14 @@ def validate(db_key):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--plan", action="store_true"); ap.add_argument("--db"); ap.add_argument("--validate", action="store_true")
+    ap.add_argument("--plan", action="store_true"); ap.add_argument("--plan-c", action="store_true")
+    ap.add_argument("--db"); ap.add_argument("--validate", action="store_true")
     ap.add_argument("--workers", type=int, default=5, help="GLM plan limit: 5 concurrent requests"); ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
     if a.plan:
         build_plan()
+    elif a.plan_c:
+        add_c_plan()
     elif a.db and a.validate:
         validate(a.db)
     elif a.db:
