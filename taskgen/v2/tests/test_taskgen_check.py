@@ -553,7 +553,7 @@ def test_a_new_lookup_row_must_be_new_and_used_by_the_entity(menus):
         ["lookup_unreferenced: dish"]
     assert mreasons(menus, "Menu ID 3: add the dish 'Dish 5' and put it on item 13.",      # 'dish 5' exists
                     ["INSERT INTO dish (name) VALUES ('Dish 5')", "UPDATE item SET dish_id = 30 WHERE item_id = 13"]) == \
-        ["lookup_name_taken: dish"]
+        ["lookup_name_taken: dish", "duplicate_name: dish.name"]   # the audit rule (2026-10-07) sees it too
     assert mreasons(menus, "Menu ID 3: add the dish 'Smoked Trout' and put it on item 13.",
                     ["INSERT INTO dish (name) VALUES ('Smoked Trout')", "UPDATE item SET dish_id = 30 WHERE item_id = 13"],
                     profile={**MENUS_PROFILE, "new_lookup": []}) == ["public_write: INSERT dish"]
@@ -670,3 +670,23 @@ def test_person_profiles_also_reject_orphans_and_net_noops(db):
                            profile=SHOP_PROFILE)["reasons"] == ["net_noop"]
     # without a profile (DySQL gold, v1 candidates) nothing changes
     assert check.run_check(db, cand("I am a5 b5. Delete my order 5.", ["DELETE FROM orders WHERE order_id = 5 AND customer_id = 5"]))["ok"]
+
+
+def test_the_audit_rules_reject_copy_order_duplicate_names_and_dangling_references(db):
+    # 2026-10-07: four audit rules (taskgen_v2.audit) became check rules; the audit of the 3,450 tasks found 32 copy
+    # lists in another order than the table, 26 lookup values added though they existed, 6 references to rows that
+    # do not exist and 4 keys renumbered onto another row's (Airlines declares no keys; covered in test_taskgen_audit)
+    copy = "INSERT INTO order_items (order_id, note) SELECT order_id, note FROM order_items WHERE item_id IN (5, 105)"
+    r = check.run_check(db, cand("I am a5 b5. Copy my order items 105 and 5 as new items.", [copy]), profile=SHOP_PROFILE)
+    assert "copy_order: order_items" in r["reasons"]
+    r = check.run_check(db, cand("I am a5 b5. Copy my order items 5 and 105 as new items.", [copy]), profile=SHOP_PROFILE)
+    assert r["ok"], r["reasons"]
+    r = check.run_check(db, cand("I am a5 b5. Add the product p7 at price 2.", ["INSERT INTO products (name, price) VALUES ('p7', 2)"],
+                                 task_type="3_public_only"), profile=SHOP_PROFILE)
+    assert "duplicate_name: products.name" in r["reasons"]
+    r = check.run_check(db, cand("I am a5 b5. Point my order 5 at product 999.", ["UPDATE orders SET product_id = 999 WHERE order_id = 5 AND customer_id = 5"]),
+                        profile=SHOP_PROFILE)
+    assert "dangling_fk: orders.product_id -> products" in r["reasons"]
+    # without a profile (DySQL gold: 10.5% of it writes dangling references) nothing changes
+    assert check.run_check(db, cand("I am a5 b5. Point my order 5 at product 999.",
+                                    ["UPDATE orders SET product_id = 999 WHERE order_id = 5 AND customer_id = 5"]))["ok"]

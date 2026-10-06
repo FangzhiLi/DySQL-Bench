@@ -410,6 +410,34 @@ def entity_reasons(db, profile, tracer, speaker_ids, cand, stmts, labels, writes
     return list(dict.fromkeys(out))   # one reason per kind and table
 
 
+# audit rules the check enforces on generated candidates (2026-10-07, after the audit of the 3,450 tasks found 32
+# copy lists in another order than the table, 26 lookup values added though they existed, 6 references to rows that
+# do not exist and 4 keys renumbered onto another row's); DySQL's gold is not held to them (10.5% of it writes a
+# dangling reference)
+GATE = ("copy_order", "key_collision", "duplicate_name", "dangling_fk")
+_AUDITS = {}
+
+
+def audit_reasons(db_rec, tracer, instruction, stmts, allowed):
+    """Reasons from taskgen_v2.audit's GATE rules. One audited copy of the database is kept per process, for the
+    database checked last (its edges are the profile's, through tracer)."""
+    from taskgen_v2 import audit   # audit imports check
+    path = db_rec["path"]
+    if path not in _AUDITS:
+        _AUDITS.clear()
+        _AUDITS[path] = audit.DbAudit(path, [(c, cols, p, ref) for c, refs in tracer.up.items() for cols, p, ref in refs])
+    flags, _ = _AUDITS[path].run(instruction, stmts, allowed)
+    out = set()
+    for f in flags:
+        if f["k"] == "dangling_fk":
+            out.add(f"dangling_fk: {f['table']}.{','.join(f['cols'])} -> {f['parent']}")
+        elif f["k"] in ("key_collision", "duplicate_name"):
+            out.add(f"{f['k']}: {f['table']}.{f['col']}")
+        elif f["k"] == "copy_order":
+            out.add(f"copy_order: {f['table']}")
+    return sorted(out)
+
+
 def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
     """With a profile (generated candidates), scope, people and ownership come from it, INSERT into no_insert tables
     and writes to another person's data are rejected; without one (DySQL gold, v1 candidates), as in v1."""
@@ -552,6 +580,8 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
             out["reasons"] += entity_reasons(db, profile, tracer, speaker_ids, cand, stmts, labels, out["writes"], seen, new_public)
         if profile:
             out["reasons"] += orphan_reasons(db, tracer, deleted, updated)
+            if not any(x.startswith("sql_error") for x in out["reasons"]):
+                out["reasons"] += audit_reasons(db_rec, tracer, cand["instruction"], executed, allowed)
             # writes that end where they started leave the eval hash nothing to compare (university pilot: five renames;
             # address: a first_name set to the value it already had)
             state = final_state(db_rec["path"], executed) if any(w["rows"] for w in out["writes"]) else None
