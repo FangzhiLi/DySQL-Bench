@@ -19,7 +19,9 @@ CREATE TABLE segs (ticket_no TEXT REFERENCES tickets(ticket_no), flight INTEGER)
 INSERT INTO tickets VALUES ('T1', 'A'), ('T2', 'B'); INSERT INTO segs VALUES ('T1', 7), ('T2', 8);
 CREATE TABLE dup (id INTEGER PRIMARY KEY, v TEXT);
 INSERT INTO dup VALUES (1, 'a'), (2, 'a'), (3, 'b');
+CREATE TABLE members (member_key INTEGER PRIMARY KEY, ext_id INTEGER, joined TEXT);
 """ + rows("customers", 30, lambda i: f"{i + 10},'f{i}','g{i}','{['active', 'closed'][i % 2]}'") \
+    + rows("members", 30, lambda i: f"{i + 1},{1000 + i},'2020-01-{i % 28 + 1:02d}-{i}'") \
     + rows("orders", 40, lambda i: f"{i + 200},{10 + i % 30},'{['Shipped', 'Pending'][i % 2]}','2020-02-{i % 28 + 1:02d}',10.0")
 
 
@@ -135,6 +137,16 @@ def test_a_key_renumbered_onto_one_another_row_holds(shop):
     assert kinds(flags) == ["key_collision"] and flags[0]["value"] == "T2"
 
 
+def test_an_identifier_no_two_rows_share_given_to_a_second_row(shop):
+    # 2026-10-07 reading: 23 legislator tasks set a govtrack_id (icpsr_id, thomas_id...) another legislator holds; the
+    # column is unique over 11,864 rows but declares no key
+    flags, _ = shop.run("Member 1: my ext id is 1005.", ["UPDATE members SET ext_id = 1005 WHERE member_key = 1"])
+    assert kinds(flags) == ["key_collision"] and flags[0]["col"] == "ext_id"
+    # a column not named like an identifier may repeat (two people hired the same day), and a copy repeats everything
+    assert shop.run("Member 1 joined with member 6.", ["UPDATE members SET joined = '2020-01-06-5' WHERE member_key = 1"])[0] == []
+    assert shop.run("Copy member 1.", ["INSERT INTO members (ext_id, joined) SELECT ext_id, joined FROM members WHERE member_key = 1"])[0] == []
+
+
 def test_an_update_that_changes_nothing(shop):
     flags, _ = shop.run("Customer 1: my status is wrong, set it to active.", ["UPDATE customers SET status = 'active' WHERE customer_id = 1"])
     assert kinds(flags) == ["noop_update"]
@@ -155,6 +167,9 @@ def test_a_shared_name_renamed_to_one_another_row_holds(shop):
     assert shop.run("Rename colour 3 to Silver.", rename)[0] == []
     assert shop.run("Rename colour 3 to Teal.", ["UPDATE colour SET colour_name = 'Teal' WHERE id = 3"], shared={"colour"})[0] == []
     assert shop.run("Spell colour 2 in capitals.", ["UPDATE colour SET colour_name = 'SILVER' WHERE id = 2"], shared={"colour"})[0] == []
+    # a column that already repeats some values is no list of labels (books street names: 958 distinct of 1,000)
+    assert shop.run("Rename customer 10 to Bob.", ["UPDATE customers SET first_name = 'Bob' WHERE customer_id = 10"],
+                    shared={"customers"})[0] == []
 
 
 def test_a_name_that_differs_only_in_punctuation(shop):

@@ -41,6 +41,7 @@ SMALL_DOMAIN = 12        # a column with at most this many distinct values is a 
 MIN_ROWS = 30            # ... over at least this many rows
 SHAPE_SHARE = 0.95       # a column whose two commonest value shapes cover this share has a format
 NEAR_DUP = 0.5           # word 3-gram Jaccard with a DySQL instruction
+LABELS = 0.99            # a column this distinct is a list of labels, where a rename onto another row's name duplicates it
 
 
 def _top_words(s):
@@ -315,7 +316,7 @@ class DbAudit:
                             if r.get(c) is not None:
                                 allowed.add(_norm(r[c]))
             flags += self._dangling(per)
-            flags += self._collisions(per)
+            flags += self._collisions(per, {n for n, st in enumerate(stmts) if check.ARCHIVE_SRC.match(st)})
             flags += self._claims(instruction, per)
             self.last = per   # [(statement index, op, table, old rows, new rows)], for the reading packets
         finally:
@@ -388,6 +389,8 @@ class DbAudit:
             st = self.col_stats(t, c)
             if not st["n"] or st["d"] < 0.9 * st["n"]:   # a lookup's names are unique; people share first names
                 continue
+            if old is not None and st["d"] < LABELS * st["n"]:   # renames: lists of labels only, not street names
+                continue
             for i, r in enumerate(new):
                 v = r.get(c)
                 if old is not None and name_key(old[i].get(c)) == name_key(v):
@@ -398,15 +401,18 @@ class DbAudit:
                     out.append({"k": "duplicate_name", "stmt": n, "table": t, "col": c, "value": v[:60]})
         return out
 
-    def _collisions(self, per):
-        """Key values the task wrote that two rows hold at the end: the primary key, a unique column, or a column other
-        tables point at (most of these databases declare no keys on them)."""
+    def _collisions(self, per, copies=()):
+        """Key values the task wrote that two rows hold at the end: the primary key, a unique column, a column other
+        tables point at (most of these databases declare no keys on them), or an identifier no two rows share (not for
+        the copies, statements in copies, which repeat every value of the row)."""
         out, done = [], set()
         for n, op, t, old, new in per:
             info = self.pk.get(t) or {}
             keys = set(self.referenced.get(t.lower(), ())) | {u[0] for u in schema.unique_columns(self.conn, t) if len(u) == 1}
             if len(info.get("cols") or []) == 1:
                 keys.add(info["cols"][0])
+            if n not in copies:
+                keys |= self._id_columns(t)
             olds = {r.get("__rowid__"): r for r in old}
             for r in new:
                 for c in keys:
@@ -419,6 +425,21 @@ class DbAudit:
                     if k > 1:
                         out.append({"k": "key_collision", "stmt": n, "table": t, "col": c, "value": str(v)[:60], "rows": k})
         return out
+
+    def _id_columns(self, t):
+        """Columns named like an identifier (govtrack_id) whose values are all distinct over at least MIN_ROWS rows of the
+        original table and that are not foreign keys: legislator's external ids declare no key."""
+        if ("_ids", t) not in self.stats:
+            fk = {c for cols, _, _ in self.fks.get(t.lower(), []) for c in cols}
+            out = set()
+            for c in self.columns(t):
+                if c in fk or not re.search(r"(?i)(^|_)id$", c):
+                    continue
+                n, d = self.orig.execute(f"SELECT COUNT({_q(c)}), COUNT(DISTINCT {_q(c)}) FROM {_q(t)}").fetchone()
+                if n >= MIN_ROWS and n == d:
+                    out.add(c)
+            self.stats[("_ids", t)] = out
+        return self.stats[("_ids", t)]
 
     def _broader(self, n, st, t, old, text, allowed):
         """The instruction names every changed row by a key column the statement's WHERE does not use."""
