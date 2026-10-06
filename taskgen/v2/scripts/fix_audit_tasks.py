@@ -15,7 +15,8 @@ Usage (from taskgen/v2/):
   P=~/miniconda3/envs/dysql/bin/python
   $P scripts/fix_audit_tasks.py --plan                 # results/audit/fix_plan.json, every database
   $P scripts/fix_audit_tasks.py --plan-c               # adds the 11 IPL tasks (C, 2026-10-07)
-  $P scripts/fix_audit_tasks.py --plan-risky           # adds the 35 of the riskier subset (report section 9)
+  $P scripts/fix_audit_tasks.py --plan-read risky      # adds the 35 of the riskier subset (report section 9)
+  $P scripts/fix_audit_tasks.py --plan-read random2    # adds the 44 of the random round and its rules (section 10)
   $P scripts/fix_audit_tasks.py --db bird:movie        # new candidates, originals excluded
   $P scripts/taskgen.py check --db bird:movie          # then verify (x3), then:
   $P scripts/fix_audit_tasks.py --db bird:movie --validate"""
@@ -167,11 +168,13 @@ def add_c_plan():
     print(f"{len(IPL_DROP) + len(IPL_REGENERATE)} IPL fixes added; {len(plan)} in the plan")
 
 
-def add_risky_plan():
+def add_read_plan(rnd):
+    """The bad tasks of a later reading round (read_<rnd>/bad.json): substituted or rewritten as listed above, or
+    generated again."""
     plan = json.load(open(PLAN))
-    bad = json.load(open(os.path.join(AUDIT, "read_risky", "bad.json")))
+    bad = json.load(open(os.path.join(AUDIT, "read_" + rnd, "bad.json")))
     for b in bad:
-        i, cls = b["id"], "risky read: " + b["class"]
+        i, cls = b["id"], f"{rnd} read: " + b["class"]
         if i in RISKY_SUBSTITUTE:
             plan[i] = {"kind": "substitute", "class": cls, "map": RISKY_SUBSTITUTE[i], "text_only": True}
         elif i in RISKY_REWRITE:
@@ -331,7 +334,7 @@ def validate(db_key):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--plan", action="store_true"); ap.add_argument("--plan-c", action="store_true")
-    ap.add_argument("--plan-risky", action="store_true")
+    ap.add_argument("--plan-read", metavar="ROUND", help="adds the bad tasks of a later reading round (risky, random2)")
     ap.add_argument("--db"); ap.add_argument("--validate", action="store_true")
     ap.add_argument("--workers", type=int, default=5, help="GLM plan limit: 5 concurrent requests"); ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
@@ -339,8 +342,8 @@ def main():
         build_plan()
     elif a.plan_c:
         add_c_plan()
-    elif a.plan_risky:
-        add_risky_plan()
+    elif a.plan_read:
+        add_read_plan(a.plan_read)
     elif a.db and a.validate:
         validate(a.db)
     elif a.db:
