@@ -147,6 +147,22 @@ def test_a_name_a_lookup_already_holds(shop):
     assert shop.run("Re-enter Silver.", ["DELETE FROM colour WHERE id = 2", "INSERT INTO colour (colour_name) VALUES ('Silver')"])[0] == []
 
 
+def test_a_shared_name_renamed_to_one_another_row_holds(shop):
+    # 2026-10-07 reading: 13 tasks renamed a shared lookup row to a name another row holds (superhero power 22 to
+    # 'Energy Beams', which power 41 is); renames of the speaker's own record may share a name (two people called Ann)
+    rename = ["UPDATE colour SET colour_name = 'Silver' WHERE id = 3"]
+    assert kinds(shop.run("Rename colour 3 to Silver.", rename, shared={"colour"})[0]) == ["duplicate_name"]
+    assert shop.run("Rename colour 3 to Silver.", rename)[0] == []
+    assert shop.run("Rename colour 3 to Teal.", ["UPDATE colour SET colour_name = 'Teal' WHERE id = 3"], shared={"colour"})[0] == []
+    assert shop.run("Spell colour 2 in capitals.", ["UPDATE colour SET colour_name = 'SILVER' WHERE id = 2"], shared={"colour"})[0] == []
+
+
+def test_a_name_that_differs_only_in_punctuation(shop):
+    # flight_4: 'Gafsa–Ksar International Airport' added next to 'Gafsa Ksar International Airport'
+    flags, _ = shop.run("Add the colour Sil-ver.", ["INSERT INTO colour (colour_name) VALUES ('Sil-ver')"])
+    assert kinds(flags) == ["duplicate_name"]
+
+
 def test_a_row_updated_then_deleted(shop):
     flags, _ = shop.run("x", ["UPDATE lines SET qty = 9 WHERE line_id = 1", "DELETE FROM lines WHERE line_id = 1"])
     assert kinds(flags) == ["update_then_delete"]

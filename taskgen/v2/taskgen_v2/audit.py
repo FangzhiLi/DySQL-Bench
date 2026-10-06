@@ -174,6 +174,11 @@ def insert_columns(stmt):
     return [c.strip().strip('"[]`') for c in m.group(5).split(",")] if m else None
 
 
+def name_key(v):
+    """A name as compared for duplicates: case, spaces and punctuation aside ('Gafsa\u2013Ksar' is 'Gafsa Ksar')."""
+    return re.sub(r"[\W_]+", "", v.lower()) if isinstance(v, str) else v
+
+
 class DbAudit:
     """One database: a writable in-memory copy (each task runs inside a transaction that is rolled back), the original
     file for column statistics, and the foreign keys (declared ones plus the given edges)."""
@@ -181,6 +186,7 @@ class DbAudit:
     def __init__(self, path, edges=()):
         self.path = path
         self.conn = check._memory_copy(path)
+        self.conn.create_function("name_key", 1, name_key, deterministic=True)
         self.orig = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
         self.pk = schema.pk_info(self.conn)
         self.names = {n.lower(): n for (n,) in self.conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
@@ -234,8 +240,11 @@ class DbAudit:
             self.stats[k] = {"n": n, "d": d, "vals": vals, "types": types, "shapes": shapes, "sample": len(sample)}
         return self.stats[k]
 
-    def run(self, instruction, stmts, allowed=frozenset()):
-        """Flags [{"k", ...}] and stats {} of one task. The database is unchanged afterwards."""
+    def run(self, instruction, stmts, allowed=frozenset(), shared=None):
+        """Flags [{"k", ...}] and stats {} of one task. The database is unchanged afterwards. shared: the tables that are
+        nobody's own data (lookups), where a rename to a name another row holds is a duplicate too; None checks no
+        renames."""
+        shared = {t.lower() for t in shared or ()}
         flags, stats = [], Counter()
         text = check.text_forms(instruction)
         allowed = set(allowed)
@@ -291,6 +300,8 @@ class DbAudit:
                         flags.append({"k": "update_then_delete", "stmt": n, "table": t, "updated_in": hit})
                 if op == "INSERT" and not check.ARCHIVE_SRC.match(st):
                     flags += self._dup_names(n, t, new)
+                elif op == "UPDATE" and t.lower() in shared:
+                    flags += self._dup_names(n, t, new, old)
                 if pre.get("copy") and len(new) >= 2:
                     mism = order_mismatch(pre["copy"], text)
                     if mism:
@@ -364,8 +375,9 @@ class DbAudit:
             return None
         return keys if len(set(rows)) > 1 else None   # copies of identical rows: the order cannot matter
 
-    def _dup_names(self, n, t, new):
-        """Inserted names or titles another row of the table already holds (case and spaces aside)."""
+    def _dup_names(self, n, t, new, old=None):
+        """Inserted names or titles another row of the table already holds (case, spaces and punctuation aside); with
+        old, the names an UPDATE changed."""
         out = []
         fk_cols = {c for cols, _, _ in self.fks.get(t.lower(), []) for c in cols}   # enlist.name is the person's key
         names = [c for _, c in check.name_columns(self.orig, [t])]
@@ -376,11 +388,13 @@ class DbAudit:
             st = self.col_stats(t, c)
             if not st["n"] or st["d"] < 0.9 * st["n"]:   # a lookup's names are unique; people share first names
                 continue
-            for r in new:
+            for i, r in enumerate(new):
                 v = r.get(c)
-                # two rows hold it right after the insert (a row deleted and entered again is not a duplicate)
-                if isinstance(v, str) and v.strip() and self.conn.execute(
-                        f"SELECT COUNT(*) FROM {_q(t)} WHERE lower(trim({_q(c)})) = ?", (v.strip().lower(),)).fetchone()[0] > 1:
+                if old is not None and name_key(old[i].get(c)) == name_key(v):
+                    continue
+                # two rows hold it right after the statement (a row deleted and entered again is not a duplicate)
+                if isinstance(v, str) and name_key(v) and self.conn.execute(
+                        f"SELECT COUNT(*) FROM {_q(t)} WHERE name_key({_q(c)}) = ?", (name_key(v),)).fetchone()[0] > 1:
                     out.append({"k": "duplicate_name", "stmt": n, "table": t, "col": c, "value": v[:60]})
         return out
 

@@ -684,6 +684,9 @@ def test_the_audit_rules_reject_copy_order_duplicate_names_and_dangling_referenc
     r = check.run_check(db, cand("I am a5 b5. Add the product p7 at price 2.", ["INSERT INTO products (name, price) VALUES ('p7', 2)"],
                                  task_type="3_public_only"), profile=SHOP_PROFILE)
     assert "duplicate_name: products.name" in r["reasons"]
+    r = check.run_check(db, cand("I am a5 b5. Rename product 8 to p7.", ["UPDATE products SET name = 'p7' WHERE product_id = 8"],
+                                 task_type="3_public_only"), profile=SHOP_PROFILE)
+    assert "duplicate_name: products.name" in r["reasons"]
     r = check.run_check(db, cand("I am a5 b5. Point my order 5 at product 999.", ["UPDATE orders SET product_id = 999 WHERE order_id = 5 AND customer_id = 5"]),
                         profile=SHOP_PROFILE)
     assert "dangling_fk: orders.product_id -> products" in r["reasons"]

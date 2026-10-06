@@ -59,7 +59,7 @@ def audit_v2(dbs, dysql_shingles):
             meta = t["meta"]
             stmts = [s for x in t["actions"] for s in check.split_statements(x["kwargs"]["sql"])]
             allowed = row_values(a.conn, meta["anchor_table"], meta.get("anchor_key"), meta.get("key_value"))
-            flags, stats = a.run(t["instruction"], stmts, allowed)
+            flags, stats = a.run(t["instruction"], stmts, allowed, meta["plan"]["tables"]["public"])
             if meta["task_type"] != "6_entity":
                 root = meta["anchor_table"]
                 cols = (prof["persons"].get(root) or {}).get("name_cols") or []

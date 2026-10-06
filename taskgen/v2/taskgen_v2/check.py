@@ -418,15 +418,16 @@ GATE = ("copy_order", "key_collision", "duplicate_name", "dangling_fk")
 _AUDITS = {}
 
 
-def audit_reasons(db_rec, tracer, instruction, stmts, allowed):
+def audit_reasons(db_rec, tracer, instruction, stmts, allowed, shared=()):
     """Reasons from taskgen_v2.audit's GATE rules. One audited copy of the database is kept per process, for the
-    database checked last (its edges are the profile's, through tracer)."""
+    database checked last (its edges are the profile's, through tracer). shared: the tables written as public, where a
+    rename to an existing name counts as a duplicate name too (2026-10-07: 13 lookup rows renamed onto another's)."""
     from taskgen_v2 import audit   # audit imports check
     path = db_rec["path"]
     if path not in _AUDITS:
         _AUDITS.clear()
         _AUDITS[path] = audit.DbAudit(path, [(c, cols, p, ref) for c, refs in tracer.up.items() for cols, p, ref in refs])
-    flags, _ = _AUDITS[path].run(instruction, stmts, allowed)
+    flags, _ = _AUDITS[path].run(instruction, stmts, allowed, shared)
     out = set()
     for f in flags:
         if f["k"] == "dangling_fk":
@@ -581,7 +582,8 @@ def run_check(db_rec, cand, anchor=None, cfg=prompt.CFG, profile=None):
         if profile:
             out["reasons"] += orphan_reasons(db, tracer, deleted, updated)
             if not any(x.startswith("sql_error") for x in out["reasons"]):
-                out["reasons"] += audit_reasons(db_rec, tracer, cand["instruction"], executed, allowed)
+                out["reasons"] += audit_reasons(db_rec, tracer, cand["instruction"], executed, allowed,
+                                                {w["table"] for w in out["writes"] if w["label"] == "public"})
             # writes that end where they started leave the eval hash nothing to compare (university pilot: five renames;
             # address: a first_name set to the value it already had)
             state = final_state(db_rec["path"], executed) if any(w["rows"] for w in out["writes"]) else None
