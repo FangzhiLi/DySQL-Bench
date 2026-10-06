@@ -12,6 +12,13 @@ INSERT INTO customers VALUES (1, 'Ann', 'Lee', 'active'), (2, 'Bob', 'Ray', 'act
 INSERT INTO orders VALUES (110, 1, 'Pending', '2020-01-05', 50.0), (111, 1, 'Pending', '2020-01-06', 60.0),
                           (112, 2, 'Shipped', '2020-01-07', 70.0);
 INSERT INTO lines VALUES (1, 110, 2), (2, 111, 1), (3, 112, 5);
+CREATE TABLE colour (id INTEGER PRIMARY KEY, colour_name TEXT);
+INSERT INTO colour VALUES (1, 'Red'), (2, 'Silver'), (3, 'Blue');
+CREATE TABLE tickets (ticket_no TEXT, book TEXT);
+CREATE TABLE segs (ticket_no TEXT REFERENCES tickets(ticket_no), flight INTEGER);
+INSERT INTO tickets VALUES ('T1', 'A'), ('T2', 'B'); INSERT INTO segs VALUES ('T1', 7), ('T2', 8);
+CREATE TABLE dup (id INTEGER PRIMARY KEY, v TEXT);
+INSERT INTO dup VALUES (1, 'a'), (2, 'a'), (3, 'b');
 """ + rows("customers", 30, lambda i: f"{i + 10},'f{i}','g{i}','{['active', 'closed'][i % 2]}'") \
     + rows("orders", 40, lambda i: f"{i + 200},{10 + i % 30},'{['Shipped', 'Pending'][i % 2]}','2020-02-{i % 28 + 1:02d}',10.0")
 
@@ -121,3 +128,31 @@ def test_identity_missing_ambiguous_or_another_persons_name(shop):
     assert ident(1, "I'm Bob Ray, customer 1, close my account.") == ["identity_other_name"]
     assert ident(2, "Please close my account.") == ["identity_missing"]
     assert ident(2, "Bob Ray, customer 2: close my account.") == []
+
+
+def test_a_key_renumbered_onto_one_another_row_holds(shop):
+    flags, _ = shop.run("Booking A: renumber ticket T1 to T2.", ["UPDATE tickets SET ticket_no = 'T2' WHERE ticket_no = 'T1'"])
+    assert kinds(flags) == ["key_collision"] and flags[0]["value"] == "T2"
+
+
+def test_an_update_that_changes_nothing(shop):
+    flags, _ = shop.run("Customer 1: my status is wrong, set it to active.", ["UPDATE customers SET status = 'active' WHERE customer_id = 1"])
+    assert kinds(flags) == ["noop_update"]
+
+
+def test_a_name_a_lookup_already_holds(shop):
+    flags, _ = shop.run("Add the colour silver.", ["INSERT INTO colour (colour_name) VALUES ('silver')"])
+    assert kinds(flags) == ["duplicate_name"]
+    assert shop.run("Add the colour Green.", ["INSERT INTO colour (colour_name) VALUES ('Green')"])[0] == []
+    assert shop.run("Re-enter Silver.", ["DELETE FROM colour WHERE id = 2", "INSERT INTO colour (colour_name) VALUES ('Silver')"])[0] == []
+
+
+def test_a_row_updated_then_deleted(shop):
+    flags, _ = shop.run("x", ["UPDATE lines SET qty = 9 WHERE line_id = 1", "DELETE FROM lines WHERE line_id = 1"])
+    assert kinds(flags) == ["update_then_delete"]
+
+
+def test_copies_of_identical_rows_have_no_order(shop):
+    st = "INSERT INTO dup (v) SELECT v FROM dup WHERE id IN ({})"
+    assert shop.run("Copy rows 2 and 1.", [st.format("1, 2")])[0] == []
+    assert kinds(shop.run("Copy rows 3 and 1.", [st.format("1, 3")])[0]) == ["copy_order"]

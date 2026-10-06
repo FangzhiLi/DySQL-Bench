@@ -7,7 +7,13 @@ says how much of it is just DySQL's style.
 - dangling_fk: a written row points at a row that does not exist at the end.
 - claim_not_found: "from X to Y", "currently X": no row the gold updates held X.
 - case_mismatch / new_category / format_shape / type_mismatch / padded_value: a written value unlike the column's.
-- copy_order: an INSERT ... SELECT numbers its copies in table order, the instruction lists the rows in another order.
+- copy_order: an INSERT ... SELECT numbers its copies in table order, the instruction lists rows that differ in another
+  order (copies of identical rows end the same whatever the order: WWE stores some matches several times).
+- key_collision: a key the task writes (primary key, unique column, or a column other tables point at) ends up on
+  two rows (Airlines declares no keys: tickets renumbered onto another booking's ticket numbers).
+- noop_update: an UPDATE that leaves every row it matches as it was (the instruction's "it is wrong" is false).
+- duplicate_name: an inserted name or title that a row of the same table already holds ('Silver' added to colour).
+- update_then_delete: a row the task updates and later deletes (the update is moot).
 - identity: the speaker's key and name are missing, ambiguous, or another person's name appears (person tasks).
 - dysql_near_dup: an instruction close to one of DySQL's (leakage)."""
 import json, re, sqlite3
@@ -192,6 +198,11 @@ class DbAudit:
                     self._edge(t, tuple(a for a, _ in pairs), parent, tuple(ref))
         for child, cols, parent, ref in edges:
             self._edge(child, tuple(cols), parent, tuple(ref))
+        self.referenced = {}   # table -> columns another table points at (keys, declared or not)
+        for lst in self.fks.values():
+            for cols, parent, ref in lst:
+                if len(ref) == 1:
+                    self.referenced.setdefault(parent.lower(), set()).add(ref[0])
 
     def _edge(self, child, cols, parent, ref):
         if self.canon(parent).lower() not in self.names:
@@ -271,6 +282,15 @@ class DbAudit:
                                   "gold": len(old), "not_given": pre["more"][1]})
                 if op in ("UPDATE", "DELETE") and old:
                     flags += self._broader(n, st, t, old, text, allowed)
+                if op == "UPDATE" and old and all(o == r for o, r in zip(old, new)):
+                    flags.append({"k": "noop_update", "stmt": n, "table": t, "rows": len(old)})
+                if op == "DELETE":
+                    gone = {r.get("__rowid__") for r in old} - {None}
+                    hit = [m for m, op2, t2, o2, _ in per[:-1] if op2 == "UPDATE" and t2 == t and gone & {r.get("__rowid__") for r in o2}]
+                    if hit:
+                        flags.append({"k": "update_then_delete", "stmt": n, "table": t, "updated_in": hit})
+                if op == "INSERT" and not check.ARCHIVE_SRC.match(st):
+                    flags += self._dup_names(n, t, new)
                 if pre.get("copy") and len(new) >= 2:
                     mism = order_mismatch(pre["copy"], text)
                     if mism:
@@ -284,6 +304,7 @@ class DbAudit:
                             if r.get(c) is not None:
                                 allowed.add(_norm(r[c]))
             flags += self._dangling(per)
+            flags += self._collisions(per)
             flags += self._claims(instruction, per)
             self.last = per   # [(statement index, op, table, old rows, new rows)], for the reading packets
         finally:
@@ -335,9 +356,55 @@ class DbAudit:
             return None
         rest = st[st.lower().index("select"):][frm:]
         try:
-            return [str(k) for (k,) in self.conn.execute(f"SELECT {_q(src)}.{_q(sk[0])} {rest}").fetchall()]
+            keys = [str(k) for (k,) in self.conn.execute(f"SELECT {_q(src)}.{_q(sk[0])} {rest}").fetchall()]
+            cols = [c for c in self.columns(src) if c != sk[0]]
+            rows = self.conn.execute(f"SELECT {', '.join(_q(c) for c in cols)} FROM {_q(src)} WHERE {_q(sk[0])} IN "
+                                     f"({', '.join('?' * len(keys))})", keys).fetchall() if keys and cols else []
         except sqlite3.Error:
             return None
+        return keys if len(set(rows)) > 1 else None   # copies of identical rows: the order cannot matter
+
+    def _dup_names(self, n, t, new):
+        """Inserted names or titles another row of the table already holds (case and spaces aside)."""
+        out = []
+        fk_cols = {c for cols, _, _ in self.fks.get(t.lower(), []) for c in cols}   # enlist.name is the person's key
+        names = [c for _, c in check.name_columns(self.orig, [t])]
+        info = list(self.orig.execute(f"PRAGMA table_info({_q(t)})"))
+        if len(info) <= 3:   # a small lookup's label column, whatever it is called (superhero colour.colour)
+            names += [r[1] for r in info if re.search(r"(?i)char|text", r[2] or "") and r[1] not in names]
+        for c in [c for c in names if c not in fk_cols]:
+            st = self.col_stats(t, c)
+            if not st["n"] or st["d"] < 0.9 * st["n"]:   # a lookup's names are unique; people share first names
+                continue
+            for r in new:
+                v = r.get(c)
+                # two rows hold it right after the insert (a row deleted and entered again is not a duplicate)
+                if isinstance(v, str) and v.strip() and self.conn.execute(
+                        f"SELECT COUNT(*) FROM {_q(t)} WHERE lower(trim({_q(c)})) = ?", (v.strip().lower(),)).fetchone()[0] > 1:
+                    out.append({"k": "duplicate_name", "stmt": n, "table": t, "col": c, "value": v[:60]})
+        return out
+
+    def _collisions(self, per):
+        """Key values the task wrote that two rows hold at the end: the primary key, a unique column, or a column other
+        tables point at (most of these databases declare no keys on them)."""
+        out, done = [], set()
+        for n, op, t, old, new in per:
+            info = self.pk.get(t) or {}
+            keys = set(self.referenced.get(t.lower(), ())) | {u[0] for u in schema.unique_columns(self.conn, t) if len(u) == 1}
+            if len(info.get("cols") or []) == 1:
+                keys.add(info["cols"][0])
+            olds = {r.get("__rowid__"): r for r in old}
+            for r in new:
+                for c in keys:
+                    v = r.get(c)
+                    o = olds.get(r.get("__rowid__")) if op == "UPDATE" else None
+                    if v in (None, "") or (o is not None and o.get(c) == v) or (t, c, str(v)) in done:
+                        continue
+                    done.add((t, c, str(v)))
+                    (k,) = self.conn.execute(f"SELECT COUNT(*) FROM {_q(t)} WHERE {_q(c)} = ?", (v,)).fetchone()
+                    if k > 1:
+                        out.append({"k": "key_collision", "stmt": n, "table": t, "col": c, "value": str(v)[:60], "rows": k})
+        return out
 
     def _broader(self, n, st, t, old, text, allowed):
         """The instruction names every changed row by a key column the statement's WHERE does not use."""
