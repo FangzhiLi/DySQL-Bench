@@ -10,7 +10,9 @@ Usage (from taskgen/v2/):
   $P scripts/audit_read.py reveal  --batch 3            # gold, its effect and the script flags, predicted tasks only
   $P scripts/audit_read.py verdict --batch 3 --file v.json   # [{"id", "verdict", "tags", "note"}]
   $P scripts/audit_read.py query   --db books "SELECT ..."   # read-only, 30 rows
-  $P scripts/audit_read.py status"""
+  $P scripts/audit_read.py status
+  $P scripts/audit_read.py --round risky risky          # 2026-10-07: the riskier subset, files in results/audit/read_risky/
+  (every other command takes --round risky the same way)"""
 import argparse, json, math, os, random, re, sqlite3, sys
 from collections import Counter, defaultdict
 V2 = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -87,6 +89,35 @@ def cmd_sample(a):
     json.dump(batches, open(os.path.join(READ, "batches.json"), "w"), indent=1)
     c = Counter(w.split(":")[0] for v in why.values() for w in v)
     print(f"{len(ids)} tasks in {len(batches) - 1} batches (+ double {len(batches['double'])}): {dict(c)}")
+
+
+def cmd_risky(a):
+    """The riskier subset (2026-10-07): every task that inserts into a table that is not the speaker's own, and every
+    archive-shaped task. Tasks the first round already read are read again, to compare."""
+    os.makedirs(READ, exist_ok=True)
+    ts = tasks()
+    first = {json.loads(l)["id"] for l in open(os.path.join(io.RESULTS, "audit", "read", "sample.jsonl"))}
+    why = defaultdict(list)
+    for i, t in ts.items():
+        m = t["meta"]
+        own = set(m["plan"]["tables"]["own"])
+        for x in t["actions"]:
+            for s in check.split_statements(x["kwargs"]["sql"]):
+                mt = re.match(r'(?is)\s*INSERT\s+(?:OR\s+\w+\s+)?INTO\s+["`\[]?(\w+)', s)
+                if mt and mt.group(1) not in own and "insert_public" not in why[i]:
+                    why[i].append("insert_public")
+        if m["plan"]["shape"].get("archive"):
+            why[i].append("archive")
+        if i in first and why[i]:
+            why[i].append("read_before")
+    ids = sorted((i for i in why if why[i]), key=lambda i: (ts[i]["meta"]["db"], i))
+    with open(os.path.join(READ, "sample.jsonl"), "w") as f:
+        for i in ids:
+            f.write(json.dumps({"id": i, "db": ts[i]["meta"]["db"], "why": why[i]}) + "\n")
+    batches = {str(n): ids[s:s + BATCH] for n, s in enumerate(range(0, len(ids), BATCH))}
+    json.dump(batches, open(os.path.join(READ, "batches.json"), "w"), indent=1)
+    c = Counter(w for i in ids for w in why[i])
+    print(f"{len(ids)} tasks in {len(batches)} batches: {dict(c)}")
 
 
 def batch_ids(b):
@@ -249,16 +280,20 @@ def cmd_status(a):
 
 
 def main():
+    global READ
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--round", help="a later reading round; its files go to results/audit/read_<round>/")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("sample"); sub.add_parser("status")
+    sub.add_parser("sample"); sub.add_parser("status"); sub.add_parser("risky")
     for c in ("blind", "reveal"):
         sub.add_parser(c).add_argument("--batch", required=True)
     for c in ("predict", "verdict"):
         p = sub.add_parser(c); p.add_argument("--batch", required=True); p.add_argument("--file", required=True)
     q = sub.add_parser("query"); q.add_argument("--db", required=True); q.add_argument("sql")
     a = ap.parse_args()
-    {"sample": cmd_sample, "blind": cmd_blind, "predict": cmd_predict, "verdict": cmd_verdict, "reveal": cmd_reveal,
+    if a.round:
+        READ = os.path.join(io.RESULTS, "audit", "read_" + a.round)
+    {"sample": cmd_sample, "risky": cmd_risky, "blind": cmd_blind, "predict": cmd_predict, "verdict": cmd_verdict, "reveal": cmd_reveal,
      "query": cmd_query, "status": cmd_status}[a.cmd](a)
 
 
