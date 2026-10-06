@@ -51,3 +51,11 @@ def test_get_env_dispatches_gen_prefix(tmp_path, monkeypatch):
     monkeypatch.setenv("TASKGEN_MANIFEST", manifest)
     env = get_env("gen:shop", user_strategy="human", user_model="", user_model_api="", task_split="train", task_index=0)
     assert isinstance(env, GenEnv) and len(env.tasks) == 1
+
+
+def test_a_repaired_task_says_where_it_came_from():
+    from taskgen_v2 import convert
+    row = convert.to_task_row(0, {"instruction": "x", "actions": [{"sql": "UPDATE a SET b = 1"}], "id": "k:t:1:1",
+                                  "repair": {"from": "k:t:1:0", "kind": "cascade"}})
+    assert row["meta"]["repair"] == {"from": "k:t:1:0", "kind": "cascade"}
+    assert convert.to_task_row(0, {"instruction": "x", "actions": []})["meta"]["repair"] is None

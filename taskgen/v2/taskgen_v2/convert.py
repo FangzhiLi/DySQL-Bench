@@ -6,7 +6,7 @@ from taskgen_v2 import io
 
 def to_task_row(i, r):
     meta = {k: r.get(k) for k in ("id", "db", "source", "anchor_table", "anchor_key", "key_value", "task_type",
-                                   "difficulty", "template", "plan", "gen_model", "verify_model", "profile_version")}
+                                   "difficulty", "template", "plan", "gen_model", "verify_model", "profile_version", "repair")}
     meta["verify_votes"] = {}   # every model's every vote (design §4.7); failed calls are not votes
     for v in r.get("votes", []):
         if "error" not in v:
