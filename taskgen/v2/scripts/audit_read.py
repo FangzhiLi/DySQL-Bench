@@ -13,6 +13,7 @@ Usage (from taskgen/v2/):
   $P scripts/audit_read.py status
   $P scripts/audit_read.py --round risky risky          # 2026-10-07: the riskier subset, files in results/audit/read_risky/
   $P scripts/audit_read.py --round random2 random      # 2026-10-07: 300 random tasks no round has read yet
+  $P scripts/audit_read.py --round new3 list --file ids.json --batches 5   # given ids, e.g. fixes nobody read yet
   (every other command takes --round the same way)"""
 import argparse, json, math, os, random, re, sqlite3, sys
 from collections import Counter, defaultdict
@@ -159,6 +160,20 @@ def cmd_random(a):
     json.dump(batches, open(os.path.join(READ, "batches.json"), "w"), indent=1)
     print(f"{len(ids)} of {total} unread tasks in {len(batches)} batches; "
           f"entity {sum(ts[i]['meta']['task_type'] == '6_entity' for i in ids)}")
+
+
+def cmd_list(a):
+    """The tasks a JSON list names, in a.batches batches (2026-10-07: the fixes and newly selected tasks of section 10)."""
+    os.makedirs(READ, exist_ok=True)
+    ts = tasks()
+    ids = sorted(json.load(open(a.file)), key=lambda i: (ts[i]["meta"]["db"], i))
+    with open(os.path.join(READ, "sample.jsonl"), "w") as f:
+        for i in ids:
+            f.write(json.dumps({"id": i, "db": ts[i]["meta"]["db"], "why": ["fix" if ts[i]["meta"].get("fix") else "new"]}) + "\n")
+    size = math.ceil(len(ids) / a.batches)
+    json.dump({str(n): ids[s:s + size] for n, s in enumerate(range(0, len(ids), size))},
+              open(os.path.join(READ, "batches.json"), "w"), indent=1)
+    print(f"{len(ids)} tasks in {math.ceil(len(ids) / size)} batches")
 
 
 def batch_ids(b):
@@ -331,10 +346,11 @@ def main():
     for c in ("predict", "verdict"):
         p = sub.add_parser(c); p.add_argument("--batch", required=True); p.add_argument("--file", required=True)
     q = sub.add_parser("query"); q.add_argument("--db", required=True); q.add_argument("sql")
+    q = sub.add_parser("list"); q.add_argument("--file", required=True); q.add_argument("--batches", type=int, default=5)
     a = ap.parse_args()
     if a.round:
         READ = os.path.join(io.RESULTS, "audit", "read_" + a.round)
-    {"sample": cmd_sample, "risky": cmd_risky, "random": cmd_random, "blind": cmd_blind, "predict": cmd_predict, "verdict": cmd_verdict, "reveal": cmd_reveal,
+    {"sample": cmd_sample, "risky": cmd_risky, "random": cmd_random, "list": cmd_list, "blind": cmd_blind, "predict": cmd_predict, "verdict": cmd_verdict, "reveal": cmd_reveal,
      "query": cmd_query, "status": cmd_status}[a.cmd](a)
 
 
