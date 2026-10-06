@@ -646,3 +646,11 @@ def test_an_entity_task_that_ends_where_it_started_is_rejected(menus):
     # university pilot: five renames that end at the current name leave nothing for the eval hash to compare
     assert mreasons(menus, "Menu ID 3: rename it to 'Menu X', then back to 'Menu 3'.",
                     ["UPDATE menu SET name = 'Menu X' WHERE menu_id = 3", "UPDATE menu SET name = 'Menu 3' WHERE menu_id = 3"]) == ["net_noop"]
+
+
+def test_changing_a_key_other_rows_point_at_is_an_orphan_too(menus):
+    # spider2 Airlines declares no keys, so the prompt's "never change a key" did not stop ticket_no and book_ref edits
+    assert mreasons(menus, "Menu ID 3: renumber page 13 as 99.", ["UPDATE page SET page_id = 99 WHERE page_id = 13"]) == ["orphans: page"]
+    assert mreasons(menus, "Menu ID 3: renumber page 13 as 99 and move its items along.",
+                    ["UPDATE item SET page_id = 99 WHERE page_id = 13", "UPDATE page SET page_id = 99 WHERE page_id = 13"]) == []
+    assert "orphans: menu" in mreasons(menus, "Menu ID 3: renumber it as 99.", ["UPDATE menu SET menu_id = 99 WHERE menu_id = 3"])
