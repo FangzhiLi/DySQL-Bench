@@ -401,7 +401,7 @@ reorder 和 rewrite 各多出 1 个新候选，是对没过校验的修复再修
 - **B 类集中在几个库，按库的占比：**
   - 一半以上：airline 74%，college_completion 74%，california_schools 58%，IPL 58%（108/186），book_publishing_company 52%；
   - 两到五成：professional_basketball 48%（92/191），bike_1 47%，Airlines 39%，food_inspection 32%，movie 28%，shakespeare 26%，food_inspection_2 24%，books 21%；
-  - 10 个库在 5% 以下：superhero、movies_4、shipping、student_loan、hr_1、menu、video_games、imdb_movies、flight_4、address。
+  - 9 个库在 5% 左右或更低：superhero、movies_4、shipping、student_loan、hr_1、menu、video_games、imdb_movies、flight_4（address 是 9%）。
   - 6 个库是 0：college_2、regional_sales、restaurant、csu_1、card_games、school_scheduling。
 - **B 类常见的几种：**
   - 改了分项没改总数：胜负场、篮板、订单金额、延误分项、受益人总数；
