@@ -1,6 +1,6 @@
 # docs：DySQL-Bench 评测
 
-这里只放评测相关的文档。训练任务生成（选库、出题）的文档在 [taskgen/](../taskgen/README.md)。
+这里放评测相关的文档和文献调研。训练任务生成（选库、出题）的文档在 [taskgen/](../taskgen/README.md)。
 
 | 文档 | 内容 |
 |---|---|
@@ -10,5 +10,6 @@
 | [task_counts.md](task_counts.md) | 各库的任务数 |
 | [gb10_serving_notes.md](gb10_serving_notes.md) | 在 GB10 上起 vLLM 服务的经验 |
 | [results/](results/) | 各次评测的报告、汇总表和失败分析 |
+| [literature/](literature/README.md) | 文献调研：SFT 冷启动与 RL 训练设计（2026-10-07） |
 
 评测脚本在 `DySQL-Bench/scripts/`，结果目录 `DySQL-Bench/results/` 不进 git。
