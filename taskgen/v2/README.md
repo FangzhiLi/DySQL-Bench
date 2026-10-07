@@ -1,10 +1,21 @@
-# 训练任务生成 v2（进行中）
+# 训练任务生成 v2
+
+**状态：完成（2026-10-07）。** 最终 3,425 道训练题（人物题 3,122，实体题 303），每道都过了执行检查、三票校验和 Opus 人读。总结见 [docs/2026-10-07-taskgen-v2-summary.md](docs/2026-10-07-taskgen-v2-summary.md)：流程、数字、质量、已知局限、怎么用。
 
 v2 从 v1 原样复制起步（tag `taskgen-v1`，61c8133）。复制的那个 commit 只改了包名（`taskgen_v1` → `taskgen_v2`）和路径（`taskgen/v1/` → `taskgen/v2/`），逻辑没动。之后每处改动单独提交，并在下面的改动记录里记一行。
 
 - **设计：** [docs/2026-10-01-taskgen-v2-design.md](docs/2026-10-01-taskgen-v2-design.md)
-- **实施计划 1（骨架、任务集统计、执行检查）：** [docs/2026-10-01-taskgen-v2-plan-1.md](docs/2026-10-01-taskgen-v2-plan-1.md)
-- **实施计划 2（库档案、嵌套建树、检查读档案）：** [docs/2026-10-01-taskgen-v2-plan-2.md](docs/2026-10-01-taskgen-v2-plan-2.md)
+- **实施计划：**
+  - 1（骨架、任务集统计、执行检查）：[docs/2026-10-01-taskgen-v2-plan-1.md](docs/2026-10-01-taskgen-v2-plan-1.md)
+  - 2（库档案、嵌套建树、检查读档案）：[docs/2026-10-01-taskgen-v2-plan-2.md](docs/2026-10-01-taskgen-v2-plan-2.md)
+  - 3（出题素材和 prompt）：[docs/2026-10-01-taskgen-v2-plan-3.md](docs/2026-10-01-taskgen-v2-plan-3.md)
+  - 4（校验校准）：[docs/2026-10-01-taskgen-v2-plan-4.md](docs/2026-10-01-taskgen-v2-plan-4.md)
+  - 5（试点和全量）：[docs/2026-10-01-taskgen-v2-plan-5.md](docs/2026-10-01-taskgen-v2-plan-5.md)
+  - 实体题：[docs/2026-10-04-entity-tasks-design.md](docs/2026-10-04-entity-tasks-design.md)、[docs/2026-10-05-entity-tasks-plan.md](docs/2026-10-05-entity-tasks-plan.md)
+- **运行和审查记录：**
+  - [docs/2026-10-02-pilot.md](docs/2026-10-02-pilot.md)
+  - [docs/2026-10-05-entity-run.md](docs/2026-10-05-entity-run.md)
+  - [docs/2026-10-06-task-audit.md](docs/2026-10-06-task-audit.md)
 - **怎么跑：** 和 v1 相同（[../v1/README.md](../v1/README.md) §3），命令在 `taskgen/v2/` 下运行。中间文件写到 `taskgen/v2/results/`，最终任务写到 `taskgen/v2/output/`，都不进 git。
 - **测试：** `cd taskgen/v2 && ~/miniconda3/envs/dysql/bin/python -m pytest -q`
 
@@ -35,3 +46,9 @@ v2 从 v1 原样复制起步（tag `taskgen-v1`，61c8133）。复制的那个 c
 | 模型调用：回答在 max_tokens 处截断、HTTP 200 没有消息体时重试；校验的票思考用光 token 不算票，结论行认得更宽 | §4.6 |
 | 校验：`TASKGEN_VERIFY_MODELS` 配几个模型各投几票，附档案的数据怪异点；预封顶（每模板 25、每库 900）之后再校验；meta 按模型记票 | §4.6、§4.7 |
 | 校准：五种改坏（`corrupt.py`）、比较两份 SQL 留下的库（`check.final_state`）、`scripts/verify_calibrate.py`；DySQL 金标准、改坏的题、新一批 v2 候选上量出每条 1 票就够（`docs/2026-10-01-verify-calibration.md`） | §5 F |
+| 全量运行（计划 5）：出题和校验重叠，逐库闸门；校验 3 票多数（前两票一致不投第三票）；去重前加同库 instruction 3-gram Jaccard ≥0.6 的近重复过滤；`results/<db>/excluded.jsonl` 里的 id 在去重时跳过；记录 `docs/2026-10-02-pilot.md` | §4.6、§4.7、§5 H、I |
+| 实体题：16 个没有人物表的库，题型 `6_entity`（库外的人说某个实体是自己的，改它和它名下的行）；实体档案、建树、出题、检查规则（`lookup_*`、`public_write` 等）；每库 19 题；记录 `docs/2026-10-05-entity-run.md` | 实体设计 |
+| 执行检查加 `orphans`（删父行留下孤儿）和 `net_noop`（写了等于没写），对所有有档案的库启用；被拒的已选题修补（`repair_tasks.py`：级联补写，或 GLM 按说明改写、重出） | §4.5 |
+| 审查：`taskgen_v2/audit.py` 的规则扫全量（含 DySQL gold 对照），`scripts/audit_read.py` 盲读（先写预期终态再看 gold），`audit_read_dysql.py` 读 DySQL 官方题；报告 `docs/2026-10-06-task-audit.md` | — |
+| 修复：`scripts/fix_audit_tasks.py`（改值、只改 SQL、重列复制顺序、改 SQL 后 GLM 改写题目、同树重出），新候选 `<树>:<下一个序号>` 带 `meta.fix`，原题进 `excluded.jsonl` | — |
+| 执行检查加四条审查规则（`check.GATE`）：复制顺序、键冲突（含原表全表唯一的 `_id` 列）、重复名称（含查找表改名，忽略大小写空格标点）、悬空外键；DySQL gold 不受这四条约束 | §4.5 |

@@ -1,6 +1,6 @@
 # 训练任务生成 v2：设计
 
-**日期：** 2026-10-01　**状态：** 已确认（2026-10-01）。实施计划分几份写：计划 1（阶段 A、G、E）见 `2026-10-01-taskgen-v2-plan-1.md`，计划 2（阶段 B、C，执行检查读档案）见 `2026-10-01-taskgen-v2-plan-2.md`，计划 3（阶段 D 出题，顺带计划 1 留下的检查规则）见 `2026-10-01-taskgen-v2-plan-3.md`，计划 4（阶段 F 校验的校准）见 `2026-10-01-taskgen-v2-plan-4.md`；运行的计划在前一份完成后再写
+**日期：** 2026-10-01　**状态：** 已确认（2026-10-01）。实施计划分几份写：计划 1（阶段 A、G、E）见 `2026-10-01-taskgen-v2-plan-1.md`，计划 2（阶段 B、C，执行检查读档案）见 `2026-10-01-taskgen-v2-plan-2.md`，计划 3（阶段 D 出题，顺带计划 1 留下的检查规则）见 `2026-10-01-taskgen-v2-plan-3.md`，计划 4（阶段 F 校验的校准）见 `2026-10-01-taskgen-v2-plan-4.md`，计划 5（阶段 H 试点、I 全量）见 `2026-10-01-taskgen-v2-plan-5.md`。实体库另有设计 `2026-10-04-entity-tasks-design.md` 和计划 `2026-10-05-entity-tasks-plan.md`；审查和修复见 `2026-10-06-task-audit.md`。**v2 已完成（2026-10-07），总结见 `2026-10-07-taskgen-v2-summary.md`。**
 **起点：** v1（tag `taskgen-v1`，61c8133），复制到 `taskgen/v2/`，包名 `taskgen_v2`。
 **依据：** 论文（ACL Findings 2026）§3 和附录 J、官方 `data_pipeline_shell/`、v1 全量结果（3816 条）与 DySQL 1062 条的逐项对比。
 
@@ -119,7 +119,7 @@ notes, draft: 审阅用（Claude 的改动；起草模型、轮数、没改掉�
 - 其余规则不变（noop、bulk 50、txn、out_of_scope）。在 DySQL gold 上重新校准：相对 v1 新增的拒绝只应来自上面列出的原因（时间函数里会被拒的约 3 条：pagila 把 `CURRENT_TIMESTAMP` 写进 return_date、payment_date；其余写的是 last_update，或只精确到日），逐条看过。
 
 ### 4.6 校验（改 `verify.py`、`llm.py` 配置）
-- 配置：`TASKGEN_VERIFY_MODELS="deepseek-v4.1-flash:2"`（模型:票数，逗号分隔多个；端点和 key 沿用 `TASKGEN_VERIFY_BASE_URL`、`TASKGEN_VERIFY_API_KEY`）；每个模型 Yes 严格多于 No 才过（2 票即两票都要 Yes），全部模型通过才通过。没设 `TASKGEN_VERIFY_MODELS` 时用 `TASKGEN_VERIFY_MODEL` 投 `verify.DEFAULT_VOTES` 票（计划 4 校准后定为 1 票：好题通过 98%，改坏的题全部被拒）。思考用光 token 没给结论的票不算票，下次运行重投。
+- 配置：`TASKGEN_VERIFY_MODELS="deepseek-v4.1-flash:2"`（模型:票数，逗号分隔多个；端点和 key 沿用 `TASKGEN_VERIFY_BASE_URL`、`TASKGEN_VERIFY_API_KEY`）；每个模型 Yes 严格多于 No 才过（2 票即两票都要 Yes），全部模型通过才通过。没设 `TASKGEN_VERIFY_MODELS` 时用 `TASKGEN_VERIFY_MODEL` 投 `verify.DEFAULT_VOTES` 票（计划 4 校准时 1 票就够：好题通过 98%，改坏的题全部被拒；全量按用户的选择用 3 票多数，前两票一致就不投第三票，计划 5）。思考用光 token 没给结论的票不算票，下次运行重投。
 - prompt 沿用 v1 重写的五问版，另附档案的数据怪异点（计划 4：address 把议员的姓存在 first_name，不附就误判）。
 - 校准脚本 `scripts/verify_calibrate.py`，三组样本（D5）：
   - 正样本：过了 v2 执行检查的 DySQL gold。
@@ -130,11 +130,11 @@ notes, draft: 审阅用（Claude 的改动；起草模型、轮数、没改掉�
 - 顺序改为 check → 预封顶（每模板 ≤25、每库 ≤900）→ verify → 终封顶（v1 的 2/15/600）。
 
 ### 4.7 封顶与转换（改 `dedup.py`，`convert.py` 不变）
-- 加 instruction 近重复过滤（同库 3-gram Jaccard ≥0.6 只留一条）。
+- 加 instruction 近重复过滤（同库 3-gram Jaccard ≥0.6 只留一条；计划 5 实现，在终封顶之前）。审查和抽检排除的题记在 `results/<db>/excluded.jsonl`，去重时跳过。
 - `meta` 多记档案版本、每模型每票结论。
 
 ### 4.8 不做的
-- 全量人工审核；refine（窄版留作 v2.1，只改 instruction、SQL 冻结）；实体库；换出题模型。
+- 全量人工审核（后来改了主意：2026-10-07 全部题都由 Opus 读过，见 `2026-10-06-task-audit.md`）；refine（窄版留作 v2.1，只改 instruction、SQL 冻结）；实体库（后来做了，见 `2026-10-04-entity-tasks-design.md`）；换出题模型。
 - **第 4 类（库内的人改别人的数据）这一轮不出。** 留给以后的备注：
   - DySQL 里真实的这类约 5%（HR 经理改员工、经纪人改客户的预约），不是 check 规则算出的 17.6%。
   - 和 agent policy 的 "must deny any requests for tasks related to any other user" 冲突；要出就得按库加授权条款，或者让 staff 当根、只改 staff 自己直接挂着的事件。
@@ -155,8 +155,8 @@ notes, draft: 审阅用（Claude 的改动；起草模型、轮数、没改掉�
 | F 校验 | §4.6 配置化 + 三组样本校准 + 顺序调整；标注集的分歧条目要你复核 | 正样本 ≥95%；负样本和人工标注集的报告；漏的类别补进 E |
 | H 试点 | beer_factory 100 条走完全部步骤；与 v1 试点（82 条）和 DySQL 对比；Qwen3-4B 跑一遍 | 指标达标；4B 通过率与 DySQL 同量级 |
 | I 全量 | 23 个库，每库 200 棵树（双根库分摊）；check → 预封顶 → verify → 终封顶 → convert | `output/manifest.json` 可被 `gen:<db>` 加载；每库抽 30 条人工看 |
-| J 对照 | v1 的 3816 条跑 v2 的 check + verify，得到 v1 对照集 | 两份任务集的 `task_stats` 并排表 |
-| K 收尾 | `taskgen/v2/README.md` 全流程、运行记录、memory | — |
+| J 对照 | v1 的 3816 条跑 v2 的 check + verify，得到 v1 对照集 | 两份任务集的 `task_stats` 并排表（2026-10-07 决定先不做：SFT 用不到） |
+| K 收尾 | `taskgen/v2/README.md` 全流程、运行记录、memory | 完成：`2026-10-07-taskgen-v2-summary.md` |
 
 ## 6. 待查
 - `deepseek-v4.1-flash` 在 ollama.com 上的速度、并发上限和限流，阶段 F 实测。
