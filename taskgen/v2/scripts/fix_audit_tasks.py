@@ -17,6 +17,7 @@ Usage (from taskgen/v2/):
   $P scripts/fix_audit_tasks.py --plan-c               # adds the 11 IPL tasks (C, 2026-10-07)
   $P scripts/fix_audit_tasks.py --plan-read risky      # adds the 35 of the riskier subset (report section 9)
   $P scripts/fix_audit_tasks.py --plan-read random2    # adds the 44 of the random round and its rules (section 10)
+  $P scripts/fix_audit_tasks.py --plan-read full       # adds the 69 A-class tasks of the full reading (section 11)
   $P scripts/fix_audit_tasks.py --db bird:movie        # new candidates, originals excluded
   $P scripts/taskgen.py check --db bird:movie          # then verify (x3), then:
   $P scripts/fix_audit_tasks.py --db bird:movie --validate"""
@@ -94,6 +95,9 @@ RISKY_SUBSTITUTE = {
     "bird:shakespeare:works:24:0": {"described as a servant in the Ford household": "described as 'servant in the Ford household'"},
     "bird:professional_basketball:players:lewisfr01:0": {"PostfgAttempted 23": "PostfgAttempted 0"},   # 23 is PostfgMade
 }
+# Fixes of the full reading (report section 11): the gold writes the column's own spelling of a value the instruction
+# gives unquoted ('Mastercard' where 2,087 rows hold 'MasterCard'); the text stays.
+SQL_SUBSTITUTE_BY_CLASS = {"mastercard_case": {"'Mastercard'": "'MasterCard'"}}
 _ORDER_ONLY = ("The SQL copies only the row(s) in orders, not the order's lines in orderdetails, and the request reads as "
                "if a copy of the order brought its lines along. Say plainly that only the order record itself (its row in "
                "orders) is to be copied, without its order lines.")
@@ -175,7 +179,9 @@ def add_read_plan(rnd):
     bad = json.load(open(os.path.join(AUDIT, "read_" + rnd, "bad.json")))
     for b in bad:
         i, cls = b["id"], f"{rnd} read: " + b["class"]
-        if i in RISKY_SUBSTITUTE:
+        if b["class"] in SQL_SUBSTITUTE_BY_CLASS:
+            plan[i] = {"kind": "substitute", "class": cls, "map": SQL_SUBSTITUTE_BY_CLASS[b["class"]], "sql_only": True}
+        elif i in RISKY_SUBSTITUTE:
             plan[i] = {"kind": "substitute", "class": cls, "map": RISKY_SUBSTITUTE[i], "text_only": True}
         elif i in RISKY_REWRITE:
             plan[i] = {"kind": "rewrite", "class": cls, "note": RISKY_REWRITE[i]}
@@ -229,8 +235,11 @@ def apply(db_key, workers, seed):
         c = cands[i]
         if p["kind"] == "substitute":
             sql = stmts_of(c) if p.get("text_only") else edit_sql(stmts_of(c), p["map"])
-            ins = fixes.substitute(c["instruction"], p["map"])
-            if any(old in c["instruction"] and new not in ins for old, new in p["map"].items()) or ins == c["instruction"]:
+            ins = c["instruction"] if p.get("sql_only") else fixes.substitute(c["instruction"], p["map"])
+            if p.get("sql_only"):
+                if sql == stmts_of(c):
+                    sys.exit(f"{i}: the SQL does not hold {list(p['map'])}")
+            elif any(old in c["instruction"] and new not in ins for old, new in p["map"].items()) or ins == c["instruction"]:
                 sys.exit(f"{i}: the instruction does not name {list(p['map'])}")
             nid = fixes.next_id(i, ids); ids.append(nid)
             new.append({**c, "id": nid, "instruction": ins, "actions": [{"sql": s} for s in sql],
