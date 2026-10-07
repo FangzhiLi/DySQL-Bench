@@ -463,7 +463,7 @@ reorder 和 rewrite 各多出 1 个新候选，是对没过校验的修复再修
 - 结果：
   - 64 道修好；
   - 4 道的修复题过了检查和校验，但 dedup 没选中，坏原题已排除；
-  - 1 道两次重出都没成，删掉（professional_basketball macalmi01）。这道后来在另一个库重跑校验时补上了票，修复题又进了最终题集。
+  - 1 道两次重出都没过校验（professional_basketball macalmi01，校验没投出票）。后来重跑这个库的校验时补上了票，修复题又进了最终题集。
 
 **新进来的题再读（Opus）：**
 - **第一轮修复后，148 道新题**（65 道修复题，83 道 dedup 补进来的）：A 类 8 道，B 类 43 道。
@@ -475,6 +475,6 @@ reorder 和 rewrite 各多出 1 个新候选，是对没过校验的修复再修
 
 **最终（2026-10-07）：**
 - **3,425 道**（人物 3,122，实体 303），每道都至少被 Opus 读过一次。
-- A 类 0，B 类约 610 道（保留），其余为好题。
+- 好题 2,816，B 类 609 道（保留，id 在 `results/audit/labels_B_final.json`），A 类 0。
 - 四条 GATE 规则 0 命中；IPL 没有矛盾行。
 - 读题记录在 `results/audit/read_{risky,random2,new3,full,new4,new5,new6}/`，不进 git。
